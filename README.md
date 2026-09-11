@@ -30,7 +30,7 @@ Validated with OCaml 5.4.0, Rocq 9.1.1, Stdlib 9.1.0, and Dune 3.23.1.
 Use any opam switch with these dependencies; its name is unrestricted.
 
 ```sh
-opam install rocq-prover.9.1.1 rocq-stdlib.9.1.0 dune.3.23.1 batteries.3.11.0 yojson.3.0.0
+opam install rocq-core.9.1.1 rocq-stdlib.9.1.0 dune.3.23.1 batteries.3.11.0 yojson.3.0.0
 opam exec -- make
 ```
 
