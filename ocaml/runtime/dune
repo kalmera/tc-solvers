@@ -1,0 +1,4 @@
+(library
+ (name tc_solvers_rank_worklists)
+ (public_name tc-solvers.runtime.rank_worklists)
+ (modules rank_worklist_binary_heap rank_worklist_quaternary_heap rank_worklist_bitmap rank_worklist_pqueue ocaml5_pqueue))

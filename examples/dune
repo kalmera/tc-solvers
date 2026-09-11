@@ -1,0 +1,4 @@
+(executables
+ (names simple restarting narrowing_fixed_point)
+ (libraries tc_solvers_extracted_simple tc_solvers_extracted_restarting tc_solvers_extracted_narrowing_fixed_point))
+(rule (alias runtest) (action (progn (run %{exe:simple.exe}) (run %{exe:restarting.exe}) (run %{exe:narrowing_fixed_point.exe}))))

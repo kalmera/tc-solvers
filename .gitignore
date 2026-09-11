@@ -43,3 +43,14 @@ time-of-build-after.log
 time-of-build-before.log
 time-of-build-both.log
 time-of-build-pretty.log
+
+_build/
+__pycache__/
+.DS_Store
+RocqMakefile
+RocqMakefile.conf
+.RocqMakefile.d
+*.cache
+*.aux
+*.vos
+*.vok

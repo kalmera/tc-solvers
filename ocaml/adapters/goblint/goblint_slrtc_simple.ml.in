@@ -1,0 +1,384 @@
+(**
+   Goblint callback adapter for SLR-TC Simple.
+
+   This is a mutable implementation of the algorithm in
+   [rocq/solvers/slr/simple/Simple.v].  The control operations at [@@CONTROL@@] are
+   supplied either by Rocq extraction or by the explicitly inlined benchmark
+   variant.
+
+   The state and evaluation frame deliberately contain only data used by the
+   Simple algorithm.  In particular, they have no reset registrations,
+   dead-side sets, read-dependency rows, or grow/narrow episode data.
+
+   Current incremental-solver limitation: each call starts from fresh state
+   and ignores [old_data].
+*)
+
+open Batteries
+open Goblint_constraint.ConstrSys
+open Goblint_constraint.SolverTypes
+
+open Slrtc_update
+
+(* @@CONTROL@@ *)
+
+module type CONTROL = sig
+  type seeded_result = SeedsSolved of int | SeedsOutOfFuel
+
+  val solve_one :
+    'd ->
+    ('v -> unit) ->
+    ('v -> 'v -> 'd) ->
+    ('v -> 'v -> 'd -> unit) ->
+    ('v -> 'v -> unit) ->
+    ('v -> 'd -> unit) ->
+    ('v -> unit) ->
+    ('v ->
+      (('v -> 'd) ->
+       ('v -> 'd -> unit) ->
+       ('v -> unit) ->
+       'd) option) ->
+    'v ->
+    unit
+
+  val solve_all :
+    int ->
+    ('v list -> unit) ->
+    (unit -> 'v option) ->
+    ('v -> unit) ->
+    'v list ->
+    bool
+
+  val solve_seeds_with_fuel :
+    int ->
+    ('v -> bool) ->
+    (unit -> 'v option) ->
+    ('v -> unit) ->
+    'v list ->
+    seeded_result
+end
+
+module Make
+    (Control : CONTROL)
+    (Update : UPDATE) : DemandEqIncrSolver =
+  functor (Arg : IncrSolverArg)
+    (S : DemandEqConstrSys)
+    (VH : Hashtbl.S with type key = S.v) ->
+  struct
+    module U = Update (S)
+
+    type marshal = unit
+
+    let copy_marshal () = ()
+    let relift_marshal () = ()
+
+    let bottom = S.Dom.bot ()
+
+    (* @@TRACE@@ *)
+
+    type set = unit VH.t
+    type local_side = S.d VH.t
+
+    type side_cell = {
+      mutable phase : U.phase;
+      mutable contribution : S.d;
+    }
+
+    type side_row = side_cell VH.t
+
+    (** Target-local state lives beside its dense rank so callbacks hash a
+        variable only once, when obtaining that rank. *)
+    type rank_info = {
+      mutable queued : bool;
+      mutable started : bool;
+      mutable variable : S.v;
+      mutable controlled : bool;
+      mutable normal_phase : U.phase option;
+      mutable readers : set option;
+      mutable side_aggregate : S.d;
+      mutable side_cells : side_row option;
+    }
+
+    let[@inline always] make_rank_info variable =
+      {
+        queued = false;
+        started = false;
+        variable;
+        controlled = false;
+        normal_phase = None;
+        readers = None;
+        side_aggregate = bottom;
+        side_cells = None;
+      }
+
+    (* @@DISCOVERY_ORDER@@ *)
+
+    type state = {
+      sigma : S.d VH.t;
+      starts : S.d VH.t;
+      queue : queue;
+    }
+
+    type episode = {
+      owner : S.v;
+      owner_rank : int;
+      owner_info : rank_info;
+      mutable owner_phase : U.phase;
+      mutable local_side : local_side option;
+    }
+
+    let[@inline always] create_state () =
+      {
+        sigma = VH.create 32;
+        starts = VH.create 16;
+        queue = create_queue ();
+      }
+
+    let[@inline always] start_value state variable =
+      VH.find_default state.starts variable bottom
+
+    let[@inline always] materialize state variable =
+      if not (VH.mem state.sigma variable) then
+        VH.replace state.sigma variable bottom
+
+    let[@inline always] lattice_equal left right =
+      S.Dom.equal left right
+
+    let[@inline always] recompute_aggregate cells =
+      VH.fold
+        (fun _ cell result -> S.Dom.join cell.contribution result)
+        cells bottom
+
+    let[@inline always] enqueue state variable =
+      queue_insert state.queue variable
+
+    let[@inline always] mark_controlled
+        dependent_info dependent_rank dependency_rank =
+      if dependency_rank >= dependent_rank then
+        dependent_info.controlled <- true
+
+    let[@inline always] write_changed_value
+        state owner_rank owner_info owner value =
+      VH.replace state.sigma owner value;
+      trace_value state.queue.trace owner_rank true;
+      begin match owner_info.readers with
+      | None -> ()
+      | Some readers ->
+        VH.iter (fun reader () -> enqueue state reader) readers;
+        VH.clear readers
+      end
+
+    let[@inline always] set_value state frame direct =
+      let owner = frame.owner in
+      let owner_info = frame.owner_info in
+      let candidate =
+        S.Dom.join direct
+          (S.Dom.join (start_value state owner) owner_info.side_aggregate)
+      in
+      let old = VH.find state.sigma owner in
+      let () =
+        if not (lattice_equal candidate old) then
+          if owner_info.controlled then begin
+            let next_phase, next =
+              U.update false owner frame.owner_phase old candidate
+            in
+            frame.owner_phase <- next_phase;
+            if not (lattice_equal next old) then
+              write_changed_value state frame.owner_rank owner_info owner next
+          end else
+            write_changed_value
+              state frame.owner_rank owner_info owner candidate
+      in
+      match state.queue.trace with
+      | TraceDisabled -> ()
+      | TraceEnabled _ ->
+        let current = VH.find state.sigma owner in
+        if lattice_equal current old then
+          trace_value state.queue.trace frame.owner_rank false
+
+    let solve xs roots _old_data =
+      let state = create_state () in
+
+      let rec solve_episode owner =
+        let owner_rank = rank state.queue owner in
+        let owner_info = Dynarray.get state.queue.infos owner_rank in
+        owner_info.started <- true;
+        let owner_system = S.system owner in
+        let owner_system_lookup _ = owner_system in
+        let owner_phase =
+          match owner_info.normal_phase with
+          | Some phase -> phase
+          | None -> U.initial_phase false owner
+        in
+        let frame =
+          {
+            owner;
+            owner_rank;
+            owner_info;
+            owner_phase;
+            local_side = None;
+          }
+        in
+        materialize state owner;
+
+        let start_evaluation _ =
+          begin match frame.local_side with
+          | Some local_side -> VH.clear local_side
+          | None -> ()
+          end;
+          match owner_system with
+          | Some _ ->
+            trace_evaluation state.queue.trace owner_rank;
+            incr SolverStats.evals
+          | None -> ()
+        in
+
+        let rec evaluate_owner () =
+          Control.solve_one bottom start_evaluation
+            (fun _ -> get frame)
+            (fun _ -> side frame)
+            (fun _ -> spawn frame)
+            (fun _ direct -> set_value state frame direct)
+            (fun _ -> drain_episode ())
+            owner_system_lookup owner
+
+        and drain_episode () =
+          let next_rank = queue_max_rank state.queue in
+          if owner_rank <= next_rank then
+            let next = queue_remove_max state.queue next_rank in
+            if next_rank = owner_rank then
+              evaluate_owner ()
+            else begin
+              solve_episode next;
+              drain_episode ()
+            end
+        in
+        evaluate_owner ();
+        if owner_info.controlled then
+          owner_info.normal_phase <- Some frame.owner_phase
+
+      and get frame target =
+        let owner = frame.owner in
+        let owner_rank = frame.owner_rank in
+        let target_rank = rank state.queue target in
+        let target_info = Dynarray.get state.queue.infos target_rank in
+        trace_get state.queue owner_rank target_rank;
+        let value =
+          try VH.find state.sigma target with Not_found ->
+            if owner_rank < target_rank then begin
+              solve_episode target;
+              VH.find state.sigma target
+            end else begin
+              enqueue state target;
+              VH.replace state.sigma target bottom;
+              bottom
+            end
+        in
+        mark_controlled target_info target_rank owner_rank;
+        let target_readers =
+          match target_info.readers with
+          | Some readers -> readers
+          | None ->
+            let readers = VH.create 4 in
+            target_info.readers <- Some readers;
+            readers
+        in
+        VH.replace target_readers owner ();
+        value
+
+      and side frame target raw =
+        let local_side =
+          match frame.local_side with
+          | Some local_side -> local_side
+          | None ->
+            let local_side = VH.create 4 in
+            frame.local_side <- Some local_side;
+            local_side
+        in
+        let input =
+          match VH.find_option local_side target with
+          | Some previous -> S.Dom.join previous raw
+          | None -> raw
+        in
+        VH.replace local_side target input;
+        write_side_contribution frame target input
+
+      and write_side_contribution frame target input =
+        let source = frame.owner in
+        let source_rank = frame.owner_rank in
+        let target_rank = rank state.queue target in
+        let target_info = Dynarray.get state.queue.infos target_rank in
+        trace_side state.queue source_rank target_rank;
+        mark_controlled frame.owner_info source_rank target_rank;
+        let old_aggregate = target_info.side_aggregate in
+        let cells =
+          match target_info.side_cells with
+          | Some cells -> cells
+          | None ->
+            let cells = VH.create 4 in
+            target_info.side_cells <- Some cells;
+            cells
+        in
+        let cell =
+          try VH.find cells source with Not_found ->
+            let fresh =
+              {
+                phase = U.initial_phase true target;
+                contribution = bottom;
+              }
+            in
+            VH.replace cells source fresh;
+            fresh
+        in
+        let old_contribution = cell.contribution in
+        let next_phase, next_contribution =
+          U.update true target cell.phase old_contribution input
+        in
+        cell.phase <- next_phase;
+        cell.contribution <- next_contribution;
+        let next_aggregate, aggregate_changed =
+          if S.Dom.leq old_contribution next_contribution then
+            if S.Dom.leq next_contribution old_aggregate
+            then old_aggregate, false
+            else S.Dom.join old_aggregate next_contribution, true
+          else begin
+            let next_aggregate = recompute_aggregate cells in
+            next_aggregate,
+              not (lattice_equal next_aggregate old_aggregate)
+          end
+        in
+        if aggregate_changed then begin
+          target_info.side_aggregate <- next_aggregate;
+          if source_rank < target_rank
+             && not (VH.mem state.sigma target)
+          then
+            solve_episode target
+          else
+            enqueue state target
+        end
+
+      and spawn frame target =
+        let owner_rank = frame.owner_rank in
+        let target_rank = rank state.queue target in
+        if not (VH.mem state.sigma target) then
+          if owner_rank < target_rank then
+            solve_episode target
+          else begin
+            enqueue state target;
+            materialize state target
+          end
+      in
+
+      List.iter
+        (fun (variable, input) ->
+          let start = S.Dom.join (start_value state variable) input in
+          VH.replace state.starts variable start;
+          VH.replace state.sigma variable start)
+        xs;
+      solve_initial state.queue solve_episode roots xs;
+      finish_trace state.queue;
+      SolverStats.vars := !SolverStats.vars + VH.length state.sigma;
+      state.sigma, ()
+  end
+
+module SLRTC = Make (Control)

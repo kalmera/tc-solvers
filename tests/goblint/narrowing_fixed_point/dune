@@ -1,0 +1,15 @@
+(copy_files ../../../ocaml/adapters/goblint/generated/slrtc_narrowing_fixed_point.ml)
+(copy_files ../../../ocaml/adapters/goblint/generated/slrtc_inlined_narrowing_fixed_point.ml)
+(copy_files ../../../ocaml/adapters/goblint/generated/slrtc_nfp_update.ml)
+(copy_files ../helpers/goblint_constraint.ml)
+(copy_files ../helpers/gobPretty.ml)
+(copy_files ../helpers/solverStats.ml)
+(executable
+ (name narrowing_fixed_point)
+ (modules narrowing_fixed_point goblint_constraint gobPretty solverStats
+  slrtc_narrowing_fixed_point slrtc_inlined_narrowing_fixed_point slrtc_nfp_update)
+ (flags (:standard -w -33-39-60-67 -warn-error -A))
+ (libraries batteries yojson unix tc_solvers_extracted_narrowing_fixed_point))
+(rule
+ (alias runtest)
+ (action (setenv SLRTC_TRACE "" (run %{exe:narrowing_fixed_point.exe}))))

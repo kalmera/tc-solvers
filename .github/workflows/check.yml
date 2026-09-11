@@ -1,0 +1,28 @@
+name: Proofs and OCaml
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  ocaml:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.4.0
+      - run: opam install dune.3.23.1 batteries.3.11.0 yojson.3.0.0
+      - name: Build committed extraction without Rocq
+        run: opam exec -- make ocaml test
+  proofs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.4.0
+      - run: opam install rocq-prover.9.1.1 rocq-stdlib.9.1.0 dune.3.23.1 batteries.3.11.0 yojson.3.0.0
+      - name: Compile proofs, regenerate, and check adapters
+        run: opam exec -- make ROCQ_JOBS=2
+      - name: Check committed generated sources
+        run: python3 tools/check_generated.py

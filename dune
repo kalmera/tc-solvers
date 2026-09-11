@@ -1,0 +1,4 @@
+(install
+ (section doc)
+ (files docs/extraction.md docs/third-party.md
+  (docs/licenses/rocq-stdlib-LGPL-2.1.txt as rocq-stdlib-LGPL-2.1.txt)))

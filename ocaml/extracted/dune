@@ -1,0 +1,41 @@
+(library
+ (name tc_solvers_extracted_common)
+ (public_name tc-solvers.extracted.common)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules
+  Datatypes
+  Decimal
+  Hexadecimal
+  List
+  ListDef
+  Logic
+  Nat
+  Number
+  Collections
+  ConstraintSystems
+  DiscoveryOrder
+  Interfaces
+  Monadic
+  Specif))
+
+(library
+ (name tc_solvers_extracted_simple)
+ (public_name tc-solvers.extracted.slr.simple)
+ (flags
+  (:standard -open Tc_solvers_extracted_common -w -33-39-67 -warn-error -A))
+ (modules Simple)
+ (libraries tc_solvers_extracted_common))
+
+(library
+ (name tc_solvers_extracted_restarting)
+ (public_name tc-solvers.extracted.slr.restarting)
+ (flags
+  (:standard -open Tc_solvers_extracted_common -w -33-39-67 -warn-error -A))
+ (modules Restarting)
+ (libraries tc_solvers_extracted_common))
+
+(library
+ (name tc_solvers_extracted_narrowing_fixed_point)
+ (public_name tc-solvers.extracted.slr.narrowing_fixed_point)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules NarrowingFixedPointRuntime))
