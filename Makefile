@@ -4,7 +4,7 @@ ROCQ_JOBS ?= 4
 RANK_WORKLIST ?= bitmap
 export RANK_WORKLIST
 .DEFAULT_GOAL := all
-.PHONY: all proofs rocq extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated
+.PHONY: all proofs rocq extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated library
 all: regenerate
 	$(MAKE) test
 RocqMakefile: _RocqProject
@@ -22,6 +22,9 @@ extract: proofs
 	python3 tools/mark_generated.py
 regenerate goblint-solvers: extract
 	$(MAKE) goblint-adapters
+	$(MAKE) library
+library:
+	python3 ocaml/library/generate.py
 goblint-adapters:
 	sh ocaml/adapters/goblint/generate_goblint_slrtc_solvers.sh
 	python3 ocaml/adapters/goblint/narrowing_fixed_point/generate.py

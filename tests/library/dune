@@ -1,0 +1,14 @@
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_simple.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_restarting.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_narrowing_fixed_point.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_update.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_nfp_update.ml)
+(copy_files ../goblint/helpers/goblint_constraint.ml)
+(copy_files ../goblint/helpers/gobPretty.ml)
+(copy_files ../goblint/helpers/solverStats.ml)
+(test
+ (name differential)
+ (flags (:standard -w -32-33-34-37-39-60-67))
+ (libraries tc_solvers batteries yojson unix tc_solvers_extracted_simple
+  tc_solvers_extracted_restarting tc_solvers_extracted_narrowing_fixed_point)
+ (action (setenv SLRTC_TRACE "" (run %{test}))))

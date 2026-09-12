@@ -1,5 +1,7 @@
 # Goblint adapters
 
+For the generic solver API, see the [`tc-solvers` library](library.md).
+
 The `slr-paper` registration set preserves the paper's configuration:
 
 | Identifier | Algorithm | Side reset | Dead-side elimination |
@@ -34,5 +36,4 @@ requires bitmap. The inlined variants and join updates support internal tests;
 they introduce no extra registered solver names. Restore the default with
 `make goblint-adapters RANK_WORKLIST=bitmap` before committing generated sources.
 
-The generic extracted libraries do not depend on Goblint. Specialized adapters
-must satisfy the additional [implementation assumptions](extraction.md).
+These adapters must satisfy the additional [implementation assumptions](extraction.md).

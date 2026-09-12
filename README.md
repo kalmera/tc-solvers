@@ -1,28 +1,27 @@
 # TC Solvers
 
 Executable constraint solvers and constructive total-correctness proofs in Rocq,
-with extracted OCaml libraries and specialized client adapters.
+with a generic OCaml solver library, extracted reference versions, and Goblint adapters.
 
 The initial version contains Simple, Restarting (four side-effect configurations),
 and Narrowing Fixed Point. Each proves total correctness and finite-height join
 leastness under its stated assumptions; Narrowing Fixed Point also proves a
 narrowing-fixpoint result. See the [theorem map](docs/proofs.md).
 
-## Use the OCaml libraries
+## Use the generic library
 
-With OCaml 5.4 and Dune 3.19 or newer in your environment:
+`tc-solvers` provides generic callback solver functors with explicit update policies.
+See the [library guide](docs/library.md) and [examples](examples/library/).
+With OCaml 5.4 and Dune 3.19 or newer:
 
 ```sh
 make ocaml
-# Or install the committed extraction in your current opam switch:
+# Or install the libraries in your current opam switch:
 opam install .
 ```
 
-The [examples](examples/) instantiate the extracted solver functors directly.
-The libraries are `tc-solvers.extracted.slr.simple`,
-`tc-solvers.extracted.slr.restarting`, and
-`tc-solvers.extracted.slr.narrowing_fixed_point`.
-[Extraction and client assumptions](docs/extraction.md) describe their contracts.
+The [extracted reference libraries](docs/extraction.md) and their
+[examples](examples/) are also available for testing.
 
 ## Check the proofs and regenerate
 
@@ -44,8 +43,8 @@ for sequential proof compilation.
 The [Goblint guide](docs/goblint.md) covers the six `slrtc_*` registrations,
 generation, installation, and backend selection.
 
-Sources are organized into `rocq/` (definitions and proofs), `ocaml/` (extraction,
-runtime components, and adapters), `tests/`, and `examples/`. Generated OCaml is
+Sources are organized into `rocq/` (definitions and proofs), `ocaml/` (the generic
+library, extracted references, runtime components, and adapters), `tests/`, and `examples/`. Generated OCaml is
 committed and checked against regeneration in CI. Edit its generators instead.
 
 MIT licensed; see [LICENSE](LICENSE).

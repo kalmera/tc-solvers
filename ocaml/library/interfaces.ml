@@ -1,0 +1,40 @@
+module type VAR = Hashtbl.HashedType
+
+module type DOMAIN = sig
+  type t
+  val bottom : t
+  val join : t -> t -> t
+  val leq : t -> t -> bool
+end
+
+module type BOX_DOMAIN = sig
+  include DOMAIN
+  val widen : t -> t -> t
+  val narrow : t -> t -> t
+end
+
+module type UPDATE = sig
+  type variable
+  type value
+  type phase
+  val initial_phase : bool -> variable -> phase
+  val update : bool -> variable -> phase -> value -> value -> phase * value
+end
+
+module type FEATURES = sig
+  val side_effect_phase_reset : bool
+  val dead_side_elimination : bool
+end
+
+module type SOLVER = sig
+  type variable
+  type value
+  type rhs = (variable -> value) -> (variable -> value -> unit) ->
+    (variable -> unit) -> value
+  type system = variable -> rhs option
+  type solution
+  val solve : ?initial:(variable * value) list -> system -> variable list -> solution
+  val value : solution -> variable -> value
+  val mem : solution -> variable -> bool
+  val iter : (variable -> value -> unit) -> solution -> unit
+end

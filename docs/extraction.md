@@ -1,8 +1,12 @@
-# Extraction and OCaml clients
+# OCaml libraries and extraction
+
+The generic [`tc-solvers` library](library.md), exposed as `Tc_solvers`, provides
+mutable callback solver functors. The extracted reference libraries below expose
+the full fuel-bounded machines for testing.
 
 `rocq/extraction/` contains extraction directives. `make regenerate` compiles
 these with the validated toolchain, writes `ocaml/extracted/`, and regenerates
-Goblint adapters. CI requires the result to match the committed generated files.
+the generic library and Goblint adapters. CI requires the result to match the committed generated files.
 The OCaml package builds those files without invoking Rocq.
 
 | Dune library | OCaml entry module |
@@ -11,7 +15,7 @@ The OCaml package builds those files without invoking Rocq.
 | `tc-solvers.extracted.slr.restarting` | `Tc_solvers_extracted_restarting.Restarting` |
 | `tc-solvers.extracted.slr.narrowing_fixed_point` | `Tc_solvers_extracted_narrowing_fixed_point.NarrowingFixedPointRuntime` |
 
-Simple and Restarting provide `FirstDiscovery` functors; Narrowing Fixed Point
+The extracted Simple and Restarting libraries provide `FirstDiscovery` functors; Narrowing Fixed Point
 provides `Solver`. Each exposes fuel-bounded execution returning `None` when fuel
 is insufficient. The examples include discovered side-effect targets.
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 
 root = Path(__file__).resolve().parent.parent
-paths = ['ocaml/extracted', 'ocaml/adapters/goblint/generated']
+paths = ['ocaml/extracted', 'ocaml/adapters/goblint/generated', 'ocaml/library/generated']
 status = subprocess.check_output(
     ['git', 'status', '--porcelain', '--untracked-files=all', '--', *paths], cwd=root, text=True)
 if status:

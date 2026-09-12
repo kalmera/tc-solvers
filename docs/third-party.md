@@ -1,5 +1,10 @@
 # Third-party components
 
+The generic library cores in `ocaml/library/generated/` reuse extracted
+callback control and the project's mutable adapter algorithms. They carry the
+same extracted-code notices and license terms. They contain no Goblint code or
+Batteries/Yojson runtime dependency; these packages are used only by adapter tests.
+
 Rocq and Rocq Stdlib supply extracted support modules such as List and Nat.
 Rocq Stdlib is LGPL-2.1. Their license notices are
 included under `docs/licenses/`. OCaml's compiler and standard library are
