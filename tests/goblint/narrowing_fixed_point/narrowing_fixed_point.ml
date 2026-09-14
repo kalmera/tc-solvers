@@ -33,8 +33,8 @@ module U = struct
   let initial_phase _ _ = W
   let update _ _ phase old input = match phase with
     | W | N -> if input <= old then N, WN.narrow old input
-      else (if phase=N then F else W), WN.widen old (max old input)
-    | F -> F, WN.widen old (max old input)
+      else (if phase=N then F else W), WN.widen old input
+    | F -> F, WN.widen old input
 end
 module Flags = struct let restart_side_phases = true let eliminate_dead_sides = true end
 module Credit = struct let remaining_changes _ _ = 0 end

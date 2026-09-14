@@ -79,11 +79,11 @@ Module FixedRankFallback.
 
   Module WNL <: WIDEN_NARROW_LAWS D WN.
     Lemma widen_upper_old : forall old input,
-      D.leq old (WN.widen old (D.join old input)) = true.
+      D.leq old (WN.widen old input) = true.
     Proof. destruct old, input; reflexivity. Qed.
 
     Lemma widen_upper_input : forall old input,
-      D.leq input (WN.widen old (D.join old input)) = true.
+      D.leq input (WN.widen old input) = true.
     Proof. destruct old, input; reflexivity. Qed.
 
     Lemma narrow_lower : forall old input,

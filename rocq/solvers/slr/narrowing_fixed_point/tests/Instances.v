@@ -7,26 +7,13 @@ From TcSolvers Require Import common.Assumptions common.BoxUpdate
 Import ListNotations.
 Set Implicit Arguments.
 
-(** Any widening on the concrete chain respects equivalence. *)
-Module ChainCongruence (WN : WIDEN_NARROW Chain.D)
-  <: WIDEN_CONGRUENCE Chain.D WN.
-  Lemma widen_congruent : forall old input input',
-    Chain.D.leq input input' = true /\ Chain.D.leq input' input = true ->
-    Chain.D.leq (WN.widen old input) (WN.widen old input') = true /\
-    Chain.D.leq (WN.widen old input') (WN.widen old input) = true.
-  Proof.
-    intros old input input' H. apply Chain.UL.equivalent_eq in H.
-    subst. split; apply Chain.DL.leq_refl.
-  Qed.
-End ChainCongruence.
-
 Module ConcreteDescent.
   Module V := Chain.V.
   Module D := Chain.D.
   Module DL := Chain.DL.
   Module WN := Chain.WN.
   Module WNL := Chain.WNL.
-  Module WC := ChainCongruence WN.
+  Module WS := Chain.WS.
   Module Fixed := Theorems.Make V D WN.
   Module U := Fixed.U.
   Module UL <: UPDATE_LAWS V D U.
@@ -102,7 +89,7 @@ Module ConcreteDescent.
     Qed.
 
   End UL.
-  Module FixedLaws := Fixed.WithLaws DL WNL WC UL.
+  Module FixedLaws := Fixed.WithLaws DL WNL WS UL.
   Module FixedCells := FixedLaws.WithCollections Chain.S Chain.M
     Base.AllEnabledFeatures Chain.SL Chain.ML.
   Definition total_correct_and_fixed := @FixedCells.total_correct_and_fixed.

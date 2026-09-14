@@ -93,7 +93,7 @@ may reset according to the selected solver configuration.
 `Update.TwoCopy (V) (D)` is the suggested starting policy: two direct copies,
 then a widening/narrowing box, with widening-only fallback after growth resumes
 in narrowing. `Update.WidenNarrow (V) (D)` starts directly in that box.
-Both require `BOX_DOMAIN` and call `widen old (join old input)`.
+Both require `BOX_DOMAIN` and call `widen old input`.
 `Update.Join (V) (D)` needs only `DOMAIN` and joins old with input. Custom policies
 use the same interface; no particular policy is selected implicitly.
 
@@ -101,8 +101,11 @@ Domain equivalence is mutual `leq`. Clients must satisfy the domain, update,
 finite-support, and transfer laws in the corresponding Rocq theorem. Join
 leastness additionally requires finite height, operational monotonicity, and
 source strictness outside roots. The proved narrowing-fixed-point instance uses
-the zero-copy box and its stated widening/narrowing laws; selecting the suggested
-two-copy policy does not instantiate that theorem.
+the zero-copy box, direct-widening upper bounds, and covered-input stability:
+`leq input old` implies that `widen old input` is equivalent to `old`.
+This extra stability law belongs to the narrowing-fixpoint theorem, not generic
+total correctness. Selecting the suggested two-copy policy does not instantiate
+that theorem.
 
 Only callback control is extracted; the mutable runtime has no mechanized
 refinement proof. Differential tests cover all six configurations and three

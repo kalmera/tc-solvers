@@ -3,8 +3,7 @@ From TcSolvers Require Import common.Interfaces.
 Set Implicit Arguments.
 
 (** Widening and narrowing operations for the zero-copy, one-box update.
-    As in Goblint, widening receives the join of the old value and the new
-    input as its second argument. *)
+    Widening receives the old value and the new input directly. *)
 Module Type WIDEN_NARROW (D : DOMAIN).
   Parameter widen : D.t -> D.t -> D.t.
   Parameter narrow : D.t -> D.t -> D.t.
@@ -15,11 +14,11 @@ Module Type WIDEN_NARROW_LAWS
 
   Parameter widen_upper_old :
     forall old input,
-      D.leq old (WN.widen old (D.join old input)) = true.
+      D.leq old (WN.widen old input) = true.
 
   Parameter widen_upper_input :
     forall old input,
-      D.leq input (WN.widen old (D.join old input)) = true.
+      D.leq input (WN.widen old input) = true.
 
   Parameter narrow_lower :
     forall old input,
@@ -31,6 +30,14 @@ Module Type WIDEN_NARROW_LAWS
       D.leq input old = true ->
       D.leq (WN.narrow old input) old = true.
 End WIDEN_NARROW_LAWS.
+
+(** Additional precision law; not required by generic total correctness. *)
+Module Type WIDEN_STABILITY (D : DOMAIN) (WN : WIDEN_NARROW D).
+  Parameter widen_stable : forall old input,
+    D.leq input old = true ->
+    D.leq (WN.widen old input) old = true /\
+    D.leq old (WN.widen old input) = true.
+End WIDEN_STABILITY.
 
 (** [BoxUpdate] with zero copy phases and one widening/narrowing box.
 
@@ -53,9 +60,6 @@ Module OneBoxUpdate
     (_is_side : bool) (_variable : V.t) : phase :=
     BoxW.
 
-  Definition joined_widen (old input : D.t) : D.t :=
-    WN.widen old (D.join old input).
-
   Definition update
     (_is_side : bool) (_variable : V.t)
     (current : phase) (old input : D.t) : phase * D.t :=
@@ -63,13 +67,13 @@ Module OneBoxUpdate
     | BoxW =>
         if D.leq input old
         then (BoxN, WN.narrow old input)
-        else (BoxW, joined_widen old input)
+        else (BoxW, WN.widen old input)
     | BoxN =>
         if D.leq input old
         then (BoxN, WN.narrow old input)
-        else (Widen, joined_widen old input)
+        else (Widen, WN.widen old input)
     | Widen =>
-        (Widen, joined_widen old input)
+        (Widen, WN.widen old input)
     end.
 
   Definition avoids_fallback (current : phase) : Prop :=

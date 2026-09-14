@@ -8,23 +8,14 @@ Set Implicit Arguments.
     The executable commit barrier establishes settled cells and covered inputs.
     The reachable episode invariant derives ordinary narrowing admissibility
     from operational monotonicity; it is not a public solver assumption. *)
-Module Type WIDEN_CONGRUENCE (D : DOMAIN) (WN : WIDEN_NARROW D).
-  Parameter widen_congruent : forall old input input',
-    D.leq input input' = true /\ D.leq input' input = true ->
-    D.leq (WN.widen old input) (WN.widen old input') = true /\
-    D.leq (WN.widen old input') (WN.widen old input) = true.
-End WIDEN_CONGRUENCE.
 
 Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
 Module Descent.
   Module U := OneBoxUpdate V D WN.
-    Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN).
+    Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
+      (WS : WIDEN_STABILITY D WN).
 
       Definition equivalent (x y : D.t) := D.leq x y = true /\ D.leq y x = true.
-
-      Definition widen_congruent :=
-        forall old input input', equivalent input input' ->
-        equivalent (WN.widen old input) (WN.widen old input').
 
       Lemma update_sound is_side variable phase old input :
         D.leq input (snd (U.update is_side variable phase old input)) = true.
@@ -34,16 +25,7 @@ Module Descent.
           [apply WNL.narrow_lower, Hle |apply WNL.widen_upper_input].
       Qed.
 
-      Lemma bounded_joins_equivalent old x y :
-        D.leq x old = true -> D.leq y old = true ->
-        equivalent (D.join old x) (D.join old y).
-      Proof.
-        intros Hx Hy. split; eapply DL.leq_trans;
-          [apply DL.join_least; [apply DL.leq_refl |exact Hx] |apply DL.join_upper_left
-          |apply DL.join_least; [apply DL.leq_refl |exact Hy] |apply DL.join_upper_left].
-      Qed.
-
-      Lemma stable_smaller_input_bounded (Hcongruent : widen_congruent)
+      Lemma stable_smaller_input_bounded
         is_side variable phase old input smaller :
         equivalent (snd (U.update is_side variable phase old input)) old ->
         D.leq smaller input = true ->
@@ -57,15 +39,14 @@ Module Descent.
         destruct phase; cbn -[D.leq] in *.
         - rewrite Hbelow. apply WNL.narrow_upper, Hbelow.
         - rewrite Hbelow. apply WNL.narrow_upper, Hbelow.
-        - eapply DL.leq_trans; [|exact (proj1 Hstable)].
-          apply Hcongruent. now apply bounded_joins_equivalent.
+        - exact (proj1 (WS.widen_stable Hbelow)).
       Qed.
     End WithLaws.
 End Descent.
 Module U := Descent.U.
 Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
- (WC : WIDEN_CONGRUENCE D WN) (UL : UPDATE_LAWS V D U).
-Module A := Descent.WithLaws DL WNL.
+ (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U).
+Module A := Descent.WithLaws DL WNL WS.
 Definition settled is_side variable phase value :=
  phase = U.Widen ->
  UL.equivalent (snd (U.update is_side variable U.Widen value value)) value.
@@ -73,23 +54,14 @@ Lemma stable_settled is_side variable phase value input :
  UL.equivalent (snd (U.update is_side variable phase value input)) value ->
  settled is_side variable phase value.
 Proof.
- intros Hstable Hphase. subst phase.
- assert (Hcovered : D.leq input value = true).
- { eapply DL.leq_trans; [apply UL.update_sound |exact (proj1 Hstable)]. }
- split.
- - eapply DL.leq_trans; [|exact (proj1 Hstable)].
-   apply WC.widen_congruent. apply A.bounded_joins_equivalent; [exact Hcovered |apply DL.leq_refl].
- - apply WNL.widen_upper_old.
+ intros _ Hphase. subst phase.
+ apply WS.widen_stable, DL.leq_refl.
 Qed.
 Lemma settled_widen_stutters is_side variable value input :
  settled is_side variable U.Widen value -> D.leq input value = true ->
  UL.equivalent (snd (U.update is_side variable U.Widen value input)) value.
 Proof.
- intros Hstable Hinput. specialize (Hstable eq_refl).
- split.
- - eapply DL.leq_trans; [|exact (proj1 Hstable)].
-   apply WC.widen_congruent. apply A.bounded_joins_equivalent; [apply DL.leq_refl |exact Hinput].
- - apply WNL.widen_upper_old.
+ intros _ Hinput. apply WS.widen_stable, Hinput.
 Qed.
 Lemma settled_update_descends is_side variable phase value input :
  settled is_side variable phase value -> D.leq input value = true ->
@@ -2182,8 +2154,8 @@ Proof.
  - destruct (S.mem (R.frame_owner fr) (R.controlled st)) eqn:Hcontrolled.
    + rewrite Hphase in Hset. cbn -[D.leq R.sigma_value] in Hset.
      destruct (D.leq candidate old) eqn:Hinput;[now split |].
-     cbn -[R.equivalent U.joined_widen] in Hset.
-     destruct (R.equivalent (U.joined_widen old candidate) old);
+     cbn -[R.equivalent WN.widen] in Hset.
+     destruct (R.equivalent (WN.widen old candidate) old);
      inversion Hset;subst;discriminate.
    + cbn in Hset. destruct (R.equivalent candidate old);
      inversion Hset;subst;cbn in Hnext;rewrite Hphase in Hnext;discriminate.
@@ -3275,7 +3247,7 @@ Proof.
  - destruct (S.mem (R.frame_owner fr) (R.controlled st)).
    + rewrite Hphase in Hset. cbn -[D.leq R.sigma_value] in Hset.
      destruct (D.leq candidate old);
-     cbn -[R.equivalent U.joined_widen WN.narrow] in Hset;
+     cbn -[R.equivalent WN.widen WN.narrow] in Hset;
      destruct R.equivalent;inversion Hset;subst;[now right |now right |now left |now left].
    + cbn in Hset. destruct (R.equivalent candidate old);inversion Hset;subst;left;exact Hphase.
 Qed.
@@ -3606,7 +3578,7 @@ Definition narrowing_input
       + exact Hstutter.
       + exfalso.
         destruct Hstutter as [Hresult_old _].
-        cbn in Hresult_old. unfold U.joined_widen in Hresult_old.
+        cbn in Hresult_old.
         pose proof (WNL.widen_upper_input old input) as Hinput_result.
         rewrite <- Bool.not_true_iff_false in Hle.
         apply Hle.
@@ -3616,7 +3588,7 @@ Definition narrowing_input
       + exact Hstutter.
       + exfalso.
         destruct Hstutter as [Hresult_old _].
-        cbn in Hresult_old. unfold U.joined_widen in Hresult_old.
+        cbn in Hresult_old.
         pose proof (WNL.widen_upper_input old input) as Hinput_result.
         rewrite <- Bool.not_true_iff_false in Hle.
         apply Hle.

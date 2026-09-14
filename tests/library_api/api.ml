@@ -34,7 +34,7 @@ let () =
   assert (d = 4);
   let p, e = Copy.update false 0 p d 5 in
   let _, f = Copy.update false 0 p e 1 in
-  assert (f = 5 && List.hd !(D.calls) = (5,5));
+  assert (f = 5 && List.hd !(D.calls) = (5,1));
   let _, x = WN.update false 0 (WN.initial_phase false 0) 0 1 in
   assert (x = 5);
   let _, x = Join.update true 1 (Join.initial_phase true 1) 2 1 in

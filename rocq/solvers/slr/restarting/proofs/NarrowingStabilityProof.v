@@ -5358,7 +5358,7 @@ Module Make
         * reflexivity.
         * cbn in Hset.
           destruct (R.equivalent
-            (U.joined_widen
+            (WN.widen
               (R.sigma_value st (R.frame_owner fr))
               (D.join direct (R.aggregate st (R.frame_owner fr))))
             (R.sigma_value st (R.frame_owner fr)));

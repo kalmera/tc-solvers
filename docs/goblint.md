@@ -14,8 +14,8 @@ The `slr-paper` registration set preserves the paper's configuration:
 | `slrtc_n` | Narrowing Fixed Point | yes | yes |
 
 All six use extracted callback control, the bitmap worklist, and `CopyUpdate`
-(two copies followed by the widening/narrowing box). Widening receives `old` and
-`join old input`. `SLRTC_TRACE` is disabled by default.
+(two copies followed by the widening/narrowing box).
+`SLRTC_TRACE` is disabled by default.
 
 ```sh
 python3 ocaml/adapters/goblint/install.py /path/to/analyzer --set slr-paper

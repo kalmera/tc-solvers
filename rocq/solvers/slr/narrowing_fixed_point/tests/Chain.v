@@ -33,7 +33,8 @@ Module Chain.
   End D.
 
   Module WN.
-    Definition widen (_old _input : D.t) : D.t := D.Top.
+    Definition widen (old input : D.t) : D.t :=
+      if D.leq input old then old else D.Top.
 
     Definition narrow (old input : D.t) : D.t :=
       if D.leq old input then input else
@@ -85,11 +86,11 @@ Module Chain.
 
   Module WNL <: WIDEN_NARROW_LAWS D WN.
     Lemma widen_upper_old : forall old input,
-      D.leq old (WN.widen old (D.join old input)) = true.
+      D.leq old (WN.widen old input) = true.
     Proof. destruct old, input; reflexivity. Qed.
 
     Lemma widen_upper_input : forall old input,
-      D.leq input (WN.widen old (D.join old input)) = true.
+      D.leq input (WN.widen old input) = true.
     Proof. destruct old, input; reflexivity. Qed.
 
     Lemma narrow_lower : forall old input,
@@ -102,6 +103,17 @@ Module Chain.
       D.leq (WN.narrow old input) old = true.
     Proof. destruct old, input; cbn; congruence. Qed.
   End WNL.
+
+  Module WS <: WIDEN_STABILITY D WN.
+    Lemma widen_stable : forall old input,
+      D.leq input old = true ->
+      D.leq (WN.widen old input) old = true /\
+      D.leq old (WN.widen old input) = true.
+    Proof.
+      intros old input Hle. unfold WN.widen. rewrite Hle.
+      split; apply DL.leq_refl.
+    Qed.
+  End WS.
 
   Module UL <: UPDATE_LAWS V D U.
     Definition equivalent (x y : D.t) : Prop :=

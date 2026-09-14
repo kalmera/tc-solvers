@@ -22,8 +22,9 @@ From TcSolvers Require Import solvers.slr.simple.Theorems.
 Termination uses finite support and update-change credits. Leastness additionally
 requires operational monotonicity, source strictness outside the roots, and
 upper-bound-preserving updates, instantiated by finite-height join iteration.
-The narrowing-fixpoint result has its own operational monotonicity and
-widening/narrowing laws; its public theorem is authoritative.
+The narrowing-fixpoint result additionally assumes operational monotonicity,
+direct-widening upper bounds, narrowing bounds, and `WIDEN_STABILITY`: if
+`input` is below `old`, then `widen old input` is equivalent to `old`.
 
 `make proofs` checks all imported units and instances. The existing instance
 checks print their assumptions; the completed results are constructive.

@@ -45,19 +45,13 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   Qed.
 End Correctness.
 
-Module Type WIDEN_CONGRUENCE (D : DOMAIN) (WN : WIDEN_NARROW D).
-  Parameter widen_congruent : forall old input input',
-    D.leq input input' = true /\ D.leq input' input = true ->
-    D.leq (WN.widen old input) (WN.widen old input') = true /\
-    D.leq (WN.widen old input') (WN.widen old input) = true.
-End WIDEN_CONGRUENCE.
 
 Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   Module Verified := FixedPoint.Make V D WN.
   Module U := Verified.U.
   Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
-    (WC : WIDEN_CONGRUENCE D WN) (UL : UPDATE_LAWS V D U).
-    Module VerifiedLaws := Verified.WithLaws DL WNL WC UL.
+    (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U).
+    Module VerifiedLaws := Verified.WithLaws DL WNL WS UL.
     Module WithCollections (S : SET V) (M : MAP V)
       (Features : Base.FEATURES) (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
 
