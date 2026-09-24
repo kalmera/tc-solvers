@@ -1,14 +1,17 @@
 From Stdlib Require Import List.
-From TcSolvers Require Import solvers.slr.narrowing_fixed_point.tests.Chain
- solvers.slr.narrowing_fixed_point.Theorems.
+From TcSolvers Require Import common.FiniteHeight common.instances.Chain
+  solvers.slr.narrowing_fixed_point.Theorems.
 Import ListNotations.
 
 (** Concrete finite-height client; the three queued side targets exercise the
     batched drain while all unrequested owners remain source-strict. *)
 Module BatchedJoinLeast.
  Module E := Chain.
- Module Solver := Theorems.FiniteHeight E.V E.D E.S E.M
-  Base.AllEnabledFeatures E.DL E.Height E.SL E.ML.
+ Module U := JoinUpdate E.V E.D.
+ Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
+ Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
+ Module Solver := Theorems.LeastSolutionMake E.V E.D U E.S E.M
+  Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
  Import Solver.
  Definition tf owner := if E.V.eq_dec owner 0 then
   R.ConstraintSystem.Side 1 E.D.One
@@ -56,5 +59,4 @@ Module BatchedJoinLeast.
  Definition least_result := @Solver.total_least_solution tf [0] finite strict monotone.
 End BatchedJoinLeast.
 
-Print Assumptions BatchedJoinLeast.total_least_solution.
-Print Assumptions BatchedJoinLeast.least_result.
+(* Print Assumptions BatchedJoinLeast.least_result. *)

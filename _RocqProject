@@ -8,6 +8,7 @@ rocq/common/ConstraintSystems.v
 rocq/solvers/slr/common/DiscoveryOrder.v
 rocq/solvers/slr/common/DiscoveryOrderLaws.v
 rocq/common/FiniteHeight.v
+rocq/common/instances/Chain.v
 rocq/solvers/slr/common/FrozenDiscoveryOrder.v
 rocq/common/Interfaces.v
 rocq/solvers/slr/common/Monadic.v

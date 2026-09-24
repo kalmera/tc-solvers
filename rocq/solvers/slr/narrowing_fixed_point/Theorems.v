@@ -1,5 +1,6 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
+  common.instances.Chain
   common.Assumptions common.BoxUpdate common.FiniteHeight
   solvers.slr.narrowing_fixed_point.proofs.Replay
   solvers.slr.narrowing_fixed_point.proofs.FixedPoint
@@ -100,12 +101,11 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   End WithLaws.
 End Make.
 
-Module FiniteHeight (V : VAR) (D : DOMAIN) (S : SET V) (M : MAP V)
-  (Features : Base.FEATURES) (DL : DOMAIN_LAWS D)
-  (FH : FINITE_HEIGHT_LAWS D DL) (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module U := JoinUpdate V D.
-  Module UL := JoinUpdateLaws V D DL FH.
-  Module UBL := JoinUpdateUpperBoundLaws V D DL.
+Module LeastSolutionMake (V : VAR) (D : DOMAIN) (U : UPDATE V D)
+  (S : SET V) (M : MAP V) (Features : Base.FEATURES)
+  (DL : DOMAIN_LAWS D) (UL : UPDATE_LAWS V D U)
+  (UBL : UPPER_BOUND_UPDATE_LAWS V D U)
+  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
   Module Internal := LeastSolution.Make V D U S M Features DL UL UBL SL ML.
   Module Sem := Internal.Sem.
   Module R := Internal.R.
@@ -120,4 +120,30 @@ Module FiniteHeight (V : VAR) (D : DOMAIN) (S : SET V) (M : MAP V)
     exists fuel final, N.solve_fuel fuel tf roots = Some final /\
       Sem.least_solution_on tf (@Sem.support tf roots finite) (R.sigma_value final).
   Proof. exact Internal.total_least_solution. Qed.
-End FiniteHeight.
+End LeastSolutionMake.
+
+(** Concrete audits discharge the module laws; the theorems above remain generic. *)
+Module Instances.
+  Module E := Chain.
+  Module Correct := Correctness E.V E.D E.U E.S E.M
+    Base.AllEnabledFeatures E.DL E.UL E.SL E.ML.
+  Module Fixed := Make E.V E.D E.WN.
+  Module FixedUL := E.UpdateLaws Fixed.U.
+  Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL.
+  Module FixedCells := FixedLaws.WithCollections E.S E.M
+    Base.AllEnabledFeatures E.SL E.ML.
+  Module U := JoinUpdate E.V E.D.
+  Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
+  Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
+  Module Least := LeastSolutionMake E.V E.D U E.S E.M
+    Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
+End Instances.
+
+Goal True. idtac "SLR-TC_N total correctness proven with assumptions:". Abort.
+Print Assumptions Instances.Correct.total_correct.
+
+Goal True. idtac "SLR-TC_N leastness proven with assumptions:". Abort.
+Print Assumptions Instances.Least.total_least_solution.
+
+Goal True. idtac "SLR-TC_N total correctness and narrowing fixedness proven with assumptions:". Abort.
+Print Assumptions Instances.FixedCells.total_correct_and_fixed.

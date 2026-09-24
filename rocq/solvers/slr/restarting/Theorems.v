@@ -1,5 +1,6 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
+  common.instances.Chain
   common.Assumptions
   solvers.slr.common.DiscoveryOrderLaws
   common.FiniteHeight
@@ -43,43 +44,7 @@ Module Make
   Proof. exact Internal.total_correct. Qed.
 End Make.
 
-Module FirstDiscovery
-  (V : VAR) (D : DOMAIN) (U : UPDATE V D)
-  (S : SET V) (M : MAP V)
-  (Features : Restarting.FEATURES)
-  (DL : DOMAIN_LAWS D)
-  (UL : UPDATE_LAWS V D U)
-  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module Rk := ListDiscoveryOrder V.
-  Module Laws <: STABLE_DISCOVERY_ORDER_LAWS V Rk :=
-    ListDiscoveryOrderLaws V.
-  Module Finite <: FINITE_DISCOVERY_ORDER_LAWS V Rk Laws :=
-    ListFiniteDiscoveryOrderLaws V.
-  Include Make
-    V D U S M Rk Features Laws Finite DL UL SL ML.
-End FirstDiscovery.
-
-Module FixedRank
-  (V : VAR) (D : DOMAIN) (U : UPDATE V D)
-  (S : SET V) (M : MAP V)
-  (Fixed : STATELESS_RANK V)
-  (FixedLaws : STATELESS_RANK_LAWS V Fixed)
-  (Features : Restarting.FEATURES)
-  (DL : DOMAIN_LAWS D)
-  (UL : UPDATE_LAWS V D U)
-  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module Rk := FixedRankDiscoveryOrder V Fixed.
-  Module Laws <: STABLE_DISCOVERY_ORDER_LAWS V Rk :=
-    FixedRankDiscoveryOrderLaws V Fixed FixedLaws.
-  Module Finite <: FINITE_DISCOVERY_ORDER_LAWS V Rk Laws :=
-    FixedRankFiniteDiscoveryOrderLaws V Fixed FixedLaws.
-  Include Make
-    V D U S M Rk Features Laws Finite DL UL SL ML.
-End FixedRank.
-
-Module LeastSolution.
-
-Module Make
+Module LeastSolutionMake
   (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Rk : DISCOVERY_ORDER V)
   (Features : Restarting.FEATURES)
@@ -109,49 +74,25 @@ Module Make
     exists fuel, final. split; [exact Hrun |].
     exact (@Internal.solve_fuel_least_solution fuel tf roots finite final Hstrict Hmono Hrun).
   Qed.
-End Make.
+End LeastSolutionMake.
 
-Module FiniteHeight
-  (V : VAR) (D : DOMAIN) (S : SET V) (M : MAP V)
-  (Rk : DISCOVERY_ORDER V) (Features : Restarting.FEATURES)
-  (RankLaws : STABLE_DISCOVERY_ORDER_LAWS V Rk)
-  (RankFinite : FINITE_DISCOVERY_ORDER_LAWS V Rk RankLaws)
-  (DL : DOMAIN_LAWS D) (FH : FINITE_HEIGHT_LAWS D DL)
-  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module U := JoinUpdate V D.
-  Module UL := JoinUpdateLaws V D DL FH.
-  Module UBL := JoinUpdateUpperBoundLaws V D DL.
-  Include Make
-    V D U S M Rk Features RankLaws RankFinite DL UL UBL SL ML.
-End FiniteHeight.
+(** Concrete audits discharge the module laws; the theorems above remain generic. *)
+Module Instances.
+  Module E := Chain.
+  Module Rk := ListDiscoveryOrder E.V.
+  Module RankLaws := ListDiscoveryOrderLaws E.V.
+  Module RankFinite := ListFiniteDiscoveryOrderLaws E.V.
+  Module Correct := Make E.V E.D E.U E.S E.M Rk Restarting.AllEnabledFeatures
+    RankLaws RankFinite E.DL E.UL E.SL E.ML.
+  Module U := JoinUpdate E.V E.D.
+  Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
+  Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
+  Module Least := LeastSolutionMake E.V E.D U E.S E.M Rk Restarting.AllEnabledFeatures
+    RankLaws RankFinite E.DL UL UBL E.SL E.ML.
+End Instances.
 
-Module FirstDiscovery
-  (V : VAR) (D : DOMAIN) (S : SET V) (M : MAP V)
-  (Features : Restarting.FEATURES)
-  (DL : DOMAIN_LAWS D) (FH : FINITE_HEIGHT_LAWS D DL)
-  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module Rk := ListDiscoveryOrder V.
-  Module RankLaws <: STABLE_DISCOVERY_ORDER_LAWS V Rk :=
-    ListDiscoveryOrderLaws V.
-  Module RankFinite <: FINITE_DISCOVERY_ORDER_LAWS V Rk RankLaws :=
-    ListFiniteDiscoveryOrderLaws V.
-  Include FiniteHeight
-    V D S M Rk Features RankLaws RankFinite DL FH SL ML.
-End FirstDiscovery.
+Goal True. idtac "SLR-TC_R total correctness proven with assumptions:". Abort.
+Print Assumptions Instances.Correct.total_correct.
 
-Module FixedRank
-  (V : VAR) (D : DOMAIN) (S : SET V) (M : MAP V)
-  (Fixed : STATELESS_RANK V) (FixedLaws : STATELESS_RANK_LAWS V Fixed)
-  (Features : Restarting.FEATURES)
-  (DL : DOMAIN_LAWS D) (FH : FINITE_HEIGHT_LAWS D DL)
-  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-  Module Rk := FixedRankDiscoveryOrder V Fixed.
-  Module RankLaws <: STABLE_DISCOVERY_ORDER_LAWS V Rk :=
-    FixedRankDiscoveryOrderLaws V Fixed FixedLaws.
-  Module RankFinite <: FINITE_DISCOVERY_ORDER_LAWS V Rk RankLaws :=
-    FixedRankFiniteDiscoveryOrderLaws V Fixed FixedLaws.
-  Include FiniteHeight
-    V D S M Rk Features RankLaws RankFinite DL FH SL ML.
-End FixedRank.
-
-End LeastSolution.
+Goal True. idtac "SLR-TC_R leastness proven with assumptions:". Abort.
+Print Assumptions Instances.Least.total_least_solution.
