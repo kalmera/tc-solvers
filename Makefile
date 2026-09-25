@@ -1,18 +1,24 @@
 DUNE ?= dune
 ROCQ ?= rocq
-ROCQ_JOBS ?= 4
+ROCQ_JOBS ?= 2
 RANK_WORKLIST ?= bitmap
 export RANK_WORKLIST
 .DEFAULT_GOAL := all
-.PHONY: all proofs rocq extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated library
+.PHONY: all proofs rocq proof-tests extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated library
 all: regenerate
 	$(MAKE) test
 RocqMakefile: _RocqProject
 	$(ROCQ) makefile -f _RocqProject -o $@
+# Keep concrete examples separate from the public theorem/assumption audits.
+PROOF_TESTS := $(wildcard rocq/solvers/slr/*/tests/*.v) \
+ rocq/solvers/slr/restarting/NarrowingStabilityCounterexample.v
+PROOF_SOURCES := $(filter-out $(PROOF_TESTS) rocq/extraction/%.v,$(filter %.v,$(shell cat _RocqProject)))
 proofs rocq: RocqMakefile
-	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile all
+	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile $(PROOF_SOURCES:.v=.vo)
+proof-tests: proofs
+	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile $(PROOF_TESTS:.v=.vo)
 narrowing-fixed-point: RocqMakefile
-	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile rocq/solvers/slr/narrowing_fixed_point/tests/Instances.vo rocq/solvers/slr/narrowing_fixed_point/tests/LeastInstances.vo
+	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile rocq/solvers/slr/narrowing_fixed_point/Theorems.vo
 # Recompile extraction roots even when their .vo files are current.
 extract: proofs
 	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractSimple.v

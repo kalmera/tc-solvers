@@ -11,7 +11,7 @@ example systems remain beside it. Shared concrete instances live in
 | `restarting` | `Restarting.v` | Total correctness for all four feature settings; leastness under upper-bound-preserving updates |
 | `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
 
-Public theorem files include the definitions necessary to read their statements.
+Public theorem interfaces expose the definitions necessary to read their statements.
 Simple and Restarting expose `Make` and `LeastSolutionMake`, with explicit rank
 policies and laws. Narrowing Fixed Point exposes `Correctness` for arbitrary
 updates, `Make` for OneBox narrowing fixedness, and `LeastSolutionMake` for
@@ -32,8 +32,10 @@ The narrowing-fixpoint result additionally assumes operational monotonicity,
 direct-widening upper bounds, narrowing bounds, and `WIDEN_STABILITY`: if
 `input` is below `old`, then `widen old input` is equivalent to `old`.
 
-`make proofs` checks all imported units and instances. Each `Theorems.v`
-instantiates its public results in an `Instances` module using the shared five-element `Chain` domain.
+`make proofs` checks the proof units and public theorem audits. The additional
+concrete example systems and counterexample are checked with `make proof-tests`.
+Each `Theorems.v` instantiates its public results in an `Instances` module using
+the shared five-element `Chain` domain.
 Compiling the file prints a labelled marker followed by Rocq's actual
 `Print Assumptions` output, for example:
 

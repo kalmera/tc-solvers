@@ -35,7 +35,8 @@ opam exec -- make
 
 `make` compiles proofs, regenerates extraction and adapters, and runs the existing
 OCaml smoke and differential checks. `make proofs`, `make narrowing-fixed-point`,
-`make regenerate`, and `make test` select individual stages. Set `ROCQ_JOBS=1`
+`make regenerate`, and `make test` select individual stages. `make proof-tests`
+additionally checks the concrete example systems and counterexample. Set `ROCQ_JOBS=1`
 for sequential proof compilation.
 
 ## Integrate with Goblint

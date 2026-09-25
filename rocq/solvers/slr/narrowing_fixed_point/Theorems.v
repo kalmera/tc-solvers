@@ -47,59 +47,9 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
 End Correctness.
 
 
-Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
-  Module Verified := FixedPoint.Make V D WN.
-  Module U := Verified.U.
-  Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
-    (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U).
-    Module VerifiedLaws := Verified.WithLaws DL WNL WS UL.
-    Module WithCollections (S : SET V) (M : MAP V)
-      (Features : Base.FEATURES) (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
-
-      Module Internal := VerifiedLaws.WithCollections S M Features SL ML.
-      Module Sem := Internal.Sem.
-      Module R := Internal.R.
-      Module N := Internal.Replay.Front.N.
-
-      Definition solved (final : R.state) (owner : V.t) : Prop :=
-        exists value, M.lookup (R.sigma final) owner = Some value.
-
-      Definition replay (final : R.state) :=
-        Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
-
-      Definition owner_post_solution (tf : R.ConstraintSystem.system)
-        (final : R.state) (owner : V.t) : Prop :=
-        forall direct reads effects, replay final (tf owner) direct reads effects ->
-          D.leq direct (R.sigma_value final owner) = true /\
-          (forall target value, In (target,value) effects ->
-            D.leq value (R.sigma_value final target) = true).
-
-      Definition correct_final_state (tf : R.ConstraintSystem.system)
-        (roots : list V.t) (final : R.state) : Prop :=
-        forall owner, In owner roots ->
-          solved final owner /\ owner_post_solution tf final owner.
-
-      Definition monotonic_system (tf : R.ConstraintSystem.system) : Prop :=
-        forall owner, Sem.rhs_dependencies_monotone (tf owner) /\
-                      Sem.rhs_effects_monotone (tf owner).
-
-      Definition narrowing_fixed (tf : R.ConstraintSystem.system) (final : R.state) : Prop :=
-        forall owner, solved final owner ->
-          (exists direct reads effects, replay final (tf owner) direct reads effects) /\
-          (forall direct reads effects, replay final (tf owner) direct reads effects ->
-            UL.equivalent
-              (WN.narrow (R.sigma_value final owner)
-                (D.join direct (R.aggregate final owner)))
-              (R.sigma_value final owner)).
-
-      Theorem total_correct_and_fixed : forall tf roots,
-        Sem.finite_system tf roots -> monotonic_system tf ->
-        exists fuel final, N.solve_fuel fuel tf roots = Some final /\
-          correct_final_state tf roots final /\ narrowing_fixed tf final.
-      Proof. exact Internal.total_correct_and_fixed. Qed.
-    End WithCollections.
-  End WithLaws.
-End Make.
+(** Reuse the implementation's public vocabulary and theorem directly;
+    nested wrapper functors duplicate the large replay proof graph. *)
+Module Make := FixedPoint.Make.
 
 Module LeastSolutionMake (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Features : Base.FEATURES)

@@ -80,7 +80,7 @@ Module Fanout.
 
   Definition commit_replay := @N.actual_commit_replay.
   Definition reset_credit := @N.higher_reset_preserves_credit.
-  Definition successful_correct := @ConcreteDescent.FixedCells.Internal.Replay.successful_run_correct.
+  Definition successful_correct := @ConcreteDescent.FixedCells.Replay.successful_run_correct.
 End Fanout.
 
 (* Print Assumptions ConcreteDescent.fanout_total_correct_and_fixed. *)
