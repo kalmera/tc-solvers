@@ -1,6 +1,6 @@
 From Stdlib Require Import List Bool Arith.PeanoNat Lia
   Wellfounded.Inverse_Image Wellfounded.Lexicographic_Product.
-From TcSolvers Require Import common.Assumptions
+From TcSolvers Require Import common.Assumptions common.SolverSpecifications
   solvers.slr.narrowing_fixed_point.Base
   solvers.slr.narrowing_fixed_point.NarrowingFixedPoint
   solvers.slr.narrowing_fixed_point.proofs.AccumulatedReplay.
@@ -9390,5 +9390,32 @@ Qed.
 Theorem sufficient_fuel tf roots (finite : Sem.finite_system tf roots) :
  exists fuel final,N.solve_fuel fuel tf roots=Some final.
 Proof. exact (@sufficient_fuel_base tf roots (@Support.finite_bridge tf roots finite)). Qed.
+(** Final-state termination for the public theorem interface. *)
+Definition terminates_to tf roots final : Prop :=
+ N.steps tf (R.initial_config roots) (Sem.terminal_config final) /\ Sem.quiescent final.
+
+Theorem solver_terminates : forall tf roots,
+ Sem.finite_system tf roots -> exists final, terminates_to tf roots final.
+Proof.
+ intros tf roots finite.
+ exact (@terminates tf roots (@Support.finite_bridge tf roots finite)).
+Qed.
 End Termination.
+(** Shared public specifications are bound here, outside extraction dependencies. *)
+  Module Store.
+    Definition state := R.state.
+    Definition sigma := R.sigma.
+    Definition sigma_value := R.sigma_value.
+  End Store.
+  Module TransferView.
+    Definition rhs := Sem.ConstraintSyntax.rhs.
+    Definition observation := Sem.observation.
+    Definition observed_sides := Sem.observed_sides.
+    Definition rhs_observes := Sem.rhs_observes.
+    Definition rhs_eval_with := Sem.rhs_eval_with.
+    Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
+    Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
+  End TransferView.
+  Module Spec := SolverSpecifications.Make V D M TransferView Store.
+
 End Make.

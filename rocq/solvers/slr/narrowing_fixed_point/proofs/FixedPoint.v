@@ -1,6 +1,6 @@
 From Stdlib Require Import Bool List Lia Arith.PeanoNat.
 From TcSolvers Require Import common.Assumptions common.BoxUpdate
-  common.UpdateIdempotency
+  common.UpdateIdempotency common.SolverSpecifications
   solvers.slr.narrowing_fixed_point.proofs.Replay.
 Import ListNotations.
 Set Implicit Arguments.
@@ -4251,39 +4251,11 @@ Definition total_correct :=
    ex_intro _ fuel (ex_intro _ final
      (conj Hsolve (@Replay.successful_run_correct fuel tf roots final Hsolve)))
  end.
-(** Public statement vocabulary lives with the implementation so that the
-    facade can alias this functor without copying its nested proof modules. *)
 Module N := Replay.Front.N.
-Definition solved (final : R.state) (owner : V.t) : Prop :=
-  exists value, M.lookup (R.sigma final) owner = Some value.
-
-Definition replay (final : R.state) :=
-  Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
-
-Definition owner_post_solution (tf : R.ConstraintSystem.system)
-  (final : R.state) (owner : V.t) : Prop :=
-  forall direct reads effects, replay final (tf owner) direct reads effects ->
-    D.leq direct (R.sigma_value final owner) = true /\
-    (forall target value, In (target,value) effects ->
-      D.leq value (R.sigma_value final target) = true).
-
-Definition correct_final_state (tf : R.ConstraintSystem.system)
-  (roots : list V.t) (final : R.state) : Prop :=
-  forall owner, In owner roots ->
-    solved final owner /\ owner_post_solution tf final owner.
-
-Definition monotonic_system (tf : R.ConstraintSystem.system) : Prop :=
-  forall owner, Sem.rhs_dependencies_monotone (tf owner) /\
-                Sem.rhs_effects_monotone (tf owner).
-
-Definition narrowing_fixed (tf : R.ConstraintSystem.system) (final : R.state) : Prop :=
-  forall owner, solved final owner ->
-    (exists direct reads effects, replay final (tf owner) direct reads effects) /\
-    (forall direct reads effects, replay final (tf owner) direct reads effects ->
-      UL.equivalent
-        (WN.narrow (R.sigma_value final owner)
-          (D.join direct (R.aggregate final owner)))
-        (R.sigma_value final owner)).
+Module Spec := Replay.Spec.
+Include Spec.
+Definition narrowing_fixed := narrowing_fixed_with WN.narrow
+  (fun final owner direct => D.join direct (R.aggregate final owner)).
 
 Theorem total_correct_and_fixed : forall tf roots,
   Sem.finite_system tf roots -> monotonic_system tf ->

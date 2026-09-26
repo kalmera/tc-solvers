@@ -11,21 +11,31 @@ example systems remain beside it. Shared concrete instances live in
 | `restarting` | `Restarting.v` | Total correctness for all four feature settings; leastness; ordinary-system narrowing fixedness under value idempotency |
 | `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
 
+Each public correctness interface follows the paper's order: `semantic_termination`,
+`sufficient_fuel`, `successful_run_correct`, then `total_correct` as a corollary
+combining sufficient fuel with successful-run correctness.
 Public theorem interfaces expose the definitions necessary to read their statements.
 Simple and Restarting expose `Make` and `LeastSolutionMake`, with explicit rank
 policies and laws. Narrowing Fixed Point exposes `Correctness` for arbitrary
 updates, `Make` for OneBox narrowing fixedness, and `LeastSolutionMake` for
 upper-bound-preserving updates. Restarting additionally exposes `OrdinaryFixedPointMake`.
-Both fixedness interfaces use `WithLaws.WithCollections.total_correct_and_fixed`
-and expose `solved`, `replay`, `correct_final_state`, `monotonic_system`, and
+Both fixedness interfaces expose `WithLaws.WithCollections.successful_run_fixed`,
+which adds narrowing fixedness to the successful run supplied by `total_correct`.
+They expose `solved`, `replay`, `correct_final_state`, `monotonic_system`, and
 `narrowing_fixed`. Fixedness includes replay existence and applies to every
 final-state replay of every solved owner, including non-roots.
-Restarting separately requires `no_side_effects`; spawns are allowed.
+Restarting separately requires `no_side_effects`; spawns are allowed. Its
+successful-run fixedness theorem also requires finite support; Narrowing Fixed
+Point needs finite support only for total correctness.
 Both use first-discovery ranking and ordinary value idempotency of the combined
 update. Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
-The public theorem files define their statement vocabulary beside their theorems.
-Common domain, collection, update, and finite-support laws are in `rocq/common/`.
+The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
+It supplies solvedness, replay, final-state correctness, operational monotonicity,
+absence of side effects, and narrowing fixedness parameterized by its input.
+The theorem files include these definitions and state the main results;
+Restarting's internal observation conversion stays in its fixedness proof.
+Common domain, collection, update, and finite-support laws are also in `rocq/common/`.
 Rank discovery and shared SLR control are in `rocq/solvers/slr/common/`.
 For example:
 

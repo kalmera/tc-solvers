@@ -6,7 +6,7 @@ From Stdlib Require Import
   Wellfounded.Lexicographic_Product
   Wellfounded.List_Extension.
 From TcSolvers Require Import
-  common.Assumptions
+  common.Assumptions common.SolverSpecifications
   common.ConstraintSemantics
   solvers.slr.common.DiscoveryOrderLaws
   solvers.slr.restarting.Restarting.
@@ -19600,6 +19600,23 @@ Module CommitHistory.
 
   End Correctness.
 End CommitHistory.
+
+(** Shared public specifications are bound here, outside extraction dependencies. *)
+  Module Store.
+    Definition state := R.state.
+    Definition sigma := R.sigma.
+    Definition sigma_value := R.sigma_value.
+  End Store.
+  Module TransferView.
+    Definition rhs := Sem.ConstraintSyntax.rhs.
+    Definition observation := Sem.observation.
+    Definition observed_sides := Sem.observed_sides.
+    Definition rhs_observes := Sem.rhs_observes.
+    Definition rhs_eval_with := Sem.rhs_eval_with.
+    Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
+    Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
+  End TransferView.
+  Module Spec := SolverSpecifications.Make V D M TransferView Store.
 
 End Make.
 

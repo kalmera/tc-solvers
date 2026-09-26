@@ -1,5 +1,6 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
+  common.SolverSpecifications
   common.instances.IdempotentChain
   common.instances.Chain
   common.Assumptions common.BoxUpdate common.UpdateIdempotency
@@ -27,29 +28,34 @@ Module Make
   Module Sem := Internal.Sem.
   Module R := Internal.R.
 
-  Definition solved (final : R.state) (owner : V.t) : Prop :=
-    exists value, M.lookup (R.sigma final) owner = Some value.
+  Module Spec := Internal.Spec.
+  Include Spec.
 
-  Definition replay (final : R.state) :=
-    Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
+  Definition terminates_to := Sem.terminates_to.
 
-  Definition owner_post_solution (tf : R.ConstraintSystem.system)
-    (final : R.state) (owner : V.t) : Prop :=
-    forall direct reads effects, replay final (tf owner) direct reads effects ->
-      D.leq direct (R.sigma_value final owner) = true /\
-      (forall target value, List.In (target,value) effects ->
-        D.leq value (R.sigma_value final target) = true).
+  Theorem semantic_termination : forall tf roots,
+    Sem.finite_system tf roots -> exists final, terminates_to tf roots final.
+  Proof. exact Internal.solver_terminates. Qed.
 
-  Definition correct_final_state (tf : R.ConstraintSystem.system)
-    (roots : list V.t) (final : R.state) : Prop :=
-    forall owner, List.In owner roots ->
-      solved final owner /\ owner_post_solution tf final owner.
+  Theorem sufficient_fuel : forall tf roots,
+    Sem.finite_system tf roots ->
+    exists fuel final, R.solve_fuel fuel tf roots = Some final.
+  Proof. exact Internal.sufficient_fuel. Qed.
 
-  Theorem total_correct : forall tf roots,
+  Theorem successful_run_correct : forall fuel tf roots final,
+    R.solve_fuel fuel tf roots = Some final -> correct_final_state tf roots final.
+  Proof. exact Internal.solve_fuel_correct. Qed.
+
+  Corollary total_correct : forall tf roots,
     Sem.finite_system tf roots ->
     exists fuel final, R.solve_fuel fuel tf roots = Some final /\
       correct_final_state tf roots final.
-  Proof. exact Internal.total_correct. Qed.
+  Proof.
+    intros tf roots finite.
+    destruct (sufficient_fuel finite) as [fuel [final Hrun]].
+    exists fuel, final. split; [exact Hrun |].
+    exact (@successful_run_correct fuel tf roots final Hrun).
+  Qed.
 End Make.
 
 Module LeastSolutionMake
@@ -97,48 +103,16 @@ Module OrdinaryFixedPointMake (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       Module Sem := Internal.Sem.
       Module R := Internal.R.
 
-      Definition monotonic_system (tf : R.ConstraintSystem.system) : Prop := forall owner,
-        Internal.N.rhs_dependencies_monotone (tf owner) /\
-        Internal.N.rhs_effects_monotone (tf owner).
-      (** No side contributions in any observation; spawns remain allowed. *)
-      Definition no_side_effects (tf : R.ConstraintSystem.system) : Prop :=
-        forall owner result, Internal.N.trace_observes (tf owner) result ->
-          Internal.N.observed_sides result = nil.
-      Definition solved final owner := exists value, M.lookup (R.sigma final) owner = Some value.
-      Definition replay final := Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
-      Definition correct_final_state tf roots final :=
-        forall owner, List.In owner roots -> solved final owner /\
-          (forall direct reads effects, replay final (tf owner) direct reads effects ->
-            D.leq direct (R.sigma_value final owner) = true /\
-            forall target value, List.In (target,value) effects ->
-              D.leq value (R.sigma_value final target) = true).
-      Definition narrowing_fixed tf final := forall owner, solved final owner ->
-        (exists direct reads effects, replay final (tf owner) direct reads effects) /\
-        (forall direct reads effects, replay final (tf owner) direct reads effects ->
-          UL.equivalent (WN.narrow (R.sigma_value final owner) direct) (R.sigma_value final owner)).
+      Module Spec := Internal.Spec.
+      Include Spec.
+      Definition narrowing_fixed := narrowing_fixed_with WN.narrow
+        (fun _ _ direct => direct).
 
-      Theorem total_correct_and_fixed : forall tf roots,
+      Theorem successful_run_fixed : forall fuel tf roots final,
         Sem.finite_system tf roots -> monotonic_system tf -> no_side_effects tf ->
-        exists fuel final, R.solve_fuel fuel tf roots = Some final /\
-          correct_final_state tf roots final /\ narrowing_fixed tf final.
-      Proof.
-        intros tf roots finite Hmono Hpure.
-        assert (Hordinary : Internal.N.ordinary_monotonic_system tf).
-        { constructor.
-          - intro owner. exact (proj1 (Hmono owner)).
-          - intro owner. exact (proj2 (Hmono owner)).
-          - exact Hpure. }
-        destruct (@Internal.total_correct_and_fixed tf roots finite
-          IL.ordinary_value_idempotent Hordinary)
-          as [fuel [final [Hrun [Hcorrect Hfixed]]]].
-        exists fuel, final. split; [exact Hrun |]. split; [exact Hcorrect |].
-        intros owner Hsolved.
-        destruct (Hfixed owner Hsolved) as [direct [reads [effects [Hreplay Howner_fixed]]]].
-        split; [eauto |].
-        intros direct' reads' effects' Hreplay'.
-        destruct (Internal.C.rhs_eval_deterministic Hreplay Hreplay') as [-> [_ _]].
-        exact Howner_fixed.
-      Qed.
+        R.solve_fuel fuel tf roots = Some final -> narrowing_fixed tf final.
+      Proof. exact (Internal.successful_run_narrowing_fixed IL.ordinary_value_idempotent). Qed.
+
     End WithCollections.
   End WithLaws.
 End OrdinaryFixedPointMake.
@@ -163,7 +137,7 @@ Module Instances.
   Module FixedLaws := Fixed.WithLaws IE.DL IE.WNL FixedUL IL.
   Module Ordinary := FixedLaws.WithCollections IE.S IE.M Restarting.AllEnabledFeatures
     IE.SL IE.ML.
-  Definition ordinary_fixed := Ordinary.total_correct_and_fixed.
+  Definition ordinary_fixed := Ordinary.successful_run_fixed.
 End Instances.
 
 Goal True. idtac "SLR-TC_R total correctness proven with assumptions:". Abort.

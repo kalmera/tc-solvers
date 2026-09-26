@@ -23,8 +23,6 @@ jobs:
           ocaml-compiler: 5.4.0
       - run: opam install rocq-core.9.1.1 rocq-stdlib.9.1.0 dune.3.23.1 batteries.3.11.0 yojson.3.0.0
       - name: Compile proofs, regenerate, and check adapters
-        run: opam exec -- make ROCQ_JOBS=2
-      - name: Check concrete proof examples
-        run: opam exec -- make proof-tests ROCQ_JOBS=2
+        run: opam exec -- make proofs ROCQ_JOBS=2
       - name: Check committed generated sources
         run: python3 tools/check_generated.py

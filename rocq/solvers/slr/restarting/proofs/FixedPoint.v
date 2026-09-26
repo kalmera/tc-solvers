@@ -1,6 +1,6 @@
 From Stdlib Require Import List Bool.
 From TcSolvers Require Import
-  common.Assumptions common.BoxUpdate
+  common.Assumptions common.BoxUpdate common.SolverSpecifications
   solvers.slr.restarting.proofs.Correctness
   solvers.slr.restarting.proofs.NarrowingStabilityProof.
 
@@ -197,5 +197,61 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       - exact (@C.solve_fuel_correct fuel tf roots final Hrun).
       - eapply successful_run_fixed; eassumption.
     Qed.
+
+    Module Spec := C.Spec.
+
+    Definition common_observation (result : N.observation) : Sem.observation :=
+      {| Sem.Observation.observed_direct := N.observed_direct result;
+         Sem.Observation.observed_reads := N.observed_reads result;
+         Sem.Observation.observed_sides := N.observed_sides result;
+         Sem.Observation.observed_spawns := N.observed_spawns result |}.
+
+    Lemma trace_observes_common : forall body result,
+      N.trace_observes body result ->
+      Sem.rhs_observes body (common_observation result).
+    Proof.
+      intros body result Htrace. induction Htrace.
+      - apply Sem.ObserveRet.
+      - exact (@Sem.ObserveGet target value next (common_observation result) IHHtrace).
+      - exact (@Sem.ObserveSide target payload next (common_observation result) IHHtrace).
+      - exact (@Sem.ObserveSpawn target next (common_observation result) IHHtrace).
+    Qed.
+
+    Lemma ordinary_system_from_common : forall tf,
+      Spec.monotonic_system tf -> Spec.no_side_effects tf ->
+      N.ordinary_monotonic_system tf.
+    Proof.
+      intros tf Hmono Hpure. constructor.
+      - intros owner lower upper Hlower Hupper Hreads.
+        exact (proj1 (Hmono owner) (common_observation lower)
+          (common_observation upper) (trace_observes_common Hlower)
+          (trace_observes_common Hupper) Hreads).
+      - intros owner lower upper Hlower Hupper Hreads.
+        destruct (proj2 (Hmono owner) (common_observation lower)
+          (common_observation upper) (trace_observes_common Hlower)
+          (trace_observes_common Hupper) Hreads) as [Hdirect Hsides Hspawns].
+        constructor; assumption.
+      - intros owner result Htrace.
+        exact (Hpure owner (common_observation result) (trace_observes_common Htrace)).
+    Qed.
+
+    (** The public theorem adds fixedness to a successful run. Its assumptions
+        and conclusion use only the shared specification vocabulary. *)
+    Theorem successful_run_narrowing_fixed : value_idempotent ->
+      forall fuel tf roots final,
+      Sem.finite_system tf roots -> Spec.monotonic_system tf -> Spec.no_side_effects tf ->
+      R.solve_fuel fuel tf roots = Some final ->
+      Spec.narrowing_fixed_with WN.narrow (fun _ _ direct => direct) tf final.
+    Proof.
+      intros Hid fuel tf roots final finite Hmono Hpure Hrun owner Hsolved.
+      destruct (@successful_run_fixed fuel tf roots final finite Hid
+        (ordinary_system_from_common Hmono Hpure) Hrun owner Hsolved)
+        as [direct [reads [effects [Hreplay Hfixed]]]].
+      split; [eauto |].
+      intros direct' reads' effects' Hreplay'.
+      destruct (C.rhs_eval_deterministic Hreplay Hreplay') as [-> [_ _]].
+      exact Hfixed.
+    Qed.
+
   End WithLaws.
 End Make.

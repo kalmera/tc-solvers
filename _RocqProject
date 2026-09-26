@@ -5,6 +5,7 @@ rocq/common/UpdateIdempotency.v
 rocq/common/BoxUpdate.v
 rocq/common/Collections.v
 rocq/common/ConstraintSemantics.v
+rocq/common/SolverSpecifications.v
 rocq/common/ConstraintSystems.v
 rocq/solvers/slr/common/DiscoveryOrder.v
 rocq/solvers/slr/common/DiscoveryOrderLaws.v
