@@ -11,8 +11,8 @@ module D = struct
   let join = max
 end
 module WN = struct
-  let widen _ _ = 5
-  let narrow old input = max input (old - 1)
+  let widen old input = if input <= old then old else 5
+  let narrow old input = if input = 0 then 0 else old
 end
 module Set = struct
   type t = int list

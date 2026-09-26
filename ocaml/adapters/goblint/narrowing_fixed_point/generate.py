@@ -45,7 +45,7 @@ def generate(inlined):
     once('      S.Dom.equal left right',
          '      left == right || (S.Dom.leq left right && S.Dom.leq right left)')
     # Return the decision already made at commit, rather than comparing again
-    # for self-requeue and tracing. All equivalent updates retain the old value.
+    # for tracing. All equivalent updates retain the old value.
     a = source.index('    let[@inline always] set_value state frame direct =')
     b = source.index('    let solve xs roots _old_data =', a)
     source = source[:a] + '''    let[@inline always] set_value state frame direct =
@@ -146,12 +146,16 @@ end''' + source[b:]
               end else if owner_info.queued then
                 evaluate_owner ()
               else begin
-                let changed = set_value state frame direct in
-                if owner_info.controlled && changed then
-                  enqueue state owner;
+                ignore (set_value state frame direct);
                 drain_episode ()
               end)
             (fun _ -> ())''')
+    # Initial values are RHS constants, as in the extracted reference. Preloading
+    # sigma would skip the first controlled update now that synthetic rechecks
+    # are gone. Their roots are still seeded by solve_initial.
+    once('''          VH.replace state.starts variable start;
+          VH.replace state.sigma variable start)''',
+         '''          VH.replace state.starts variable start)''')
     once('      and side frame target raw =\n', '''      and side frame target raw =
         ignore (rank state.queue target);
 ''')

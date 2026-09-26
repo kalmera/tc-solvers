@@ -1269,7 +1269,7 @@ Proof.
       destruct (@state_below_set_value
         (Sem.support finite) upper st f t next next_fr
         Hstate_below Hcompleted Hset) as [Hnext Hnext_fr].
-      constructor; [now apply state_below_with_queue |]. cbn. now split.
+      constructor; [exact Hnext |]. cbn. now split.
 Qed.
 Lemma base_drain_below tf roots (finite : Sem.finite_system tf roots) upper st f c after :
  system_monotone_on tf (Sem.support finite) -> post_solution_on tf (Sem.support finite) upper ->

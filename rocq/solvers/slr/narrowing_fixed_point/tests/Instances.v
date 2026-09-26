@@ -1,86 +1,87 @@
 From Stdlib Require Import List.
-From TcSolvers Require Import common.instances.Chain
-  common.Assumptions common.BoxUpdate
-  solvers.slr.narrowing_fixed_point.Theorems.
-
+From TcSolvers Require Import common.FiniteHeight
+  solvers.slr.narrowing_fixed_point.NarrowingFixedPoint
+  solvers.slr.narrowing_fixed_point.tests.Chain.
 Import ListNotations.
-Set Implicit Arguments.
 
-Module ConcreteDescent.
-  Module V := Chain.V.
-  Module D := Chain.D.
-  Module DL := Chain.DL.
-  Module WN := Chain.WN.
-  Module WNL := Chain.WNL.
-  Module WS := Chain.WS.
-  Module Fixed := Theorems.Make V D WN.
-  Module U := Fixed.U.
-  Module UL := Chain.UpdateLaws U.
-  Module FixedLaws := Fixed.WithLaws DL WNL WS UL.
-  Module FixedCells := FixedLaws.WithCollections Chain.S Chain.M
-    Base.AllEnabledFeatures Chain.SL Chain.ML.
-  Definition total_correct_and_fixed := @FixedCells.total_correct_and_fixed.
-  Import FixedCells.
-  Definition fanout owner := if V.eq_dec owner 0 then
-    R.ConstraintSystem.Side 1 D.One (R.ConstraintSystem.Side 2 D.Two
-      (R.ConstraintSystem.Side 3 D.Three (R.ConstraintSystem.Ret D.One)))
-    else R.ConstraintSystem.Ret D.Bot.
-  Definition finite_fanout : Sem.finite_system fanout [0].
-  Proof.
-    refine (@Sem.Build_finite_system fanout [0] [0;1;2;3] _ _ _).
-    - repeat constructor;cbn;intuition discriminate.
-    - intros owner [->|H];[now left |contradiction].
-    - intros owner Hin. unfold fanout. destruct (V.eq_dec owner 0).
-      + constructor;[cbn;auto |]. constructor;[cbn;auto |].
-        constructor;[cbn;auto |constructor].
-      + constructor.
-  Defined.
-  Lemma fanout_observations owner lower upper :
-    Sem.rhs_observes (fanout owner) lower ->
-    Sem.rhs_observes (fanout owner) upper -> lower=upper.
-  Proof.
-    unfold fanout. destruct (V.eq_dec owner 0);intros Hl Hu.
-    all: repeat match goal with
-      H : Sem.rhs_observes (R.ConstraintSystem.Side _ _ _) _ |- _ => inversion H;subst;clear H
-    | H : Sem.rhs_observes (R.ConstraintSystem.Ret _) _ |- _ => inversion H;subst;clear H
-    end;reflexivity.
-  Qed.
-  Lemma fanout_monotone : FixedCells.monotonic_system fanout.
-  Proof.
-    intro owner. split;intros lower upper Hl Hu Hreads;
-      pose proof (@fanout_observations owner lower upper Hl Hu) as Heq;subst upper.
-    - intros target Hin;exact Hin.
-    - constructor;[apply DL.leq_refl | |intros target Hin;exact Hin].
-      intros target value Hin. exists value. split;[exact Hin |apply DL.leq_refl].
-  Qed.
-  Definition fanout_total_correct_and_fixed :=
-    @FixedCells.total_correct_and_fixed fanout [0] finite_fanout fanout_monotone.
-End ConcreteDescent.
+Module E := Chain.
+(** Value idempotency does not require phase idempotency. *)
+Example replay_can_change_phase :
+  E.U.update false 0 E.U.BoxW E.D.Bot E.D.One = (E.U.BoxW, E.D.Top) /\
+  E.U.update false 0 E.U.BoxW E.D.Top E.D.One = (E.U.BoxN, E.D.Top).
+Proof. split; reflexivity. Qed.
+
+Module Optimized := NarrowingFixedPoint.Make E.V E.D E.U E.S E.M
+  Base.AllEnabledFeatures E.DL E.UL E.SL E.ML.
+
+
+Module After.
+  Module N := Optimized.
+  Module R := N.R.
+  Definition tf (owner : E.V.t) : R.ConstraintSystem.rhs :=
+    if E.V.eq_dec owner 0 then
+      R.ConstraintSystem.Get 1 (fun _ => R.ConstraintSystem.Ret E.D.One)
+    else R.ConstraintSystem.Get 0 (fun _ => R.ConstraintSystem.Ret E.D.Bot).
+  Definition final := R.cfg_state (N.run_fuel 200 tf (R.initial_config [0])).
+  Fixpoint completed_owners fuel (c : R.config) : list E.V.t :=
+    match fuel with
+    | 0 => []
+    | S rest =>
+        let current := match R.cfg_control c with
+          R.RunRhs fr (R.ConstraintSystem.Ret _) _ => [R.frame_owner fr] | _ => [] end in
+        match N.next_config tf c with
+        | Some next => current ++ completed_owners rest next | None => current end
+    end.
+End After.
+
+Example terminates : Optimized.solve_fuel 200 After.tf [0] = Some After.final.
+Proof. vm_compute. reflexivity. Qed.
+
+(** No synthetic fourth evaluation of owner 0. *)
+Example completed_owners :
+  After.completed_owners 200 (After.R.initial_config [0]) = [1;0;1].
+Proof. vm_compute. reflexivity. Qed.
+
+Module SelfDependency.
+  Module U := JoinUpdate E.V E.D.
+  Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
+  Module N := NarrowingFixedPoint.Make E.V E.D U E.S E.M
+    Base.AllEnabledFeatures E.DL UL E.SL E.ML.
+  Module R := N.R.
+  Definition successor value := match value with
+    E.D.Bot => E.D.One | E.D.One => E.D.Two | E.D.Two => E.D.Three
+    | E.D.Three | E.D.Top => E.D.Top end.
+  Definition tf (_owner : E.V.t) : R.ConstraintSystem.rhs :=
+    R.ConstraintSystem.Get 0 (fun value => R.ConstraintSystem.Ret (successor value)).
+  Example idempotent : forall owner phase old input,
+    snd (U.update false owner (fst (U.update false owner phase old input))
+      (snd (U.update false owner phase old input)) input) =
+    snd (U.update false owner phase old input).
+  Proof. intros owner phase old input; destruct old, input; reflexivity. Qed.
+  Example monotone : forall old new,
+    E.D.leq old new = true -> E.D.leq (successor old) (successor new) = true.
+  Proof. destruct old, new; cbn; congruence. Qed.
+  Definition final := R.cfg_state (N.run_fuel 200 tf (R.initial_config [0])).
+  Example retained_self_wakes : N.solve_fuel 200 tf [0] = Some final /\
+    R.sigma_value final 0 = E.D.Top.
+  Proof. vm_compute. split; reflexivity. Qed.
+End SelfDependency.
 
 Module Fanout.
-  Import Chain ConcreteDescent.FixedCells.
-  Definition tf := ConcreteDescent.fanout.
+  Module N := Optimized.
+  Module R := N.R.
+  Definition tf owner := if E.V.eq_dec owner 0 then
+    R.ConstraintSystem.Side 1 E.D.One (R.ConstraintSystem.Side 2 E.D.Two
+      (R.ConstraintSystem.Side 3 E.D.Three (R.ConstraintSystem.Ret E.D.One)))
+    else R.ConstraintSystem.Ret E.D.Bot.
   Definition final := R.cfg_state (N.run_fuel 500 tf (R.initial_config [0])).
-
-  Example solved : N.solve_fuel 500 tf [0] = Some final /\
-    R.sigma_value final 0 = D.One /\ R.sigma_value final 1 = D.One /\
-    R.sigma_value final 2 = D.Two /\ R.sigma_value final 3 = D.Three.
-  Proof. vm_compute. repeat split; reflexivity. Qed.
-
-  Example insufficient_fuel : N.solve_fuel 0 tf [0] = None.
-  Proof. reflexivity. Qed.
-
+  Example solved : N.solve_fuel 500 tf [0] = Some final.
+  Proof. vm_compute. reflexivity. Qed.
   Example all_owners_fixed : forall owner, In owner [0;1;2;3] ->
-    WN.narrow (R.sigma_value final owner)
-      (D.join (if Nat.eqb owner 0 then D.One else D.Bot)
+    E.WN.narrow (R.sigma_value final owner)
+      (E.D.join (if Nat.eqb owner 0 then E.D.One else E.D.Bot)
         (R.aggregate final owner)) = R.sigma_value final owner.
   Proof.
     intros owner [<-|[<-|[<-|[<-|H]]]]; [| | | |contradiction]; vm_compute; reflexivity.
   Qed.
-
-  Definition commit_replay := @N.actual_commit_replay.
-  Definition reset_credit := @N.higher_reset_preserves_credit.
-  Definition successful_correct := @ConcreteDescent.FixedCells.Replay.successful_run_correct.
 End Fanout.
-
-(* Print Assumptions ConcreteDescent.fanout_total_correct_and_fixed. *)

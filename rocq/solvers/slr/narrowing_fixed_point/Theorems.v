@@ -1,6 +1,7 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
-  common.instances.Chain
+  common.instances.IdempotentChain
+  common.UpdateIdempotency
   common.Assumptions common.BoxUpdate common.FiniteHeight
   solvers.slr.narrowing_fixed_point.proofs.Replay
   solvers.slr.narrowing_fixed_point.proofs.FixedPoint
@@ -47,9 +48,45 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
 End Correctness.
 
 
-(** Reuse the implementation's public vocabulary and theorem directly;
-    nested wrapper functors duplicate the large replay proof graph. *)
-Module Make := FixedPoint.Make.
+(** OneBox fixedness under ordinary value idempotency; feature flags are arbitrary. *)
+Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
+  Module Fixed := FixedPoint.Make V D WN.
+  Module U := Fixed.U.
+  Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
+    (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U)
+    (IL : VALUE_IDEMPOTENT V D U).
+    Module Laws := Fixed.WithLaws DL WNL WS UL IL.
+    Module WithCollections (S : SET V) (M : MAP V) (Features : Base.FEATURES)
+      (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
+      Module Internal := Laws.WithCollections S M Features SL ML.
+      Module R := Internal.R.
+      Module Sem := Internal.Sem.
+      Module N := Internal.N.
+
+      Definition solved final owner := exists value, M.lookup (R.sigma final) owner = Some value.
+      Definition replay final := Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
+      Definition correct_final_state tf roots final :=
+        forall owner, In owner roots -> solved final owner /\
+          (forall direct reads effects, replay final (tf owner) direct reads effects ->
+            D.leq direct (R.sigma_value final owner) = true /\
+            forall target value, In (target,value) effects ->
+              D.leq value (R.sigma_value final target) = true).
+      Definition monotonic_system (tf : R.ConstraintSystem.system) : Prop := forall owner,
+        Sem.rhs_dependencies_monotone (tf owner) /\ Sem.rhs_effects_monotone (tf owner).
+      Definition narrowing_fixed tf final := forall owner, solved final owner ->
+        (exists direct reads effects, replay final (tf owner) direct reads effects) /\
+        (forall direct reads effects, replay final (tf owner) direct reads effects ->
+          UL.equivalent (WN.narrow (R.sigma_value final owner)
+            (D.join direct (R.aggregate final owner))) (R.sigma_value final owner)).
+
+      Theorem total_correct_and_fixed : forall tf roots,
+        Sem.finite_system tf roots -> monotonic_system tf ->
+        exists fuel final, N.solve_fuel fuel tf roots = Some final /\
+          correct_final_state tf roots final /\ narrowing_fixed tf final.
+      Proof. exact Internal.total_correct_and_fixed. Qed.
+    End WithCollections.
+  End WithLaws.
+End Make.
 
 Module LeastSolutionMake (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Features : Base.FEATURES)
@@ -72,25 +109,25 @@ Module LeastSolutionMake (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   Proof. exact Internal.total_least_solution. Qed.
 End LeastSolutionMake.
 
-(** Concrete audits discharge the module laws; the theorems above remain generic. *)
+(** Share one concrete OneBox instance between correctness and fixedness audits.
+    Runtime examples are separate and do not instantiate this proof graph again. *)
 Module Instances.
-  Module E := Chain.
-  Module Correct := Correctness E.V E.D E.U E.S E.M
-    Base.AllEnabledFeatures E.DL E.UL E.SL E.ML.
-  Module Fixed := Make E.V E.D E.WN.
+  Module E := IdempotentChain.
+  Module Fixed := FixedPoint.Make E.V E.D E.WN.
   Module FixedUL := E.UpdateLaws Fixed.U.
-  Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL.
+  Module FixedIL := E.Idempotency Fixed.U.
+  Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL FixedIL.
   Module FixedCells := FixedLaws.WithCollections E.S E.M
     Base.AllEnabledFeatures E.SL E.ML.
   Module U := JoinUpdate E.V E.D.
   Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
   Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
-  Module Least := LeastSolutionMake E.V E.D U E.S E.M
+  Module Least := LeastSolution.Make E.V E.D U E.S E.M
     Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
 End Instances.
 
 Goal True. idtac "SLR-TC_N total correctness proven with assumptions:". Abort.
-Print Assumptions Instances.Correct.total_correct.
+Print Assumptions Instances.FixedCells.total_correct.
 
 Goal True. idtac "SLR-TC_N leastness proven with assumptions:". Abort.
 Print Assumptions Instances.Least.total_least_solution.

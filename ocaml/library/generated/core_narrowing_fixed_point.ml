@@ -701,9 +701,7 @@ let[@inline always] pop_max queue =
               end else if owner_info.queued then
                 evaluate_owner ()
               else begin
-                let changed = set_value state frame direct in
-                if owner_info.controlled && changed then
-                  enqueue state owner;
+                ignore (set_value state frame direct);
                 drain_episode ()
               end)
             (fun _ -> ())
@@ -904,8 +902,7 @@ let[@inline always] pop_max queue =
       List.iter
         (fun (variable, input) ->
           let start = S.Dom.join (start_value state variable) input in
-          VH.replace state.starts variable start;
-          VH.replace state.sigma variable start)
+          VH.replace state.starts variable start)
         xs;
       solve_initial state.queue solve_episode roots xs;
       finish_trace state.queue;

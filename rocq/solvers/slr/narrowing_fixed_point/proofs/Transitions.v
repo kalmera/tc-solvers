@@ -669,18 +669,7 @@ Module Make
     R.set_value st fr direct = (after,next_fr) -> carries_reads st after.
   Proof. intros H owner reads Hr. eapply B.guarded_reads_set_value; eauto. Qed.
 
-  Lemma carries_requeue before after owner :
-    carries_reads after (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    unfold R.requeue_changed_controlled_owner.
-    destruct (_ && _)%bool; [apply carries_enqueue |intros x reads H; exact H].
-  Qed.
 
-  Lemma requeue_extends before after owner :
-    B.rank_extends after (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    unfold R.requeue_changed_controlled_owner. apply B.rank_extends_with_queue.
-  Qed.
 
   Lemma get_config tf st fr target next k after next_fr value :
     R.complete_get st fr target = (after,next_fr,value) ->
@@ -772,10 +761,9 @@ Module Make
     R.next_config tf {| R.cfg_state := st; R.cfg_control := R.RunCommit fr direct k |} = Some after ->
     valid tf after.
   Proof.
-    intros [Ho [Hc Hk]] Hstep. cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
+    intros [Ho [Hc Hk]] Hstep. cbn -[R.set_value] in Hstep.
     destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
-    inversion Hstep; subst. eapply valid_carries;
-      [apply requeue_extends |apply carries_requeue |].
+    inversion Hstep; subst.
     split; cbn.
     - rewrite (@B.set_value_frame_owner st fr direct next next_fr Hset). eapply below_extended;
         [eapply B.rank_extends_set_value; exact Hset |exact Ho].

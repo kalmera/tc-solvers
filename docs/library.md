@@ -103,8 +103,12 @@ leastness additionally requires finite height, operational monotonicity, and
 source strictness outside roots. The proved narrowing-fixed-point instance uses
 the zero-copy box, direct-widening upper bounds, and covered-input stability:
 `leq input old` implies that `widen old input` is equivalent to `old`.
-This extra stability law belongs to the narrowing-fixpoint theorem, not generic
-total correctness. Selecting the suggested two-copy policy does not instantiate
+Narrowing fixedness also requires ordinary value-only idempotency of the combined
+update: if `update(false, owner, phase, old, input) = (phase2, value2)`, then the
+value of `update(false, owner, phase2, value2, input)` must be equivalent to
+`value2`. The phase may change. The scheduler skips the synthetic owner recheck
+but retains dependency wakeups. These extra laws belong to narrowing fixedness,
+not generic total correctness. Selecting the suggested two-copy policy does not instantiate
 that theorem.
 
 Only callback control is extracted; the mutable runtime has no mechanized

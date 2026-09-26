@@ -18289,6 +18289,1318 @@ Module Make
 
   End Correctness.
 
+
+(** Parametric strengthening of the saved commit summaries. *)
+Module CommitHistory.
+  Section Correctness.
+    Variable P : V.t -> D.t -> D.t -> Prop.
+    Definition commit_property (c : R.config) : Prop :=
+      forall fr direct k,
+        R.cfg_control c = R.RunCommit fr direct k ->
+        forall st' fr',
+          R.set_value (R.cfg_state c) fr direct = (st', fr') ->
+          P (R.frame_owner fr) direct (R.sigma_value st' (R.frame_owner fr)).
+
+
+    Definition summary_valid
+      (tf : R.ConstraintSystem.system) (st : R.state) (owner : V.t) : Prop :=
+      Sem.solved st owner /\
+      exists direct reads effects,
+        rhs_trace (tf owner) direct reads effects /\
+        guarded_reads st owner reads /\
+        recorded_effects st owner effects /\
+        (D.leq direct (R.sigma_value st owner) = true /\
+         P owner direct (R.sigma_value st owner)).
+
+
+    Lemma summary_valid_observe :
+      forall tf st x owner,
+        summary_valid tf st owner ->
+        summary_valid tf (R.observe st x) owner.
+    Proof.
+      intros tf st x owner
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]].
+      split; [now apply solved_observe |].
+      exists direct, reads, effects. split; [exact Htrace |].
+      split; [now apply guarded_reads_observe |].
+      split; [now apply recorded_effects_observe |].
+      unfold R.sigma_value in *. rewrite (proj1 (observe_solver_view st x)).
+      exact Hdirect.
+    Qed.
+
+    Fixpoint continuation_history
+      (tf : R.ConstraintSystem.system) (st : R.state)
+      (k : R.continuation) : Prop :=
+      match k with
+      | R.KLoop | R.KSeedLoop _ => True
+      | R.KAfterGet fr target next rest =>
+          evaluation_witness tf st fr (R.ConstraintSystem.Get target next) /\
+          continuation_history tf st rest
+      | R.KAfterSide fr next rest
+      | R.KAfterSpawn fr next rest =>
+          evaluation_witness tf st fr next /\
+          continuation_history tf st rest
+      | R.KDead fr direct _ rest =>
+          completed_witness tf st fr direct /\
+          continuation_history tf st rest
+      | R.KDrain fr rest =>
+          summary_valid tf st (R.frame_owner fr) /\
+          continuation_history tf st rest
+      end.
+
+    Definition control_history
+      (tf : R.ConstraintSystem.system) (st : R.state)
+      (control : R.control) : Prop :=
+      match control with
+      | R.RunLoop | R.RunSeeds _ | R.RunSeedLoop _ => True
+      | R.StartEpisode _ k => continuation_history tf st k
+      | R.RunRhs fr current k =>
+          evaluation_witness tf st fr current /\
+          continuation_history tf st k
+      | R.RunDead fr direct _ k
+      | R.RunCommit fr direct k =>
+          completed_witness tf st fr direct /\
+          continuation_history tf st k
+      | R.RunDrain fr k =>
+          summary_valid tf st (R.frame_owner fr) /\
+          continuation_history tf st k
+      | R.Return k => continuation_history tf st k
+      end.
+
+    Lemma summary_valid_same_solver_view :
+      forall tf before after owner,
+        same_solver_view before after ->
+        summary_valid tf before owner ->
+        summary_valid tf after owner.
+    Proof.
+      intros tf before after owner
+        [Hread Hcontributions]
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split.
+      - destruct Hsolved as [value Hlookup]. exists value.
+        rewrite (proj1 Hread). exact Hlookup.
+      - exists direct, reads, effects. split; [exact Htrace |]. split.
+        + eapply guarded_reads_same_view; eauto.
+        + split.
+          * eapply recorded_effects_same_solver_view; eauto.
+            split; assumption.
+          * unfold R.sigma_value in *.
+            rewrite (proj1 Hread). exact Hdirect.
+    Qed.
+
+    Lemma continuation_history_same_solver_view :
+      forall tf before after k,
+        same_solver_view before after ->
+        continuation_history tf before k ->
+        continuation_history tf after k.
+    Proof.
+      intros tf before after k Hview.
+      induction k; cbn; intros Hhistory; try exact I.
+      all: destruct Hhistory as [Hhead Hrest]; split.
+      all: try (eapply evaluation_witness_same_solver_view; eauto).
+      all: try (eapply completed_witness_same_solver_view; eauto).
+      all: try (eapply summary_valid_same_solver_view; eauto).
+      all: eapply IHk; eauto.
+    Qed.
+
+    Lemma continuation_history_observe :
+      forall tf st x k,
+        continuation_history tf st k ->
+        continuation_history tf (R.observe st x) k.
+    Proof.
+      intros. eapply continuation_history_same_solver_view;
+        [apply observe_same_solver_view |exact H].
+    Qed.
+
+    Lemma summary_valid_write_other_source :
+      forall tf st fr target input st' changed owner,
+        R.write_side_contribution st fr target input = (st', changed) ->
+        owner <> R.frame_owner fr ->
+        summary_valid tf st owner ->
+        summary_valid tf st' owner.
+    Proof.
+      intros tf st fr target input st' changed owner Hwrite Hneq
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]].
+      pose proof (write_side_contribution_same_read_view Hwrite) as Hview.
+      split.
+      - destruct Hsolved as [value Hlookup]. exists value.
+        rewrite (proj1 Hview). exact Hlookup.
+      - exists direct, reads, effects. split; [exact Htrace |]. split.
+        + eapply guarded_reads_same_view; eauto.
+        + split.
+          * eapply recorded_effects_write_other_source; eauto.
+          * unfold R.sigma_value in *. rewrite (proj1 Hview). exact Hdirect.
+    Qed.
+
+    Lemma summary_valid_set_value_other :
+      forall tf st fr direct st' fr' owner,
+        R.set_value st fr direct = (st', fr') ->
+        owner <> R.frame_owner fr ->
+        summary_valid tf st owner ->
+        summary_valid tf st' owner.
+    Proof.
+      intros tf st fr direct st' fr' owner Hset Hneq
+        [Hsolved [result [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split.
+      - eapply set_value_solved; eauto.
+      - exists result, reads, effects. split; [exact Htrace |]. split.
+        + eapply guarded_reads_set_value; eauto.
+        + split.
+          * eapply recorded_effects_set_value; eauto.
+          * rewrite (@set_value_sigma_value_other_correctness
+              st fr direct st' fr' owner Hset Hneq). exact Hdirect.
+    Qed.
+
+    Lemma summary_valid_enqueue :
+      forall tf st inserted owner,
+        summary_valid tf st owner ->
+        summary_valid tf (R.enqueue st inserted) owner.
+    Proof.
+      intros tf st inserted owner
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split; [exact Hsolved |].
+      exists direct, reads, effects. split; [exact Htrace |]. split.
+      - now apply guarded_reads_enqueue.
+      - split; assumption.
+    Qed.
+
+    Lemma continuation_history_enqueue :
+      forall tf st inserted k,
+        continuation_history tf st k ->
+        continuation_history tf (R.enqueue st inserted) k.
+    Proof.
+      intros tf st inserted k. induction k; cbn; intros Hhistory; try exact I.
+      all: destruct Hhistory as [Hhead Hhistory]; split.
+      all: try (now apply evaluation_witness_enqueue).
+      all: try (now apply completed_witness_enqueue).
+      all: try (now apply summary_valid_enqueue).
+      all: now apply IHk.
+    Qed.
+
+    Lemma summary_valid_materialize :
+      forall tf st inserted owner,
+        summary_valid tf st owner ->
+        summary_valid tf (R.materialize st inserted) owner.
+    Proof.
+      intros tf st inserted owner
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split.
+      - now apply materialize_preserves_solved.
+      - exists direct, reads, effects. split; [exact Htrace |]. split.
+        + now apply guarded_reads_materialize.
+        + split; [now apply recorded_effects_materialize |].
+          rewrite (@materialize_sigma_value_solved st inserted owner Hsolved).
+          exact Hdirect.
+    Qed.
+
+    Lemma continuation_history_materialize :
+      forall tf st inserted k,
+        continuation_history tf st k ->
+        continuation_history tf (R.materialize st inserted) k.
+    Proof.
+      intros tf st inserted k. induction k; cbn; intros Hhistory; try exact I.
+      all: destruct Hhistory as [Hhead Hhistory]; split.
+      all: try (now apply evaluation_witness_materialize).
+      all: try (now apply completed_witness_materialize).
+      all: try (now apply summary_valid_materialize).
+      all: now apply IHk.
+    Qed.
+
+    Lemma summary_valid_add_reader :
+      forall tf st target added owner,
+        summary_valid tf st owner ->
+        summary_valid tf (add_reader st target added) owner.
+    Proof.
+      intros tf st target added owner
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split; [exact Hsolved |].
+      exists direct, reads, effects. split; [exact Htrace |]. split.
+      - now apply guarded_reads_add_reader.
+      - split; assumption.
+    Qed.
+
+    Lemma continuation_history_add_reader :
+      forall tf st target added k,
+        continuation_history tf st k ->
+        continuation_history tf (add_reader st target added) k.
+    Proof.
+      intros tf st target added k. induction k; cbn; intros Hhistory; try exact I.
+      all: destruct Hhistory as [Hhead Hhistory]; split.
+      all: try (now apply evaluation_witness_add_reader).
+      all: try (now apply completed_witness_add_reader).
+      all: try (now apply summary_valid_add_reader).
+      all: now apply IHk.
+    Qed.
+
+    Lemma summary_valid_pop_other :
+      forall tf st popped rest owner,
+        R.queue_pop (R.queue st) = Some (popped, rest) ->
+        owner <> popped ->
+        summary_valid tf st owner ->
+        summary_valid tf (R.with_queue st rest) owner.
+    Proof.
+      intros tf st popped rest owner Hpop Hneq
+        [Hsolved [direct [reads [effects
+          [Htrace [Hreads [Heffects Hdirect]]]]]]]. split; [exact Hsolved |].
+      exists direct, reads, effects. split; [exact Htrace |]. split.
+      - eapply guarded_reads_pop_other; eauto.
+      - split; assumption.
+    Qed.
+
+    Lemma completed_witness_set_value_summary :
+      forall tf st fr direct st' fr',
+        completed_witness tf st fr direct ->
+        R.set_value st fr direct = (st', fr') ->
+        P (R.frame_owner fr) direct (R.sigma_value st' (R.frame_owner fr)) ->
+        summary_valid tf st' (R.frame_owner fr).
+    Proof.
+      intros tf st fr direct st' fr'
+        [Hsolved [reads [effects
+          [Htrace [Hreads [Heffects Hframe]]]]]] Hset HP. split.
+      - eapply set_value_solved; eauto.
+      - exists direct, reads, effects. split; [exact Htrace |]. split.
+        + eapply guarded_reads_set_value; eauto.
+        + split.
+          * eapply recorded_effects_set_value; eauto.
+          * split; [eapply set_value_direct_sound; exact Hset |exact HP].
+    Qed.
+
+    Lemma continuation_history_complete_get :
+      forall tf st fr target st' fr' value k,
+        R.complete_get st fr target = (st', fr', value) ->
+        continuation_history tf st k -> continuation_history tf st' k.
+    Proof.
+      intros tf st fr target st' fr' value k Hget Hhistory.
+      unfold R.complete_get in Hget.
+      set (base := if R.rank_lt st (R.frame_owner fr) target
+        then st else R.promote_controlled st target) in *.
+      inversion Hget; subst.
+      apply continuation_history_materialize.
+      apply continuation_history_add_reader. subst base.
+      destruct (R.rank_lt st (R.frame_owner fr) target).
+      - exact Hhistory.
+      - eapply continuation_history_same_solver_view;
+          [apply promote_controlled_same_solver_view |exact Hhistory].
+    Qed.
+
+    Lemma continuation_history_set_value :
+      forall tf st fr direct st' fr' k,
+        R.set_value st fr direct = (st', fr') ->
+        Termination.continuation_below st (R.frame_owner fr) k ->
+        continuation_history tf st k -> continuation_history tf st' k.
+    Proof.
+      intros tf st fr direct st' fr' k Hset.
+      induction k; intros Hbelow Hhistory; cbn in *; try exact I.
+      all: destruct Hbelow as [Hlt Hbelow].
+      all: destruct Hhistory as [Hhead Hhistory].
+      all: split.
+      all: try match goal with
+      | |- evaluation_witness _ _ _ _ =>
+          eapply evaluation_witness_set_value; [exact Hset |exact Hhead]
+      | |- completed_witness _ _ _ _ =>
+          eapply completed_witness_set_value; [exact Hset |exact Hhead]
+      | |- summary_valid _ _ _ =>
+          eapply summary_valid_set_value_other;
+            [exact Hset |exact (@rank_lt_true_neq_correctness st _ _ Hlt)
+            |exact Hhead]
+      end.
+      all: eapply IHk;
+        [eapply continuation_below_raise_correctness; eauto |exact Hhistory].
+    Qed.
+
+    Lemma continuation_history_write_side :
+      forall tf st fr target input st' changed k,
+        R.write_side_contribution st fr target input = (st', changed) ->
+        Termination.continuation_below st (R.frame_owner fr) k ->
+        continuation_history tf st k -> continuation_history tf st' k.
+    Proof.
+      intros tf st fr target input st' changed k Hwrite.
+      induction k; intros Hbelow Hhistory; cbn in *; try exact I.
+      all: destruct Hbelow as [Hlt Hbelow].
+      all: destruct Hhistory as [Hhead Hhistory].
+      all: split.
+      all: try match goal with
+      | |- evaluation_witness _ _ _ _ =>
+          eapply evaluation_witness_write_other_source;
+            [exact Hwrite |exact (@rank_lt_true_neq_correctness st _ _ Hlt)
+            |exact Hhead]
+      | |- completed_witness _ _ _ _ =>
+          eapply completed_witness_write_other_source;
+            [exact Hwrite |exact (@rank_lt_true_neq_correctness st _ _ Hlt)
+            |exact Hhead]
+      | |- summary_valid _ _ _ =>
+          eapply summary_valid_write_other_source;
+            [exact Hwrite |exact (@rank_lt_true_neq_correctness st _ _ Hlt)
+            |exact Hhead]
+      end.
+      all: eapply IHk;
+        [eapply continuation_below_raise_correctness; eauto |exact Hhistory].
+    Qed.
+
+    Lemma continuation_history_pop_above :
+      forall tf st popped rest upper k,
+        R.queue_pop (R.queue st) = Some (popped, rest) ->
+        Termination.continuation_below st upper k ->
+        (popped = upper \/ R.rank_lt st upper popped = true) ->
+        continuation_history tf st k ->
+        continuation_history tf (R.with_queue st rest) k.
+    Proof.
+      intros tf st popped rest upper k Hpop.
+      induction k; intros Hbelow Habove Hhistory; cbn in *; try exact I.
+      all: destruct Hbelow as [Hlt Hbelow].
+      all: destruct Hhistory as [Hhead Hhistory].
+      all: assert (Hneq : R.frame_owner f <> popped).
+      all: try (apply (@rank_lt_true_neq_correctness st);
+        destruct Habove as [-> | Habove];
+        [exact Hlt |eapply Termination.rank_lt_trans_true; eauto]).
+      all: split.
+      all: try match goal with
+      | |- evaluation_witness _ _ _ _ =>
+          eapply evaluation_witness_pop_other;
+            [exact Hpop |exact Hneq |exact Hhead]
+      | |- completed_witness _ _ _ _ =>
+          eapply completed_witness_pop_other;
+            [exact Hpop |exact Hneq |exact Hhead]
+      | |- summary_valid _ _ _ =>
+          eapply summary_valid_pop_other;
+            [exact Hpop |exact Hneq |exact Hhead]
+      end.
+      all: eapply IHk;
+        [eapply continuation_below_raise_correctness; eauto
+        |exact Habove |exact Hhistory].
+    Qed.
+
+    Lemma next_config_control_history :
+      forall tf before after,
+        commit_property before ->
+        configuration_ranked before ->
+        Termination.control_ordered (R.cfg_state before)
+          (R.cfg_control before) ->
+        control_history tf (R.cfg_state before) (R.cfg_control before) ->
+        R.next_config tf before = Some after ->
+        control_history tf (R.cfg_state after) (R.cfg_control after).
+    Proof.
+      intros tf [st control] after Hcommit Hranked Hordered Hhistory Hstep.
+      pose proof (configuration_control_ranked Hranked) as Hcontrol_ranked.
+      destruct control; cbn in Hordered, Hhistory, Hcontrol_ranked, Hstep.
+      - destruct (R.queue_pop (R.queue st)) as [[owner rest]|];
+          try discriminate. inversion Hstep; subst. exact I.
+      - destruct l as [|root remaining]; cbn in Hstep.
+        + inversion Hstep; subst. exact I.
+        + set (observed := R.observe st root) in *.
+          destruct (R.is_materialized observed root);
+            inversion Hstep; subst; exact I.
+      - destruct (R.queue_pop (R.queue st)) as [[owner rest]|];
+          inversion Hstep; subst; exact I.
+      - inversion Hstep; subst. cbn. split.
+        + apply initial_evaluation_witness.
+          apply materialize_solved_correctness.
+        + now apply continuation_history_materialize.
+      - destruct Hcontrol_ranked as [Hframe_ranked Hcontinuation_ranked].
+        destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct r; cbn -[R.observe R.complete_get R.enqueue
+          R.record_side_input R.write_side_contribution R.continue_side
+          R.materialize] in Hstep.
+        + inversion Hstep; subst. cbn. split.
+          * now apply evaluation_ret_completed.
+          * exact Hcontinuation.
+        + set (observed := R.observe st t) in *.
+          assert (Hcurrent0 : evaluation_witness tf observed f
+            (R.ConstraintSystem.Get t r)).
+          { subst observed. now apply evaluation_witness_observe. }
+          assert (Hcontinuation0 : continuation_history tf observed c).
+          { subst observed. now apply continuation_history_observe. }
+          destruct (negb (R.is_materialized observed t) &&
+            R.rank_lt observed (R.frame_owner f) t)%bool.
+          * inversion Hstep; subst. cbn. split; assumption.
+          * set (st0 := if R.is_materialized observed t
+              then observed else R.enqueue observed t) in *.
+            change (Some
+              (let '(st1, fr1, value) := R.complete_get st0 f t in
+               {| R.cfg_state := st1;
+                  R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+              Some after) in Hstep.
+            destruct (R.complete_get st0 f t)
+              as [[st1 fr1] value] eqn:Hget.
+            inversion Hstep; subst. cbn. split.
+            -- eapply evaluation_witness_complete_get; [exact Hget |].
+               unfold st0. destruct (R.is_materialized observed t);
+                 [exact Hcurrent0 |now apply evaluation_witness_enqueue].
+            -- eapply continuation_history_complete_get; [exact Hget |].
+               unfold st0. destruct (R.is_materialized observed t);
+                 [exact Hcontinuation0 |now apply continuation_history_enqueue].
+        + set (observed := R.observe st t) in *.
+          assert (Hcurrent0 : evaluation_witness tf observed f
+            (R.ConstraintSystem.Side t t0 r)).
+          { subst observed. now apply evaluation_witness_observe. }
+          assert (Hcontinuation0 : continuation_history tf observed c).
+          { subst observed. now apply continuation_history_observe. }
+          assert (Hordered0 : Termination.continuation_below observed
+            (R.frame_owner f) c).
+          { subst observed. eapply observed_continuation_below; eauto. }
+          change (Some
+            (let '(fr1, input) := R.record_side_input f t t0 in
+             let '(st1, changed) :=
+               R.write_side_contribution observed fr1 t input in
+             R.continue_side st1 fr1 t r c changed) = Some after) in Hstep.
+          destruct (R.record_side_input f t t0)
+            as [fr1 input] eqn:Hrecord.
+          destruct (R.write_side_contribution observed fr1 t input)
+            as [st1 changed] eqn:Hwrite.
+          inversion Hstep; subst.
+          assert (Hcurrent1 : evaluation_witness tf st1 fr1 r).
+          { eapply evaluation_witness_side; eauto. }
+          assert (Howner1 : R.frame_owner fr1 = R.frame_owner f).
+          { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
+              as Howner. cbn in Howner. symmetry. exact Howner. }
+          assert (Hcontinuation1 : continuation_history tf st1 c).
+          { eapply continuation_history_write_side;
+              [exact Hwrite | |exact Hcontinuation0].
+            now rewrite Howner1. }
+          unfold R.continue_side. destruct changed.
+          * destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
+              negb (R.is_materialized st1 t))%bool; cbn.
+            -- split; assumption.
+            -- split; [now apply evaluation_witness_enqueue
+                       |now apply continuation_history_enqueue].
+          * cbn. split; assumption.
+        + set (observed := R.observe st t) in *.
+          assert (Hcurrent0 : evaluation_witness tf observed f
+            (R.ConstraintSystem.Spawn t r)).
+          { subst observed. now apply evaluation_witness_observe. }
+          assert (Hcontinuation0 : continuation_history tf observed c).
+          { subst observed. now apply continuation_history_observe. }
+          pose proof (evaluation_witness_spawn Hcurrent0) as Hnext.
+          destruct (R.is_materialized observed t).
+          * inversion Hstep; subst. cbn. split; assumption.
+          * destruct (R.rank_lt observed (R.frame_owner f) t).
+            -- inversion Hstep; subst. cbn. split; assumption.
+            -- inversion Hstep; subst. cbn. split.
+               ++ apply evaluation_witness_materialize.
+                  now apply evaluation_witness_enqueue.
+               ++ apply continuation_history_materialize.
+                  now apply continuation_history_enqueue.
+      - destruct Hcontrol_ranked as [Hframe_ranked
+          [Hpending_ranked Hcontinuation_ranked]].
+        destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct l as [|target remaining]; cbn in Hstep.
+        + inversion Hstep; subst. cbn. split.
+          * eapply completed_witness_same_solver_view;
+              [apply publish_targets_same_solver_view |exact Hcurrent].
+          * eapply continuation_history_same_solver_view;
+              [apply publish_targets_same_solver_view |exact Hcontinuation].
+        + destruct (S.mem target (R.frame_current_targets f)) eqn:Hmem.
+          * inversion Hstep; subst. cbn. split; assumption.
+          * change (Some
+              (let '(st1, changed) :=
+                 R.write_side_contribution st f target D.bottom in
+               R.continue_dead st1 f t target remaining c changed) =
+              Some after) in Hstep.
+            destruct (R.write_side_contribution st f target D.bottom)
+              as [st1 changed] eqn:Hwrite.
+            inversion Hstep; subst.
+            assert (Hcurrent1 : completed_witness tf st1 f t).
+            { eapply completed_witness_dead_side; eauto. }
+            assert (Hcontinuation1 : continuation_history tf st1 c).
+            { eapply continuation_history_write_side; eauto. }
+            unfold R.continue_dead. destruct changed.
+            -- destruct (R.rank_lt st1 (R.frame_owner f) target &&
+                 negb (R.is_materialized st1 target))%bool; cbn.
+               ++ split; assumption.
+               ++ split; [now apply completed_witness_enqueue
+                           |now apply continuation_history_enqueue].
+            -- cbn. split; assumption.
+      - destruct Hcontrol_ranked as [Hframe_ranked Hcontinuation_ranked].
+        destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
+        inversion Hstep; subst. cbn.
+        assert (Howner : R.frame_owner fr1 = R.frame_owner f)
+          by (eapply set_value_frame_owner; eauto). split.
+        + rewrite Howner.
+          eapply completed_witness_set_value_summary; eauto.
+          eapply Hcommit; [reflexivity |exact Hset].
+        + eapply continuation_history_set_value; eauto.
+      - destruct Hcontrol_ranked as [Hframe_ranked Hcontinuation_ranked].
+        destruct Hhistory as [Hsummary Hcontinuation].
+        destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
+        + inversion Hstep; subst.
+          eapply continuation_history_same_solver_view;
+            [apply reset_registered_cells_same_solver_view
+            |exact Hcontinuation].
+        + destruct (V.eq_dec next (R.frame_owner f)) as [Heq | Hneq].
+          * inversion Hstep; subst. cbn. split.
+            -- apply initial_evaluation_witness. exact (proj1 Hsummary).
+            -- eapply continuation_history_pop_above.
+               ++ unfold R.queue_pop. rewrite Hqueue. reflexivity.
+               ++ exact Hordered.
+               ++ left. reflexivity.
+               ++ exact Hcontinuation.
+          * destruct (R.rank_lt st (R.frame_owner f) next) eqn:Hlt.
+            -- inversion Hstep; subst. cbn. split.
+               ++ eapply summary_valid_pop_other.
+                  ** unfold R.queue_pop. rewrite Hqueue. reflexivity.
+                  ** intro Hback. apply Hneq. symmetry. exact Hback.
+                  ** exact Hsummary.
+               ++ eapply continuation_history_pop_above.
+                  ** unfold R.queue_pop. rewrite Hqueue. reflexivity.
+                  ** exact Hordered.
+                  ** now right.
+                  ** exact Hcontinuation.
+            -- inversion Hstep; subst.
+               eapply continuation_history_same_solver_view;
+                 [apply reset_registered_cells_same_solver_view
+                 |exact Hcontinuation].
+      - destruct c; cbn in Hhistory, Hstep.
+        + inversion Hstep; subst. exact I.
+        + inversion Hstep; subst. exact I.
+        + destruct Hhistory as [Hcurrent Hcontinuation].
+          change (Some
+            (let '(st1, fr1, value) := R.complete_get st f t in
+             {| R.cfg_state := st1;
+                R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+            Some after) in Hstep.
+          destruct (R.complete_get st f t)
+            as [[st1 fr1] value] eqn:Hget.
+          inversion Hstep; subst. cbn. split.
+          * eapply evaluation_witness_complete_get; eauto.
+          * eapply continuation_history_complete_get; eauto.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+    Qed.
+
+    Lemma summary_valid_complete_get :
+      forall tf st fr target st' fr' value owner,
+        R.complete_get st fr target = (st', fr', value) ->
+        summary_valid tf st owner -> summary_valid tf st' owner.
+    Proof.
+      intros tf st fr target st' fr' value owner Hget Hsummary.
+      unfold R.complete_get in Hget.
+      set (base := if R.rank_lt st (R.frame_owner fr) target
+        then st else R.promote_controlled st target) in *.
+      set (read_state := add_reader base target (R.frame_owner fr)) in *.
+      fold add_reader in Hget. inversion Hget; subst.
+      apply summary_valid_materialize. subst read_state.
+      apply summary_valid_add_reader. subst base.
+      destruct (R.rank_lt st (R.frame_owner fr) target).
+      - exact Hsummary.
+      - eapply summary_valid_same_solver_view;
+          [apply promote_controlled_same_solver_view |exact Hsummary].
+    Qed.
+
+    Lemma continuation_history_active_solved :
+      forall tf st k x,
+        continuation_history tf st k ->
+        continuation_active_correctness x k -> Sem.solved st x.
+    Proof.
+      intros tf st k. induction k; intros x Hhistory Hactive; cbn in *;
+        try contradiction.
+      all: destruct Hhistory as [Hhead Hhistory].
+      - destruct Hactive as [-> | Hactive];
+          [exact (proj1 Hhead) |eapply IHk; eauto].
+      - destruct Hactive as [-> | Hactive];
+          [exact (proj1 Hhead) |eapply IHk; eauto].
+      - destruct Hactive as [-> | Hactive];
+          [exact (proj1 Hhead) |eapply IHk; eauto].
+      - destruct Hactive as [-> | Hactive];
+          [exact (proj1 Hhead) |eapply IHk; eauto].
+      - eapply IHk; eauto.
+    Qed.
+
+    Lemma summary_valid_step_guarded :
+      forall tf before after owner,
+        commit_property before ->
+        control_history tf (R.cfg_state before) (R.cfg_control before) ->
+        summary_valid tf (R.cfg_state before) owner ->
+        R.next_config tf before = Some after ->
+        queued (R.cfg_state after) owner \/
+        control_active owner (R.cfg_control after) \/
+        summary_valid tf (R.cfg_state after) owner.
+    Proof.
+      intros tf [st control] after owner Hcommit Hhistory Hsummary Hstep.
+      destruct control; cbn in Hhistory, Hstep.
+      - destruct (R.queue st) as [|head rest] eqn:Hqueue;
+          try discriminate. inversion Hstep; subst.
+        destruct (V.eq_dec owner head) as [-> | Hneq].
+        + right. left. now left.
+        + right. right. eapply summary_valid_pop_other.
+          * unfold R.queue_pop. rewrite Hqueue. reflexivity.
+          * exact Hneq.
+          * exact Hsummary.
+      - destruct l as [|root remaining]; cbn in Hstep.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + set (observed := R.observe st root) in *.
+          destruct (R.is_materialized observed root);
+            inversion Hstep; subst; right; right;
+            subst observed; now apply summary_valid_observe.
+      - destruct (R.queue st) as [|head rest] eqn:Hqueue; cbn in Hstep.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst.
+          destruct (V.eq_dec owner head) as [-> | Hneq].
+          * right. left. now left.
+          * right. right. eapply summary_valid_pop_other.
+            -- unfold R.queue_pop. rewrite Hqueue. reflexivity.
+            -- exact Hneq.
+            -- exact Hsummary.
+      - inversion Hstep; subst. right. right.
+        now apply summary_valid_materialize.
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
+        + destruct r; cbn -[R.observe R.complete_get R.enqueue
+            R.record_side_input R.write_side_contribution R.continue_side
+            R.materialize] in Hstep.
+          * inversion Hstep; subst. right. left. now left.
+          * set (observed := R.observe st t) in *.
+            destruct (negb (R.is_materialized observed t) &&
+              R.rank_lt observed (R.frame_owner f) t)%bool.
+            -- inversion Hstep; subst. right. left. cbn. now right; left.
+            -- set (st0 := if R.is_materialized observed t
+                 then observed else R.enqueue observed t) in *.
+               change (Some
+                 (let '(st1, fr1, value) := R.complete_get st0 f t in
+                  {| R.cfg_state := st1;
+                     R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+                 Some after) in Hstep.
+               destruct (R.complete_get st0 f t)
+                 as [[st1 fr1] value] eqn:Hget.
+               inversion Hstep; subst. right. left. left.
+               symmetry. eapply complete_get_frame_owner; eauto.
+          * set (observed := R.observe st t) in *.
+            change (Some
+              (let '(fr1, input) := R.record_side_input f t t0 in
+               let '(st1, changed) :=
+                 R.write_side_contribution observed fr1 t input in
+               R.continue_side st1 fr1 t r c changed) = Some after) in Hstep.
+            destruct (R.record_side_input f t t0)
+              as [fr1 input] eqn:Hrecord.
+            destruct (R.write_side_contribution observed fr1 t input)
+              as [st1 changed] eqn:Hwrite.
+            inversion Hstep; subst.
+            assert (Howner : R.frame_owner fr1 = R.frame_owner f).
+            { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
+                as H. cbn in H. symmetry. exact H. }
+            unfold R.continue_side. destruct changed.
+            -- destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
+                 negb (R.is_materialized st1 t))%bool.
+               ++ right. left. cbn. right. left. symmetry. exact Howner.
+               ++ right. left. cbn. left. symmetry. exact Howner.
+            -- right. left. cbn. left. symmetry. exact Howner.
+          * set (observed := R.observe st t) in *.
+            destruct (R.is_materialized observed t).
+            -- inversion Hstep; subst. right. left. now left.
+            -- destruct (R.rank_lt observed (R.frame_owner f) t).
+               ++ inversion Hstep; subst. right. left. cbn. now right; left.
+               ++ inversion Hstep; subst. right. left. now left.
+        + destruct r; cbn -[R.observe R.complete_get R.enqueue
+            R.record_side_input R.write_side_contribution R.continue_side
+            R.materialize] in Hstep.
+          * inversion Hstep; subst. right. right. exact Hsummary.
+          * set (observed := R.observe st t) in *.
+            assert (Hsummary0 : summary_valid tf observed owner)
+              by (subst observed; now apply summary_valid_observe).
+            destruct (negb (R.is_materialized observed t) &&
+              R.rank_lt observed (R.frame_owner f) t)%bool.
+            -- inversion Hstep; subst. right. right. exact Hsummary0.
+            -- set (st0 := if R.is_materialized observed t
+                 then observed else R.enqueue observed t) in *.
+               change (Some
+                 (let '(st1, fr1, value) := R.complete_get st0 f t in
+                  {| R.cfg_state := st1;
+                     R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+                 Some after) in Hstep.
+               destruct (R.complete_get st0 f t)
+                 as [[st1 fr1] value] eqn:Hget.
+               inversion Hstep; subst. right. right.
+               eapply summary_valid_complete_get; [exact Hget |].
+               unfold st0. destruct (R.is_materialized observed t);
+                 [exact Hsummary0 |now apply summary_valid_enqueue].
+          * set (observed := R.observe st t) in *.
+            assert (Hsummary0 : summary_valid tf observed owner)
+              by (subst observed; now apply summary_valid_observe).
+            change (Some
+              (let '(fr1, input) := R.record_side_input f t t0 in
+               let '(st1, changed) :=
+                 R.write_side_contribution observed fr1 t input in
+               R.continue_side st1 fr1 t r c changed) = Some after) in Hstep.
+            destruct (R.record_side_input f t t0)
+              as [fr1 input] eqn:Hrecord.
+            destruct (R.write_side_contribution observed fr1 t input)
+              as [st1 changed] eqn:Hwrite.
+            inversion Hstep; subst.
+            assert (Hsummary1 : summary_valid tf st1 owner).
+            { eapply summary_valid_write_other_source;
+                [exact Hwrite | |exact Hsummary0].
+              pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
+                as H. cbn in H. rewrite <- H. exact Hother. }
+            unfold R.continue_side. destruct changed.
+            -- destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
+                 negb (R.is_materialized st1 t))%bool;
+                 [right; right; exact Hsummary1 |
+                  right; right; now apply summary_valid_enqueue].
+            -- right. right. exact Hsummary1.
+          * set (observed := R.observe st t) in *.
+            assert (Hsummary0 : summary_valid tf observed owner)
+              by (subst observed; now apply summary_valid_observe).
+            destruct (R.is_materialized observed t).
+            -- inversion Hstep; subst. right. right. exact Hsummary0.
+            -- destruct (R.rank_lt observed (R.frame_owner f) t).
+               ++ inversion Hstep; subst. right. right. exact Hsummary0.
+               ++ inversion Hstep; subst. right. right.
+                  apply summary_valid_materialize.
+                  now apply summary_valid_enqueue.
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
+        + destruct l as [|dead remaining]; cbn in Hstep.
+          * inversion Hstep; subst. right. left. now left.
+          * destruct (S.mem dead (R.frame_current_targets f)).
+            -- inversion Hstep; subst. right. left. now left.
+            -- change (Some
+                (let '(st1, changed) :=
+                   R.write_side_contribution st f dead D.bottom in
+                 R.continue_dead st1 f t dead remaining c changed) =
+                Some after) in Hstep.
+               destruct (R.write_side_contribution st f dead D.bottom)
+                 as [st1 changed] eqn:Hwrite.
+               inversion Hstep; subst. unfold R.continue_dead.
+               destruct changed.
+               ++ destruct (R.rank_lt st1 (R.frame_owner f) dead &&
+                    negb (R.is_materialized st1 dead))%bool.
+                  ** right. left. cbn. right. left. reflexivity.
+                  ** right. left. cbn. now left.
+               ++ right. left. cbn. now left.
+        + destruct l as [|dead remaining]; cbn in Hstep.
+          * inversion Hstep; subst. right. right. exact Hsummary.
+          * destruct (S.mem dead (R.frame_current_targets f)).
+            -- inversion Hstep; subst. right. right. exact Hsummary.
+            -- change (Some
+                (let '(st1, changed) :=
+                   R.write_side_contribution st f dead D.bottom in
+                 R.continue_dead st1 f t dead remaining c changed) =
+                Some after) in Hstep.
+               destruct (R.write_side_contribution st f dead D.bottom)
+                 as [st1 changed] eqn:Hwrite.
+               inversion Hstep; subst.
+               assert (Hsummary1 : summary_valid tf st1 owner)
+                 by (eapply summary_valid_write_other_source; eauto).
+               unfold R.continue_dead. destruct changed.
+               ++ destruct (R.rank_lt st1 (R.frame_owner f) dead &&
+                    negb (R.is_materialized st1 dead))%bool;
+                    [right; right; exact Hsummary1 |
+                     right; right; now apply summary_valid_enqueue].
+               ++ right. right. exact Hsummary1.
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
+        inversion Hstep; subst.
+        destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
+        + right. right. eapply completed_witness_set_value_summary; eauto.
+          eapply Hcommit; [reflexivity |exact Hset].
+        + right. right. eapply summary_valid_set_value_other; eauto.
+      - destruct Hhistory as [Hframe Hcontinuation].
+        destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
+        + inversion Hstep; subst. right. right.
+          eapply summary_valid_same_solver_view;
+            [apply reset_registered_cells_same_solver_view |exact Hsummary].
+        + destruct (V.eq_dec next (R.frame_owner f)).
+          * inversion Hstep; subst.
+            destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hneq].
+            -- right. left. now left.
+            -- right. right. eapply summary_valid_pop_other.
+               ++ unfold R.queue_pop. rewrite Hqueue. reflexivity.
+               ++ exact Hneq.
+               ++ exact Hsummary.
+          * destruct (R.rank_lt st (R.frame_owner f) next).
+            -- inversion Hstep; subst.
+               destruct (V.eq_dec owner next) as [-> | Hneq].
+               ++ right. left. now left.
+               ++ right. right. eapply summary_valid_pop_other.
+                  ** unfold R.queue_pop. rewrite Hqueue. reflexivity.
+                  ** exact Hneq.
+                  ** exact Hsummary.
+            -- inversion Hstep; subst. right. right.
+               eapply summary_valid_same_solver_view;
+                 [apply reset_registered_cells_same_solver_view
+                 |exact Hsummary].
+      - destruct c; cbn in Hstep.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + change (Some
+            (let '(st1, fr1, value) := R.complete_get st f t in
+             {| R.cfg_state := st1;
+                R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+            Some after) in Hstep.
+          destruct (R.complete_get st f t)
+            as [[st1 fr1] value] eqn:Hget.
+          inversion Hstep; subst. right. right.
+          eapply summary_valid_complete_get; eauto.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+    Qed.
+
+    Lemma next_config_control_get_consistent :
+      forall tf before after,
+        control_get_consistent
+          (R.cfg_state before) (R.cfg_control before) ->
+        control_history tf
+          (R.cfg_state before) (R.cfg_control before) ->
+        R.next_config tf before = Some after ->
+        control_get_consistent
+          (R.cfg_state after) (R.cfg_control after).
+    Proof.
+      intros tf [st control] after Hconsistent Hhistory Hstep.
+      destruct control; cbn in Hconsistent, Hhistory, Hstep.
+      - destruct (R.queue st); try discriminate.
+        inversion Hstep; subst. split; exact I.
+      - destruct l as [|root remaining]; cbn in Hstep.
+        + inversion Hstep; subst. exact I.
+        + set (observed := R.observe st root) in *.
+          destruct (R.is_materialized observed root);
+            inversion Hstep; subst; cbn; repeat split; exact I.
+      - destruct (R.queue st); cbn in Hstep;
+          inversion Hstep; subst; cbn; repeat split; exact I.
+      - inversion Hstep; subst. exact Hconsistent.
+      - destruct Hconsistent as [Hexpect Hcontinuation].
+        destruct r; cbn -[R.observe R.complete_get R.enqueue
+          R.record_side_input R.write_side_contribution R.continue_side
+          R.materialize] in Hstep.
+        + inversion Hstep; subst. split; assumption.
+        + set (observed := R.observe st t) in *.
+          destruct (negb (R.is_materialized observed t) &&
+            R.rank_lt observed (R.frame_owner f) t)%bool.
+          * inversion Hstep; subst. cbn. split; [reflexivity |].
+            split; assumption.
+          * set (st0 := if R.is_materialized observed t
+              then observed else R.enqueue observed t) in *.
+            change (Some
+              (let '(st1, fr1, value) := R.complete_get st0 f t in
+               {| R.cfg_state := st1;
+                  R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+              Some after) in Hstep.
+            destruct (R.complete_get st0 f t)
+              as [[st1 fr1] value] eqn:Hget.
+            inversion Hstep; subst. split.
+            -- rewrite (@complete_get_frame_owner
+                 st0 f t st1 fr1 value Hget). exact Hexpect.
+            -- exact Hcontinuation.
+        + set (observed := R.observe st t) in *.
+          change (Some
+            (let '(fr1, input) := R.record_side_input f t t0 in
+             let '(st1, changed) :=
+               R.write_side_contribution observed fr1 t input in
+             R.continue_side st1 fr1 t r c changed) = Some after) in Hstep.
+          destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
+          destruct (R.write_side_contribution observed fr1 t input)
+            as [st1 changed] eqn:Hwrite.
+          inversion Hstep; subst.
+          assert (Howner : R.frame_owner fr1 = R.frame_owner f).
+          { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
+              as H. cbn in H. symmetry. exact H. }
+          unfold R.continue_side. destruct changed.
+          * destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
+              negb (R.is_materialized st1 t))%bool.
+            -- cbn. split; [exact I |]. split.
+               ++ now rewrite Howner.
+               ++ exact Hcontinuation.
+            -- cbn. split; [now rewrite Howner |exact Hcontinuation].
+          * cbn. split; [now rewrite Howner |exact Hcontinuation].
+        + set (observed := R.observe st t) in *.
+          destruct (R.is_materialized observed t).
+          * inversion Hstep; subst. split; assumption.
+          * destruct (R.rank_lt observed (R.frame_owner f) t).
+            -- inversion Hstep; subst. cbn. split; [exact I |].
+               split; assumption.
+            -- inversion Hstep; subst. split; assumption.
+      - destruct Hconsistent as [Hexpect Hcontinuation].
+        destruct l as [|target remaining]; cbn in Hstep.
+        + inversion Hstep; subst. split; assumption.
+        + destruct (S.mem target (R.frame_current_targets f)).
+          * inversion Hstep; subst. split; assumption.
+          * change (Some
+              (let '(st1, changed) :=
+                 R.write_side_contribution st f target D.bottom in
+               R.continue_dead st1 f t target remaining c changed) =
+              Some after) in Hstep.
+            destruct (R.write_side_contribution st f target D.bottom)
+              as [st1 changed] eqn:Hwrite.
+            inversion Hstep; subst. unfold R.continue_dead. destruct changed.
+            -- destruct (R.rank_lt st1 (R.frame_owner f) target &&
+                 negb (R.is_materialized st1 target))%bool.
+               ++ cbn. split; [exact I |]. split; assumption.
+               ++ cbn. split; assumption.
+            -- cbn. split; assumption.
+      - destruct Hconsistent as [Hexpect Hcontinuation].
+        destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
+        inversion Hstep; subst. split.
+        + rewrite (@set_value_frame_owner st f t st1 fr1 Hset).
+          exact Hexpect.
+        + exact Hcontinuation.
+      - destruct Hconsistent as [Hexpect Hcontinuation].
+        destruct Hhistory as [Hsummary Hhistory].
+        destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
+        + inversion Hstep; subst.
+          destruct c; cbn in Hexpect, Hcontinuation |- *;
+            split; try exact I; try exact Hcontinuation.
+          rewrite <- Hexpect. eapply solved_same_solver_view;
+            [apply reset_registered_cells_same_solver_view
+            |exact (proj1 Hsummary)].
+        + destruct (V.eq_dec next (R.frame_owner f)).
+          * inversion Hstep; subst. split; assumption.
+          * destruct (R.rank_lt st (R.frame_owner f) next).
+            -- inversion Hstep; subst. cbn. split; [exact I |].
+               split; assumption.
+            -- inversion Hstep; subst.
+               destruct c; cbn in Hexpect, Hcontinuation |- *;
+                 split; try exact I; try exact Hcontinuation.
+               rewrite <- Hexpect. eapply solved_same_solver_view;
+                 [apply reset_registered_cells_same_solver_view
+                 |exact (proj1 Hsummary)].
+      - destruct Hconsistent as [Hready Hcontinuation].
+        destruct c; cbn in Hready, Hcontinuation, Hstep.
+        + inversion Hstep; subst. exact I.
+        + inversion Hstep; subst. exact I.
+        + change (Some
+            (let '(st1, fr1, value) := R.complete_get st f t in
+             {| R.cfg_state := st1;
+                R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+            Some after) in Hstep.
+          destruct (R.complete_get st f t)
+            as [[st1 fr1] value] eqn:Hget.
+          inversion Hstep; subst.
+          destruct Hcontinuation as [Hexpect Hcontinuation]. split.
+          * rewrite (@complete_get_frame_owner st f t st1 fr1 value Hget).
+            exact Hexpect.
+          * exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+    Qed.
+
+    Lemma next_config_solved_origin_guarded :
+      forall tf before after x,
+        control_get_consistent
+          (R.cfg_state before) (R.cfg_control before) ->
+        control_history tf
+          (R.cfg_state before) (R.cfg_control before) ->
+        Sem.solved (R.cfg_state after) x ->
+        R.next_config tf before = Some after ->
+        Sem.solved (R.cfg_state before) x \/
+        queued (R.cfg_state after) x \/
+        control_active x (R.cfg_control after).
+    Proof.
+      intros tf [st control] after x Hconsistent Hhistory Hsolved Hstep.
+      destruct control; cbn in Hconsistent, Hhistory, Hstep.
+      - destruct (R.queue st); try discriminate.
+        inversion Hstep; subst. now left.
+      - destruct l as [|root remaining]; cbn in Hstep.
+        + inversion Hstep; subst. now left.
+        + set (observed := R.observe st root) in *.
+          destruct (R.is_materialized observed root);
+            inversion Hstep; subst; left; subst observed;
+            exact (@solved_observe_back st root x Hsolved).
+      - destruct (R.queue st); cbn in Hstep;
+          inversion Hstep; subst; now left.
+      - inversion Hstep; subst.
+        destruct (@materialize_solved_origin_correctness st t x Hsolved)
+          as [Hbefore | ->]; [now left |right; right; now left].
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct r; cbn -[R.observe R.complete_get R.enqueue
+          R.record_side_input R.write_side_contribution R.continue_side
+          R.materialize] in Hstep.
+        + inversion Hstep; subst. now left.
+        + set (observed := R.observe st t) in *.
+          destruct (negb (R.is_materialized observed t) &&
+            R.rank_lt observed (R.frame_owner f) t)%bool.
+          * inversion Hstep; subst. left. subst observed.
+            exact (@solved_observe_back st t x Hsolved).
+          * set (st0 := if R.is_materialized observed t
+              then observed else R.enqueue observed t) in *.
+            change (Some
+              (let '(st1, fr1, value) := R.complete_get st0 f t in
+               {| R.cfg_state := st1;
+                  R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+              Some after) in Hstep.
+            destruct (R.complete_get st0 f t)
+              as [[st1 fr1] value] eqn:Hget.
+            inversion Hstep; subst.
+            destruct (@complete_get_solved_origin
+              st0 f t st1 fr1 value x Hget Hsolved) as [Hst0 | ->].
+            -- left. unfold st0 in Hst0.
+               destruct (R.is_materialized observed t); subst observed;
+                 exact (@solved_observe_back st t x Hst0).
+            -- unfold st0. destruct (R.is_materialized observed t) eqn:Hmat.
+               ++ left. subst observed. apply (@solved_observe_back st t t).
+                  unfold R.is_materialized in Hmat.
+                  destruct (M.lookup (R.sigma (R.observe st t)) t)
+                    as [current|] eqn:Hlookup; try discriminate.
+                  now exists current.
+               ++ right. left. eapply queued_complete_get; [exact Hget |].
+                  destruct (R.is_materialized observed t); try discriminate.
+                  unfold queued. apply queue_insert_members. now left.
+        + set (observed := R.observe st t) in *.
+          change (Some
+            (let '(fr1, input) := R.record_side_input f t t0 in
+             let '(st1, changed) :=
+               R.write_side_contribution observed fr1 t input in
+             R.continue_side st1 fr1 t r c changed) = Some after) in Hstep.
+          destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
+          destruct (R.write_side_contribution observed fr1 t input)
+            as [st1 changed] eqn:Hwrite.
+          inversion Hstep; subst.
+          destruct (write_side_contribution_same_read_view Hwrite)
+            as [Hsigma _].
+          left. apply solved_observe_back with (observed := t).
+          destruct Hsolved as [value Hlookup]. exists value.
+          unfold R.continue_side in Hlookup. destruct changed.
+          * destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
+              negb (R.is_materialized st1 t))%bool;
+              cbn in Hlookup; now rewrite Hsigma in Hlookup.
+          * cbn in Hlookup. now rewrite Hsigma in Hlookup.
+        + set (observed := R.observe st t) in *.
+          destruct (R.is_materialized observed t).
+          * inversion Hstep; subst. left. subst observed.
+            exact (@solved_observe_back st t x Hsolved).
+          * destruct (R.rank_lt observed (R.frame_owner f) t).
+            -- inversion Hstep; subst. left. subst observed.
+               exact (@solved_observe_back st t x Hsolved).
+            -- inversion Hstep; subst.
+               destruct (@materialize_solved_origin_correctness
+                 (R.enqueue observed t) t x Hsolved) as [Horigin | ->].
+               ++ left. subst observed.
+                  exact (@solved_observe_back st t x Horigin).
+               ++ right. left. apply queued_materialize.
+                  unfold queued. apply queue_insert_members. now left.
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct l as [|target remaining]; cbn in Hstep.
+        + inversion Hstep; subst. now left.
+        + destruct (S.mem target (R.frame_current_targets f)).
+          * inversion Hstep; subst. now left.
+          * change (Some
+              (let '(st1, changed) :=
+                 R.write_side_contribution st f target D.bottom in
+               R.continue_dead st1 f t target remaining c changed) =
+              Some after) in Hstep.
+            destruct (R.write_side_contribution st f target D.bottom)
+              as [st1 changed] eqn:Hwrite.
+            inversion Hstep; subst.
+            destruct (write_side_contribution_same_read_view Hwrite)
+              as [Hsigma _].
+            left. destruct Hsolved as [value Hlookup]. exists value.
+            unfold R.continue_dead in Hlookup. destruct changed.
+            -- destruct (R.rank_lt st1 (R.frame_owner f) target &&
+                 negb (R.is_materialized st1 target))%bool;
+                 cbn in Hlookup; now rewrite Hsigma in Hlookup.
+            -- cbn in Hlookup. now rewrite Hsigma in Hlookup.
+      - destruct Hhistory as [Hcurrent Hcontinuation].
+        destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
+        inversion Hstep; subst.
+        destruct (@set_value_solved_origin
+          st f t st1 fr1 x Hset Hsolved) as [Hbefore | ->].
+        + now left.
+        + left. exact (proj1 Hcurrent).
+      - destruct (R.queue st) as [|next rest]; cbn in Hstep.
+        + inversion Hstep; subst. left.
+          eapply solved_same_solver_view_back;
+            [apply reset_registered_cells_same_solver_view |exact Hsolved].
+        + destruct (V.eq_dec next (R.frame_owner f)).
+          * inversion Hstep; subst. now left.
+          * destruct (R.rank_lt st (R.frame_owner f) next).
+            -- inversion Hstep; subst. now left.
+            -- inversion Hstep; subst. left.
+               eapply solved_same_solver_view_back;
+                 [apply reset_registered_cells_same_solver_view |exact Hsolved].
+      - destruct Hconsistent as [Hready Hcontinuation].
+        destruct c; cbn in Hready, Hstep.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + change (Some
+            (let '(st1, fr1, value) := R.complete_get st f t in
+             {| R.cfg_state := st1;
+                R.cfg_control := R.RunRhs fr1 (r value) c |}) =
+            Some after) in Hstep.
+          destruct (R.complete_get st f t)
+            as [[st1 fr1] value] eqn:Hget.
+          inversion Hstep; subst.
+          destruct (@complete_get_solved_origin
+            st f t st1 fr1 value x Hget Hsolved) as [Hbefore | ->].
+          * now left.
+          * left. exact Hready.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+    Qed.
+
+    Lemma next_config_summary_guarded :
+      forall tf before after owner,
+        commit_property before ->
+        control_get_consistent
+          (R.cfg_state before) (R.cfg_control before) ->
+        control_history tf
+          (R.cfg_state before) (R.cfg_control before) ->
+        (forall x,
+          Sem.solved (R.cfg_state before) x ->
+          queued (R.cfg_state before) x \/
+          control_active x (R.cfg_control before) \/
+          summary_valid tf (R.cfg_state before) x) ->
+        Sem.solved (R.cfg_state after) owner ->
+        R.next_config tf before = Some after ->
+        queued (R.cfg_state after) owner \/
+        control_active owner (R.cfg_control after) \/
+        summary_valid tf (R.cfg_state after) owner.
+    Proof.
+      intros tf before after owner Hcommit_property Hconsistent Hhistory
+        Hguard Hsolved Hstep.
+      destruct (@next_config_solved_origin_guarded
+        tf before after owner Hconsistent Hhistory Hsolved Hstep)
+        as [Hbefore | [Hqueued | Hactive]].
+      - destruct (Hguard owner Hbefore)
+          as [Hqueued | [Hactive | Hsummary]].
+        + destruct (@queued_step_scheduled
+            tf before after owner Hqueued Hstep);
+            [now left |now right; left].
+        + destruct (@active_step_scheduled_or_commit
+            tf before after owner Hactive Hstep)
+            as [Hqueued' | [Hactive' | Hcommit]].
+          * now left.
+          * now right; left.
+          * right. right. destruct Hcommit as
+              [st [fr [direct [k [st' [fr'
+                [-> [Hset [-> ->]]]]]]]]].
+            cbn in Hhistory.
+            eapply completed_witness_set_value_summary; eauto.
+            { exact (proj1 Hhistory). }
+            eapply Hcommit_property; [reflexivity |exact Hset].
+        + eapply summary_valid_step_guarded; eauto.
+      - now left.
+      - now right; left.
+    Qed.
+
+    Lemma roots_guarded_step :
+      forall tf roots before after,
+        control_history tf
+          (R.cfg_state before) (R.cfg_control before) ->
+        roots_guarded roots before ->
+        R.next_config tf before = Some after -> roots_guarded roots after.
+    Proof.
+      intros tf roots before after Hhistory Hroots Hstep x Hin.
+      destruct (Hroots x Hin)
+        as [Hsolved | [Hqueued | [Hpending | Hactive]]].
+      - left. eapply next_config_preserves_solved; eauto.
+      - destruct (@queued_step_scheduled tf before after x Hqueued Hstep)
+          as [Hqueued' | Hactive'];
+          [right; left; exact Hqueued' |right; right; right; exact Hactive'].
+      - destruct (@control_pending_step tf x before after Hpending Hstep)
+          as [Hsolved' | [Hpending' | Hactive']];
+          [now left |right; right; left; exact Hpending'
+           |right; right; right; exact Hactive'].
+      - destruct (@active_step_scheduled_or_commit
+          tf before after x Hactive Hstep)
+          as [Hqueued | [Hactive' | Hcommit]].
+        + right. left. exact Hqueued.
+        + right. right. right. exact Hactive'.
+        + left. destruct Hcommit as
+            [st [fr [direct [k [st' [fr'
+              [-> [Hset [-> ->]]]]]]]]].
+          cbn in Hhistory, Hactive.
+          destruct Hactive as [_ | Hactive].
+          * eapply set_value_solved;
+              [exact Hset |exact (proj1 (proj1 Hhistory))].
+          * eapply set_value_solved; [exact Hset |].
+            eapply (@continuation_history_active_solved
+              tf st k (R.frame_owner fr));
+              [exact (proj2 Hhistory) |exact Hactive].
+    Qed.
+
+    Record invariant
+      (tf : R.ConstraintSystem.system) (roots : list V.t)
+      (c : R.config) : Prop := {
+      invariant_reachable : Sem.steps tf (R.initial_config roots) c;
+      invariant_history :
+        control_history tf (R.cfg_state c) (R.cfg_control c);
+      invariant_get_consistent :
+        control_get_consistent (R.cfg_state c) (R.cfg_control c);
+      invariant_aggregate :
+        forall target,
+          queued (R.cfg_state c) target \/
+          control_active target (R.cfg_control c) \/
+          aggregate_bounded (R.cfg_state c) target;
+      invariant_summaries :
+        forall owner,
+          Sem.solved (R.cfg_state c) owner ->
+          queued (R.cfg_state c) owner \/
+          control_active owner (R.cfg_control c) \/
+          summary_valid tf (R.cfg_state c) owner;
+      invariant_roots : roots_guarded roots c;
+    }.
+
+    Lemma initial_invariant :
+      forall tf roots, invariant tf roots (R.initial_config roots).
+    Proof.
+      intros tf roots. constructor.
+      - constructor.
+      - exact I.
+      - exact I.
+      - intros target. right. right. apply initial_aggregate_bounded.
+      - intros owner [value Hlookup]. cbn in Hlookup.
+        rewrite ML.lookup_empty in Hlookup. discriminate.
+      - apply initial_roots_guarded.
+    Qed.
+
+    Lemma invariant_step :
+      forall tf roots before after,
+        invariant tf roots before ->
+        commit_property before ->
+        R.next_config tf before = Some after -> invariant tf roots after.
+    Proof.
+      intros tf roots before after Hinv Hcommit Hstep.
+      pose proof (invariant_reachable Hinv) as Hreachable.
+      pose proof (reachable_configuration_ranked Hreachable) as Hranked.
+      pose proof (Termination.reachable_control_ordered Hreachable) as Hordered.
+      constructor.
+      - eapply Termination.steps_append_one; eauto.
+      - eapply next_config_control_history; eauto using invariant_history.
+      - eapply next_config_control_get_consistent; eauto using
+          invariant_get_consistent, invariant_history.
+      - intros target. eapply next_config_aggregate_guarded; eauto using
+          invariant_aggregate.
+      - intros owner Hsolved. eapply next_config_summary_guarded; eauto using
+          invariant_get_consistent, invariant_history, invariant_summaries.
+      - eapply roots_guarded_step; eauto using invariant_history,
+          invariant_roots.
+    Qed.
+
+    Lemma invariant_steps :
+      forall tf roots first final,
+        (forall c, Sem.steps tf (R.initial_config roots) c -> commit_property c) ->
+        invariant tf roots first ->
+        Sem.steps tf first final -> invariant tf roots final.
+    Proof.
+      intros tf roots first final Hcommits Hinv Hsteps. induction Hsteps.
+      - exact Hinv.
+      - apply IHHsteps. eapply invariant_step; eauto.
+        apply Hcommits. exact (invariant_reachable Hinv).
+    Qed.
+
+    Lemma terminal_invariant :
+      forall tf roots final,
+        (forall c, Sem.steps tf (R.initial_config roots) c -> commit_property c) ->
+        Sem.terminates_to tf roots final ->
+        invariant tf roots (Sem.terminal_config final).
+    Proof.
+      intros tf roots final Hcommits [Hsteps _]. eapply invariant_steps.
+      - exact Hcommits.
+      - apply initial_invariant.
+      - exact Hsteps.
+    Qed.
+
+  End Correctness.
+End CommitHistory.
+
 End Make.
 
 Module FirstDiscovery

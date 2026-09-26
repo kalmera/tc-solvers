@@ -2054,92 +2054,13 @@ Module Make
     now apply enqueue_distinct.
   Qed.
 
-  Lemma requeue_preserves (P : R.state -> Prop) before after owner :
-    P after -> P (R.enqueue after owner) ->
-    P (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    intros Hsame Hqueue. unfold R.requeue_changed_controlled_owner.
-    destruct (S.mem owner (R.controlled before) &&
-      negb (R.equivalent (R.sigma_value after owner)
-        (R.sigma_value before owner))).
-    - exact Hqueue.
-    - destruct after; exact Hsame.
-  Qed.
 
-  Lemma requeue_unchanged before after owner :
-    R.equivalent (R.sigma_value after owner)
-      (R.sigma_value before owner) = true ->
-    R.requeue_changed_controlled_owner before after owner = after.
-  Proof.
-    intro Heq. unfold R.requeue_changed_controlled_owner. rewrite Heq.
-    rewrite Bool.andb_false_r. destruct after; reflexivity.
-  Qed.
 
-  Lemma requeue_uncontrolled before after owner :
-    S.mem owner (R.controlled before) = false ->
-    R.requeue_changed_controlled_owner before after owner = after.
-  Proof.
-    intro Hcontrol. unfold R.requeue_changed_controlled_owner.
-    rewrite Hcontrol. destruct after; reflexivity.
-  Qed.
 
-  Lemma requeue_members before after owner x :
-    List.In x (R.queue (R.requeue_changed_controlled_owner before after owner)) ->
-    x = owner \/ List.In x (R.queue after).
-  Proof.
-    unfold R.requeue_changed_controlled_owner. cbn.
-    destruct (S.mem owner (R.controlled before) &&
-      negb (R.equivalent (R.sigma_value after owner)
-        (R.sigma_value before owner))).
-    - intro H. apply queue_insert_members in H. intuition congruence.
-    - intro H. now right.
-  Qed.
 
-  Lemma requeue_enabled before after owner :
-    S.mem owner (R.controlled before) = true ->
-    R.equivalent (R.sigma_value after owner)
-      (R.sigma_value before owner) = false ->
-    List.In owner
-      (R.queue (R.requeue_changed_controlled_owner before after owner)).
-  Proof.
-    intros Hcontrol Hchanged. unfold R.requeue_changed_controlled_owner.
-    rewrite Hcontrol, Hchanged. cbn.
-    apply queue_insert_members. now left.
-  Qed.
 
-  Lemma state_data_ranked_requeue before after owner :
-    state_data_ranked after -> ranked after owner ->
-    state_data_ranked (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    intros Hdata Howner. apply requeue_preserves; [exact Hdata |].
-    now apply state_data_ranked_enqueue.
-  Qed.
 
-  Lemma queue_distinct_requeue before after owner :
-    queue_distinct after ->
-    queue_distinct (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    intro Hdistinct. apply requeue_preserves; [exact Hdistinct |].
-    now apply enqueue_distinct.
-  Qed.
 
-  Lemma queue_ordered_requeue before after owner :
-    rank_valid after -> state_data_ranked after ->
-    queue_ordered after -> ranked after owner ->
-    queue_ordered (R.requeue_changed_controlled_owner before after owner).
-  Proof.
-    intros Hvalid Hdata Hordered Howner.
-    apply requeue_preserves; [exact Hordered |].
-    apply enqueue_ordered; try assumption. exact (data_queue_ranked Hdata).
-  Qed.
-
-  (** Erase the queue-only wrapper only when conversion proves that the
-      current proposition does not inspect the queue. *)
-  Ltac clear_requeue_view :=
-    repeat match goal with
-    | |- context C [R.requeue_changed_controlled_owner ?before ?after ?owner] =>
-      let unchanged := context C [after] in progress change unchanged
-    end.
 
   Lemma next_config_rank_valid :
     forall tf before after,
@@ -2259,7 +2180,7 @@ Module Make
       try exact Hdata.
     all: try (apply state_data_ranked_observe; exact Hdata).
     all: try (apply state_data_ranked_materialize; exact Hdata).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest)
         |- state_data_ranked (R.with_queue ?before ?rest) =>
@@ -2276,7 +2197,7 @@ Module Make
       [exact Hdata | exact (proj1 (proj1 Hcontrol))]).
     all: try (apply state_data_ranked_observe_enqueue_promote_add_reader;
       [exact Hdata | exact (proj1 (proj1 Hcontrol))]).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcomplete : R.complete_get
           (if R.is_materialized (R.observe ?before ?target) ?target
@@ -2294,22 +2215,14 @@ Module Make
     all: try (apply state_data_ranked_publish_targets;
       [exact Hdata | exact (proj1 Hcontrol)]).
     all: try (apply state_data_ranked_reset_registered_cells; exact Hdata).
-    all: clear_requeue_view.
-    all: try match goal with
-      | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
-        |- state_data_ranked (R.requeue_changed_controlled_owner _ _ _) =>
-          apply state_data_ranked_requeue;
-          [eapply state_data_ranked_set_value; eauto
-          |eapply ranked_extended; [eapply rank_extends_set_value; exact Hset
-            |exact (proj1 (proj1 Hcontrol))]]
-      end.
-    all: clear_requeue_view.
+
+
     all: try match goal with
       | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
         |- state_data_ranked ?next =>
           eapply state_data_ranked_set_value; [exact Hdata | exact Hset]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution (R.observe ?before ?target)
           ?fr ?target ?input = (?next, ?changed)
@@ -2323,7 +2236,7 @@ Module Make
            [eapply rank_extends_write_side_contribution; exact Hwrite
            |eapply observe_ranks_variable; reflexivity]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\
           list_ranked ?before (?target :: ?rest) /\ _,
@@ -2339,7 +2252,7 @@ Module Make
            [eapply rank_extends_write_side_contribution; exact Hwrite
            |apply (proj1 (proj2 Hcontrol0)); now left]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcomplete : R.complete_get ?before ?fr ?target =
           (?next, ?next_fr, ?value)
@@ -2405,7 +2318,7 @@ Module Make
         end;
       try discriminate; inversion Hstep; subst; cbn in *;
       try exact I.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest)
         |- ranked (R.with_queue ?before ?rest) ?head /\ True =>
@@ -2415,7 +2328,7 @@ Module Make
              (data_queue_ranked Hdata) Hpop))
           |exact I]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr),
         Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
@@ -2426,7 +2339,7 @@ Module Make
           |eapply continuation_ranked_extended;
            [exact Hextends | exact (proj2 Hcontrol0)]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest),
         Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
@@ -2443,7 +2356,7 @@ Module Make
            |apply continuation_ranked_extended with before;
             [apply rank_extends_with_queue | exact (proj2 Hcontrol0)]]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : ranked ?before ?owner /\ continuation_ranked ?before ?k
         |- frame_ranked (R.materialize ?before ?owner)
@@ -2453,7 +2366,7 @@ Module Make
             before owner k phase (tf owner) Hdata
             (proj1 Hcontrol0) (proj2 Hcontrol0))
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
         |- frame_ranked ?before ?fr /\
@@ -2464,7 +2377,7 @@ Module Make
            exact (proj1 (proj2 (proj1 Hcontrol0)))
           |exact (proj2 Hcontrol0)]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
         |- ranked (R.observe ?before ?target) ?target /\
@@ -2478,7 +2391,7 @@ Module Make
            eapply continuation_ranked_extended;
            [eapply rank_extends_observe; reflexivity |exact (proj2 Hcontrol0)]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
         |- ranked (R.observe ?before ?target) ?target /\
@@ -2490,7 +2403,7 @@ Module Make
           |eapply continuation_ranked_extended;
            [eapply rank_extends_observe; reflexivity |exact (proj2 Hcontrol0)]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\
           list_ranked ?before (?head :: ?tail) /\
@@ -2501,7 +2414,7 @@ Module Make
           [intros x Hin; apply (proj1 (proj2 Hcontrol0)); now right
           |exact (proj2 (proj2 Hcontrol0))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k,
         Hcomplete : R.complete_get
@@ -2513,7 +2426,7 @@ Module Make
           eapply control_ranked_complete_get_after_observe;
           [exact (proj1 Hcontrol0) | exact (proj2 Hcontrol0) | exact Hcomplete]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\ ranked ?before ?target /\
           continuation_ranked ?before ?k,
@@ -2524,7 +2437,7 @@ Module Make
           [exact (proj1 Hcontrol0) | exact (proj1 (proj2 Hcontrol0))
           |exact (proj2 (proj2 Hcontrol0)) |exact Hcomplete]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hextends0 : rank_extends ?before ?after,
         Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
@@ -2533,7 +2446,7 @@ Module Make
           [now apply frame_ranked_extended with before
           |now apply continuation_ranked_extended with before]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hextends0 : rank_extends ?before ?after,
         Hcontrol0 : frame_ranked ?before ?fr /\ continuation_ranked ?before ?k
@@ -2614,7 +2527,7 @@ Module Make
         end;
       try discriminate; inversion Hstep; subst; cbn in *;
       try exact Hdistinct.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest)
         |- queue_distinct (R.with_queue ?before ?rest) =>
@@ -2624,22 +2537,20 @@ Module Make
     all: try (apply queue_distinct_materialize; exact Hdistinct).
     all: try (apply queue_distinct_materialize;
       apply enqueue_distinct; apply queue_distinct_observe; exact Hdistinct).
-    all: try (apply queue_distinct_requeue;
-      eapply queue_distinct_set_value; eauto).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
         |- queue_distinct ?next =>
           eapply queue_distinct_set_value; [exact Hdistinct |exact Hset]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcomplete : R.complete_get ?before ?fr ?target =
           (?next, ?next_fr, ?value)
         |- queue_distinct ?next =>
           eapply queue_distinct_complete_get; [exact Hdistinct |exact Hcomplete]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution (R.observe ?before ?target)
           ?fr ?target ?input = (?next, ?changed)
@@ -2649,7 +2560,7 @@ Module Make
           eapply queue_distinct_write_side_contribution;
           [apply queue_distinct_observe; exact Hdistinct |exact Hwrite]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution ?before ?fr ?target ?input =
           (?next, ?changed)
@@ -2691,7 +2602,7 @@ Module Make
       try exact Hordered.
     all: try (apply queue_ordered_observe; [exact Hdata |exact Hordered]).
     all: try (apply queue_ordered_materialize; exact Hordered).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest)
         |- queue_ordered (R.with_queue ?before ?rest) =>
@@ -2704,32 +2615,22 @@ Module Make
       |exact (data_queue_ranked (state_data_ranked_observe t Hdata))
       |apply queue_ordered_observe; [exact Hdata |exact Hordered]
       |eapply observe_ranks_variable; reflexivity]).
-    all: clear_requeue_view.
-    all: try match goal with
-      | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
-        |- queue_ordered (R.requeue_changed_controlled_owner _ _ _) =>
-          apply queue_ordered_requeue;
-          [eapply rank_valid_set_value; eauto
-          |eapply state_data_ranked_set_value; eauto
-          |eapply queue_ordered_set_value; eauto
-          |eapply ranked_extended; [eapply rank_extends_set_value; exact Hset
-            |exact (proj1 (proj1 Hcontrol))]]
-      end.
-    all: clear_requeue_view.
+
+
     all: try match goal with
       | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
         |- queue_ordered ?next =>
           eapply queue_ordered_set_value;
           [exact Hvalid |exact Hdata |exact Hordered |exact Hset]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcomplete : R.complete_get ?before ?fr ?target =
           (?next, ?next_fr, ?value)
         |- queue_ordered ?next =>
           eapply queue_ordered_complete_get; [exact Hordered |exact Hcomplete]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution (R.observe ?before ?target)
           ?fr ?target ?input = (?next, ?changed)
@@ -2747,7 +2648,7 @@ Module Make
            [eapply rank_extends_write_side_contribution; exact Hwrite
            |eapply observe_ranks_variable; reflexivity]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_ranked ?before ?fr /\
           list_ranked ?before (?target :: ?rest) /\ _,
@@ -3485,7 +3386,7 @@ Module Make
     all: try (apply state_supported_observe;
       [inversion Hcontrol; assumption |exact Hstate]).
     all: try (apply state_supported_materialize; exact Hstate).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?head, ?rest)
         |- state_supported ?support (R.with_queue ?before ?rest) =>
@@ -3493,7 +3394,7 @@ Module Make
           [exact Hstate |exact (proj2
             (queue_supported_pop (state_queue_supported Hstate) Hpop))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hget : R.complete_get ?before ?fr ?target =
           (?next, ?next_fr, ?value)
@@ -3502,7 +3403,7 @@ Module Make
             Hstate (proj1 Hcontrol) _ Hget));
           [inversion Hcontrol; subst; assumption]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hget : R.complete_get
           (if R.is_materialized (R.observe ?before ?target) ?target
@@ -3519,7 +3420,7 @@ Module Make
           [apply state_supported_observe |apply state_supported_enqueue];
           auto using state_supported_observe
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution (R.observe ?before ?target)
           ?recorded ?target ?input = (?next, ?changed)
@@ -3533,7 +3434,7 @@ Module Make
           eapply state_supported_write_side_contribution; [|exact Hwrite];
           now apply state_supported_observe
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution ?before ?fr ?target D.bottom =
           (?next, ?changed)
@@ -3547,18 +3448,8 @@ Module Make
       end.
     all: try (apply state_supported_publish_targets;
       [exact Hstate |exact (proj1 Hcontrol)]).
-    all: clear_requeue_view.
-    all: try match goal with
-      | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
-        |- state_supported ?support (R.requeue_changed_controlled_owner _ _ _) =>
-          assert (Hnext : state_supported support next) by
-            (eapply state_supported_set_value;
-             [exact Hstate |exact (proj1 Hcontrol) |exact Hset]);
-          apply requeue_preserves; [exact Hnext |];
-          apply state_supported_enqueue;
-          [exact (proj1 (proj1 Hcontrol)) |exact Hnext]
-      end.
-    all: clear_requeue_view.
+
+
     all: try match goal with
       | Hset : R.set_value ?before ?fr ?direct = (?next, ?next_fr)
         |- state_supported ?support ?next =>
@@ -3582,7 +3473,7 @@ Module Make
          exact (proj1 (rhs_supported_spawn_inv Hbody))
         |exact (proj1 (proj2 Hcontrol))].
     all: try (apply state_supported_observe; [exact Htarget |exact Hstate]).
-    all: clear_requeue_view.
+
     all: try match goal with
       | |- state_supported ?support
           (R.materialize
@@ -3632,7 +3523,7 @@ Module Make
           [apply state_supported_observe; [exact Htarget0 |exact Hstate]
           |reflexivity]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | |- state_supported ?support
           (R.cfg_state
@@ -3675,7 +3566,7 @@ Module Make
         end;
       try discriminate; inversion Hstep; subst; cbn in *;
       try exact I; try tauto.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?before) = Some (?owner, ?rest)
         |- supported ?support ?owner /\ True =>
@@ -3684,14 +3575,14 @@ Module Make
             (queue_supported_pop (state_queue_supported Hstate) Hpop))
           |exact I]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hroots : Forall (supported ?support) (?root :: ?remaining)
         |- supported ?support ?root /\
            continuation_supported ?support (R.KSeedLoop ?remaining) =>
           inversion Hroots; subst; cbn; tauto
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Howner : supported ?support ?owner /\
           continuation_supported ?support ?k
@@ -3705,7 +3596,7 @@ Module Make
           |now apply Htf
           |exact Hk]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3721,7 +3612,7 @@ Module Make
            exact (proj1 (proj2 (proj2 (proj1 Hcontrol0))))
           |exact (proj2 (proj2 Hcontrol0))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3735,7 +3626,7 @@ Module Make
           pose proof (rhs_supported_get_inv (proj1 (proj2 Hcontrol0)))
             as [Htarget Hnext]; tauto
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hget : R.complete_get ?before ?fr ?target =
           (?next_st, ?next_fr, ?value),
@@ -3750,7 +3641,7 @@ Module Make
              |exact (proj1 (proj2 Hcontrol0))]
           |]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3761,7 +3652,7 @@ Module Make
           pose proof (rhs_supported_get_inv (proj1 (proj2 Hcontrol0)))
             as [_ Hnext]; split; [apply Hnext |exact (proj2 (proj2 Hcontrol0))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3779,7 +3670,7 @@ Module Make
           [rewrite <- Hrecord; now apply record_side_input_supported
           |exact Htarget |exact Hbody |exact (proj2 (proj2 Hcontrol0))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3790,7 +3681,7 @@ Module Make
             as [Htarget Hbody]
       end.
     all: try tauto.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Forall (supported ?support) (?target :: ?remaining) /\
@@ -3807,7 +3698,7 @@ Module Make
           [exact (proj1 Hcontrol0)
           |exact Htarget |exact Hremaining |exact (proj2 (proj2 Hcontrol0))]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hset : R.set_value ?st ?fr ?direct = (?next_st, ?next_fr),
         Hcontrol0 : frame_supported ?support ?fr /\
@@ -3816,7 +3707,7 @@ Module Make
            continuation_supported ?support ?k =>
           split; [eapply frame_supported_set_value; eauto |tauto]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?st) = Some (?owner, ?rest),
         Hcontrol0 : frame_supported ?support ?fr /\
@@ -3830,7 +3721,7 @@ Module Make
     all: try exact Hcontrol.
     all: try tauto.
     all: try (inversion Hcontrol; subst; tauto).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hpop : R.queue_pop (R.queue ?st0) = Some (?owner, ?rest)
         |- supported ?support ?owner /\ _ =>
@@ -3838,7 +3729,7 @@ Module Make
             (state_queue_supported Hstate) Hpop) as [Howner Hrest];
           split; [exact Howner |assumption]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Forall _ (?x :: ?xs) /\ continuation_supported ?support ?k
@@ -3847,7 +3738,7 @@ Module Make
           destruct Hcontrol0 as [Hfr [Hxs Hk]];
           inversion Hxs; subst; tauto
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           continuation_supported ?support ?k,
@@ -3862,7 +3753,7 @@ Module Make
             (state_queue_supported Hstate) Hpop) as [Hhead Hrest];
           tauto
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : supported ?support ?owner /\
           continuation_supported ?support ?k
@@ -3875,7 +3766,7 @@ Module Make
            [exact Howner |exact Hstate_after]
           |split; [apply Htf; exact Howner |exact Hk]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3892,7 +3783,7 @@ Module Make
           |exact Hk]
       end.
     all: try tauto.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3910,7 +3801,7 @@ Module Make
           [apply frame_supported_with_side; assumption
           |exact Htarget |exact Hbody |exact Hk]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           continuation_supported ?support ?k
@@ -3924,7 +3815,7 @@ Module Make
            [exact (proj1 Hfr) |exact Hstate_after]
           |split; [apply Htf; exact (proj1 Hfr) |exact Hk]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           supported ?support ?target /\
@@ -3938,7 +3829,7 @@ Module Make
       end.
     Unshelve.
     all: try exact Hstate.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3947,7 +3838,7 @@ Module Make
           exact (proj1
             (rhs_supported_get_inv (proj1 (proj2 Hcontrol0))))
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3966,7 +3857,7 @@ Module Make
           |apply state_supported_enqueue;
            [exact Htarget |apply state_supported_observe; assumption]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           Sem.rhs_supported (supported ?support)
@@ -3978,7 +3869,7 @@ Module Make
           destruct Hcontrol0 as [Hfr [_ Hk]];
           split; [exact Hfr |split; [constructor |exact Hk]]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hcontrol0 : frame_supported ?support ?fr /\
           supported ?support ?target /\ _
@@ -4206,7 +4097,7 @@ Module Make
           end;
         try discriminate; inversion Hstep; subst; cbn;
         try reflexivity; try lia.
-      all: clear_requeue_view.
+
     all: try match goal with
         | |- seed_measure (R.cfg_control
             (R.continue_side _ _ _ _ _ ?changed)) <= _ =>
@@ -5146,7 +5037,7 @@ Module Make
       apply state_resets_ranked_observe; exact Hranked).
     all: try (apply state_resets_ranked_reset_registered_cells;
       exact Hranked).
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hget : R.complete_get ?base ?fr ?target = (?next, ?next_fr, ?value)
         |- state_resets_ranked ?next =>
@@ -5155,7 +5046,7 @@ Module Make
                  |exact Hranked]
           |exact Hget]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hwrite : R.write_side_contribution ?base ?fr ?target ?input =
           (?next, ?changed)
@@ -5173,7 +5064,7 @@ Module Make
           eapply state_resets_ranked_write_side_contribution;
           [exact Hranked |exact Hwrite]
       end.
-    all: clear_requeue_view.
+
     all: try match goal with
       | Hset : R.set_value ?base ?fr ?direct = (?next, ?next_fr)
         |- state_resets_ranked ?next =>
@@ -6309,7 +6200,7 @@ Module Make
       intros tf st after Hreset Hstep. cbn in Hstep.
       destruct (R.queue_pop (R.queue st)) as [[owner rest] |];
         try discriminate.
-      inversion Hstep; subst; clear_requeue_view. split.
+      inversion Hstep; subst. split.
       - now apply reset_sources_bounded_with_queue.
       - exact I.
     Qed.
@@ -6323,14 +6214,14 @@ Module Make
         scopes_bounded after.
     Proof.
       intros tf st roots after Hreset Hstep. destruct roots as [|root rest].
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view. split; [exact Hreset |exact I].
+      - cbn in Hstep. inversion Hstep; subst. split; [exact Hreset |exact I].
       - cbn -[R.observe] in Hstep.
         remember (R.observe st root) as observed eqn:Hobserve.
         assert (Hreset' : reset_sources_bounded observed).
         { subst observed. now apply reset_sources_bounded_observe. }
         destruct (R.is_materialized observed root).
-        + inversion Hstep; subst; clear_requeue_view. split; [exact Hreset' |exact I].
-        + inversion Hstep; subst; clear_requeue_view. split; [exact Hreset' |exact I].
+        + inversion Hstep; subst. split; [exact Hreset' |exact I].
+        + inversion Hstep; subst. split; [exact Hreset' |exact I].
     Qed.
 
     Lemma next_seedloop_scopes :
@@ -6343,10 +6234,10 @@ Module Make
     Proof.
       intros tf st roots after Hreset Hstep. cbn in Hstep.
       destruct (R.queue_pop (R.queue st)) as [[owner rest] |].
-      - inversion Hstep; subst; clear_requeue_view. split.
+      - inversion Hstep; subst. split.
         + now apply reset_sources_bounded_with_queue.
         + exact I.
-      - inversion Hstep; subst; clear_requeue_view. split; [exact Hreset |exact I].
+      - inversion Hstep; subst. split; [exact Hreset |exact I].
     Qed.
 
     Lemma next_start_episode_scopes :
@@ -6359,7 +6250,7 @@ Module Make
         scopes_bounded after.
     Proof.
       intros tf st owner k after Hreset Hk Hstep. cbn in Hstep.
-      inversion Hstep; subst; clear_requeue_view. split.
+      inversion Hstep; subst. split.
       - now apply reset_sources_bounded_materialize.
       - cbn. split.
         + apply frame_scope_fresh.
@@ -6379,7 +6270,7 @@ Module Make
         scopes_bounded after.
     Proof.
       intros tf st fr direct k after Hreset Hframe Hk Hstep.
-      cbn in Hstep. inversion Hstep; subst; clear_requeue_view. split.
+      cbn in Hstep. inversion Hstep; subst. split.
       - exact Hreset.
       - cbn. split; assumption.
     Qed.
@@ -6408,7 +6299,7 @@ Module Make
         st observed k Hext0 Hk) as Hk0.
       destruct (negb (R.is_materialized observed target) &&
         R.rank_lt observed (R.frame_owner fr) target)%bool eqn:Hdefer.
-      - inversion Hstep; subst; clear_requeue_view. split; [exact Hreset0 |].
+      - inversion Hstep; subst. split; [exact Hreset0 |].
         cbn. split; assumption.
       - remember
           (if R.is_materialized observed target
@@ -6424,7 +6315,7 @@ Module Make
           observed base k Hext1 Hk0) as Hk1.
         destruct (R.complete_get base fr target)
           as [[next next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. split.
+        inversion Hstep; subst. split.
         + eapply reset_sources_bounded_complete_get; eauto.
         + cbn. split.
           * eapply complete_get_scope; eauto.
@@ -6471,16 +6362,16 @@ Module Make
       unfold R.continue_side in Hstep. destruct changed.
       - destruct (R.rank_lt next (R.frame_owner fr1) target &&
           negb (R.is_materialized next target))%bool.
-        + inversion Hstep; subst; clear_requeue_view. split; [exact Hreset1 |].
+        + inversion Hstep; subst. split; [exact Hreset1 |].
           cbn. split; assumption.
-        + inversion Hstep; subst; clear_requeue_view. split.
+        + inversion Hstep; subst. split.
           * now apply reset_sources_bounded_enqueue.
           * cbn. split.
             -- now apply frame_scope_bounded_extended with next;
                  [apply rank_extends_enqueue |].
             -- now apply continuation_scopes_bounded_extended with next;
                  [apply rank_extends_enqueue |].
-      - inversion Hstep; subst; clear_requeue_view. split; [exact Hreset1 |].
+      - inversion Hstep; subst. split; [exact Hreset1 |].
         cbn. split; assumption.
     Qed.
 
@@ -6506,12 +6397,12 @@ Module Make
       pose proof (@continuation_scopes_bounded_extended
         st observed k Hext0 Hk) as Hk0.
       destruct (R.is_materialized observed target).
-      - inversion Hstep; subst; clear_requeue_view. split; [exact Hreset0 |].
+      - inversion Hstep; subst. split; [exact Hreset0 |].
         cbn. split; assumption.
       - destruct (R.rank_lt observed (R.frame_owner fr) target).
-        + inversion Hstep; subst; clear_requeue_view. split; [exact Hreset0 |].
+        + inversion Hstep; subst. split; [exact Hreset0 |].
           cbn. split; assumption.
-        + inversion Hstep; subst; clear_requeue_view. split.
+        + inversion Hstep; subst. split.
           * apply reset_sources_bounded_materialize.
             now apply reset_sources_bounded_enqueue.
           * cbn. split.
@@ -6555,7 +6446,7 @@ Module Make
     Proof.
       intros tf st fr direct pending k after Hreset Hframe Hk Hstep.
       destruct pending as [|target remaining].
-      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view. split.
+      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst. split.
         + now apply reset_sources_bounded_publish_targets.
         + cbn. split.
           * apply frame_scope_bounded_extended with st;
@@ -6564,7 +6455,7 @@ Module Make
               [apply rank_extends_same_ranking; reflexivity |exact Hk].
       - cbn -[R.write_side_contribution R.continue_dead] in Hstep.
         destruct (S.mem target (R.frame_current_targets fr)).
-        + inversion Hstep; subst; clear_requeue_view. split; [exact Hreset |].
+        + inversion Hstep; subst. split; [exact Hreset |].
           cbn. split; assumption.
         + destruct (R.write_side_contribution st fr target D.bottom)
             as [next changed] eqn:Hwrite.
@@ -6577,16 +6468,16 @@ Module Make
           unfold R.continue_dead in Hstep. destruct changed.
           * destruct (R.rank_lt next (R.frame_owner fr) target &&
               negb (R.is_materialized next target))%bool.
-            -- inversion Hstep; subst; clear_requeue_view. split; [exact Hreset1 |].
+            -- inversion Hstep; subst. split; [exact Hreset1 |].
                cbn. split; assumption.
-            -- inversion Hstep; subst; clear_requeue_view. split.
+            -- inversion Hstep; subst. split.
                ++ now apply reset_sources_bounded_enqueue.
                ++ cbn. split.
                   ** now apply frame_scope_bounded_extended with next;
                        [apply rank_extends_enqueue |].
                   ** now apply continuation_scopes_bounded_extended with next;
                        [apply rank_extends_enqueue |].
-          * inversion Hstep; subst; clear_requeue_view. split; [exact Hreset1 |].
+          * inversion Hstep; subst. split; [exact Hreset1 |].
             cbn. split; assumption.
     Qed.
 
@@ -6603,7 +6494,7 @@ Module Make
       intros tf st fr direct k after Hreset Hframe Hk Hstep.
       cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
-      inversion Hstep; subst; clear_requeue_view.
+      inversion Hstep; subst.
       split.
       - change (reset_sources_bounded next).
         eapply reset_sources_bounded_set_value; eauto.
@@ -6613,7 +6504,7 @@ Module Make
         + eapply continuation_scopes_bounded_extended with st.
           * eapply rank_extends_trans;
               [eapply rank_extends_set_value; exact Hset
-              |apply rank_extends_with_queue].
+              |apply rank_extends_refl].
           * exact Hk.
     Qed.
 
@@ -6648,7 +6539,7 @@ Module Make
       - destruct (V.eq_dec next (R.frame_owner fr)).
         + destruct (R.queue_pop (R.queue st)) as [[head rest] |];
             try discriminate.
-          inversion Hstep; subst; clear_requeue_view. split.
+          inversion Hstep; subst. split.
           * now apply reset_sources_bounded_with_queue.
           * cbn. split.
             -- apply frame_scope_fresh.
@@ -6657,15 +6548,15 @@ Module Make
         + destruct (R.rank_lt st (R.frame_owner fr) next).
           * destruct (R.queue_pop (R.queue st)) as [[head rest] |];
               try discriminate.
-            inversion Hstep; subst; clear_requeue_view. split.
+            inversion Hstep; subst. split.
             -- now apply reset_sources_bounded_with_queue.
             -- cbn. split.
                ++ now apply frame_scope_bounded_extended with st;
                     [apply rank_extends_with_queue |].
                ++ now apply continuation_scopes_bounded_extended with st;
                     [apply rank_extends_with_queue |].
-          * inversion Hstep; subst; clear_requeue_view. now apply clear_return_scopes.
-      - inversion Hstep; subst; clear_requeue_view. now apply clear_return_scopes.
+          * inversion Hstep; subst. now apply clear_return_scopes.
+      - inversion Hstep; subst. now apply clear_return_scopes.
     Qed.
 
     Lemma next_return_scopes :
@@ -6678,28 +6569,28 @@ Module Make
     Proof.
       intros tf st k after Hreset Hcontrol Hstep.
       destruct k.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view. split; assumption.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view. split; assumption.
+      - cbn in Hstep. inversion Hstep; subst. split; assumption.
+      - cbn in Hstep. inversion Hstep; subst. split; assumption.
       - cbn -[R.complete_get] in Hstep.
         cbn in Hcontrol. destruct Hcontrol as [Hframe Hrest].
         destruct (R.complete_get st f t) as [[next next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. split.
+        inversion Hstep; subst. split.
         + eapply reset_sources_bounded_complete_get; eauto.
         + cbn. split.
           * eapply complete_get_scope; eauto.
           * eapply continuation_scopes_bounded_extended.
             -- eapply rank_extends_complete_get. exact Hget.
             -- exact Hrest.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn in Hstep. inversion Hstep; subst.
         cbn in Hcontrol. destruct Hcontrol as [Hframe Hrest].
         split; [exact Hreset |]. cbn. split; assumption.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn in Hstep. inversion Hstep; subst.
         cbn in Hcontrol. destruct Hcontrol as [Hframe Hrest].
         split; [exact Hreset |]. cbn. split; assumption.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn in Hstep. inversion Hstep; subst.
         cbn in Hcontrol. destruct Hcontrol as [Hframe Hrest].
         split; [exact Hreset |]. cbn. split; assumption.
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn in Hstep. inversion Hstep; subst.
         cbn in Hcontrol. destruct Hcontrol as [Hframe Hrest].
         split; [exact Hreset |]. cbn. split; assumption.
     Qed.
@@ -7073,14 +6964,14 @@ Module Make
     Proof.
       intros tf st fr body k after Hordered Hstep.
       destruct body as [direct | target next | target raw next | target next].
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view. exact Hordered.
+      - cbn in Hstep. inversion Hstep; subst. exact Hordered.
       - cbn -[R.observe R.complete_get R.enqueue] in Hstep.
         set (st0 := R.observe st target) in *.
         assert (Hst0 : reader_edges_ordered st0).
         { subst st0. now apply reader_edges_ordered_observe. }
         destruct (negb (R.is_materialized st0 target) &&
           R.rank_lt st0 (R.frame_owner fr) target)%bool.
-        + inversion Hstep; subst; clear_requeue_view. exact Hst0.
+        + inversion Hstep; subst. exact Hst0.
         + set (st1 := if R.is_materialized st0 target
             then st0 else R.enqueue st0 target) in *.
           assert (Hst1 : reader_edges_ordered st1).
@@ -7088,7 +6979,7 @@ Module Make
               auto using reader_edges_ordered_enqueue. }
           destruct (R.complete_get st1 fr target)
             as [[st2 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           eapply reader_edges_ordered_complete_get; eauto.
       - cbn -[R.observe R.record_side_input R.write_side_contribution
           R.continue_side] in Hstep.
@@ -7111,10 +7002,10 @@ Module Make
         assert (Hst0 : reader_edges_ordered st0).
         { subst st0. now apply reader_edges_ordered_observe. }
         destruct (R.is_materialized st0 target).
-        + inversion Hstep; subst; clear_requeue_view. exact Hst0.
+        + inversion Hstep; subst. exact Hst0.
         + destruct (R.rank_lt st0 (R.frame_owner fr) target).
-          * inversion Hstep; subst; clear_requeue_view. exact Hst0.
-          * inversion Hstep; subst; clear_requeue_view. apply reader_edges_ordered_materialize.
+          * inversion Hstep; subst. exact Hst0.
+          * inversion Hstep; subst. apply reader_edges_ordered_materialize.
             now apply reader_edges_ordered_enqueue.
     Qed.
 
@@ -7128,11 +7019,11 @@ Module Make
     Proof.
       intros tf st fr direct pending k after Hordered Hstep.
       destruct pending as [|target remaining].
-      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
         now apply reader_edges_ordered_publish_targets.
       - cbn -[R.write_side_contribution R.continue_dead] in Hstep.
         destruct (S.mem target (R.frame_current_targets fr)).
-        + inversion Hstep; subst; clear_requeue_view. exact Hordered.
+        + inversion Hstep; subst. exact Hordered.
         + destruct (R.write_side_contribution st fr target D.bottom)
             as [st1 changed] eqn:Hwrite.
           assert (Hst1 : reader_edges_ordered st1).
@@ -7158,15 +7049,15 @@ Module Make
       destruct (R.queue_peek (R.queue st)) as [queued |].
       - destruct (V.eq_dec queued (R.frame_owner fr)).
         + destruct (R.queue_pop (R.queue st)) as [[popped rest] |];
-            try discriminate. inversion Hstep; subst; clear_requeue_view.
+            try discriminate. inversion Hstep; subst.
           now apply reader_edges_ordered_with_queue.
         + destruct (R.rank_lt st (R.frame_owner fr) queued).
           * destruct (R.queue_pop (R.queue st)) as [[popped rest] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view.
+              try discriminate. inversion Hstep; subst.
             now apply reader_edges_ordered_with_queue.
-          * inversion Hstep; subst; clear_requeue_view.
+          * inversion Hstep; subst.
             now apply reader_edges_ordered_reset_registered.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         now apply reader_edges_ordered_reset_registered.
     Qed.
 
@@ -7185,7 +7076,7 @@ Module Make
         try (inversion Hstep; subst; exact Hordered).
       destruct (R.complete_get st fr target)
         as [[st1 fr1] value] eqn:Hget.
-      inversion Hstep; subst; clear_requeue_view. eapply reader_edges_ordered_complete_get; eauto.
+      inversion Hstep; subst. eapply reader_edges_ordered_complete_get; eauto.
     Qed.
 
     Theorem next_config_reader_edges_ordered :
@@ -7200,24 +7091,24 @@ Module Make
          |fr direct k |fr k |k].
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[popped rest] |]; try discriminate.
-        inversion Hstep; subst; clear_requeue_view. now apply reader_edges_ordered_with_queue.
+        inversion Hstep; subst. now apply reader_edges_ordered_with_queue.
       - destruct roots as [|root roots]; cbn -[R.observe] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact Hordered.
+        + inversion Hstep; subst. exact Hordered.
         + assert (Hobserved : reader_edges_ordered (R.observe st root))
             by (now apply reader_edges_ordered_observe).
           destruct (R.is_materialized (R.observe st root) root);
             inversion Hstep; subst; exact Hobserved.
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[popped rest] |].
-        + inversion Hstep; subst; clear_requeue_view. now apply reader_edges_ordered_with_queue.
-        + inversion Hstep; subst; clear_requeue_view. exact Hordered.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst. now apply reader_edges_ordered_with_queue.
+        + inversion Hstep; subst. exact Hordered.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         now apply reader_edges_ordered_materialize.
       - eapply run_rhs_reader_edges_ordered; eauto.
       - eapply run_dead_reader_edges_ordered; eauto.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. eapply reader_edges_ordered_set_value; eauto.
+        inversion Hstep; subst. eapply reader_edges_ordered_set_value; eauto.
       - eapply run_drain_reader_edges_ordered; eauto.
       - eapply return_reader_edges_ordered; eauto.
     Qed.
@@ -7365,7 +7256,7 @@ Module Make
   Proof.
     intros tf support st fr body k after Hbody Hstep.
     destruct body as [direct | target next | target raw next | target next].
-    - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+    - cbn in Hstep. inversion Hstep; subst.
       apply WorkStepDecrease. cbn.
       apply work_forest_local. constructor.
     - pose proof (rhs_supported_get_inv Hbody) as [Htarget Hnext].
@@ -7375,14 +7266,14 @@ Module Make
         R.rank_lt st0 (R.frame_owner fr) target)%bool eqn:Hnested.
       + apply Bool.andb_true_iff in Hnested.
         destruct Hnested as [_ Hhigher].
-        inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        inversion Hstep; subst. apply WorkStepDecrease. cbn.
         eapply work_forest_nested; eauto. constructor.
       + set (st1 := if R.is_materialized st0 target
           then st0 else R.enqueue st0 target) in *.
         destruct (R.complete_get st1 fr target)
           as [[st2 fr1] value] eqn:Hget.
         pose proof (complete_get_owner Hget) as Howner.
-        inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        inversion Hstep; subst. apply WorkStepDecrease. cbn.
         rewrite Howner. apply work_forest_local. constructor.
     - pose proof (rhs_supported_side_inv Hbody) as [Htarget Hnext].
       cbn -[R.observe R.record_side_input R.write_side_contribution
@@ -7398,22 +7289,22 @@ Module Make
           negb (R.is_materialized st1 target))%bool eqn:Hnested.
         * apply Bool.andb_true_iff in Hnested.
           destruct Hnested as [Hhigher _]. rewrite Howner in Hhigher.
-          inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+          inversion Hstep; subst. apply WorkStepDecrease. cbn.
           rewrite Howner. eapply work_forest_nested; eauto. constructor.
-        * inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        * inversion Hstep; subst. apply WorkStepDecrease. cbn.
           rewrite Howner. apply work_forest_local. constructor.
-      + inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+      + inversion Hstep; subst. apply WorkStepDecrease. cbn.
         rewrite Howner. apply work_forest_local. constructor.
     - pose proof (rhs_supported_spawn_inv Hbody) as [Htarget Hnext].
       cbn -[R.observe R.materialize R.enqueue] in Hstep.
       set (st0 := R.observe st target) in *.
       destruct (R.is_materialized st0 target).
-      + inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+      + inversion Hstep; subst. apply WorkStepDecrease. cbn.
         apply work_forest_local. constructor.
       + destruct (R.rank_lt st0 (R.frame_owner fr) target) eqn:Hhigher.
-        * inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        * inversion Hstep; subst. apply WorkStepDecrease. cbn.
           eapply work_forest_nested; eauto. constructor.
-        * inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        * inversion Hstep; subst. apply WorkStepDecrease. cbn.
           apply work_forest_local. constructor.
   Qed.
 
@@ -7429,12 +7320,12 @@ Module Make
   Proof.
     intros tf support st fr direct pending k after Hpending Hstep.
     destruct pending as [|target remaining].
-    - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+    - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
       apply WorkStepDecrease. cbn. apply work_forest_local. constructor.
     - inversion Hpending as [|? ? Htarget Hremaining]; subst.
       cbn -[R.write_side_contribution R.continue_dead] in Hstep.
       destruct (S.mem target (R.frame_current_targets fr)).
-      + inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+      + inversion Hstep; subst. apply WorkStepDecrease. cbn.
         apply work_forest_local. constructor.
       + destruct (R.write_side_contribution st fr target D.bottom)
           as [st1 changed].
@@ -7443,11 +7334,11 @@ Module Make
             negb (R.is_materialized st1 target))%bool eqn:Hnested.
           -- apply Bool.andb_true_iff in Hnested.
              destruct Hnested as [Hhigher _].
-             inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+             inversion Hstep; subst. apply WorkStepDecrease. cbn.
              eapply work_forest_nested; eauto. constructor.
-          -- inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+          -- inversion Hstep; subst. apply WorkStepDecrease. cbn.
              apply work_forest_local. constructor.
-        * inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        * inversion Hstep; subst. apply WorkStepDecrease. cbn.
           apply work_forest_local. constructor.
   Qed.
 
@@ -7465,7 +7356,7 @@ Module Make
     - destruct (V.eq_dec next (R.frame_owner fr)).
       + destruct (R.queue_pop (R.queue st)) as [[popped rest] |];
           try discriminate.
-        inversion Hstep; subst; clear_requeue_view. apply WorkStepOrdinaryRerun.
+        inversion Hstep; subst. apply WorkStepOrdinaryRerun.
         exists fr, k. split; [reflexivity |].
         exists
           (R.fresh_frame (R.with_queue st rest)
@@ -7474,11 +7365,11 @@ Module Make
       + destruct (R.rank_lt st (R.frame_owner fr) next) eqn:Hhigher.
         * destruct (R.queue_pop (R.queue st)) as [[popped rest] |];
             try discriminate.
-          inversion Hstep; subst; clear_requeue_view. apply WorkStepDrainNested.
+          inversion Hstep; subst. apply WorkStepDrainNested.
           exists fr, k, next. repeat split; assumption.
-        * inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+        * inversion Hstep; subst. apply WorkStepDecrease. cbn.
           apply work_forest_remove_head.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn.
+    - inversion Hstep; subst. apply WorkStepDecrease. cbn.
       apply work_forest_remove_head.
   Qed.
 
@@ -7494,17 +7385,17 @@ Module Make
       [|remaining |fr target next rest |fr next rest |fr next rest
        |fr direct pending rest |fr rest];
       cbn -[R.complete_get] in Hstep.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
     - destruct (R.complete_get st fr target)
         as [[st1 fr1] value] eqn:Hget.
       pose proof (complete_get_owner Hget) as Howner.
-      inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn. rewrite Howner.
+      inversion Hstep; subst. apply WorkStepDecrease. cbn. rewrite Howner.
       apply work_forest_local. constructor.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
-    - inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
+    - inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
   Qed.
 
   Theorem reachable_step_work_kind :
@@ -7524,9 +7415,9 @@ Module Make
     - cbn in Hstep. destruct (R.queue_pop (R.queue st))
         as [[queued rest] |] eqn:Hpop.
       + apply WorkStepQueueStart. right. now eexists.
-      + inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
+      + inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
     - cbn -[R.materialize R.fresh_frame] in Hstep.
-      inversion Hstep; subst; clear_requeue_view. apply WorkStepAdministrative. reflexivity.
+      inversion Hstep; subst. apply WorkStepAdministrative. reflexivity.
     - destruct Hsupported as [Hfr [Hbody Hk]].
       eapply run_rhs_work_kind; eauto.
     - destruct Hsupported as [Hfr [Hpending Hk]].
@@ -7534,7 +7425,7 @@ Module Make
     - cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
       pose proof (@set_value_owner st fr direct st1 fr1 Hset) as Howner.
-      inversion Hstep; subst; clear_requeue_view. apply WorkStepDecrease. cbn. rewrite Howner.
+      inversion Hstep; subst. apply WorkStepDecrease. cbn. rewrite Howner.
       apply work_forest_local. constructor.
     - eapply run_drain_work_kind; eauto.
     - eapply return_work_kind; eauto.
@@ -8192,8 +8083,7 @@ Module Make
         as [commit_st [commit_fr [direct [Hcommit Hcommit_owner]]]].
       destruct (R.set_value commit_st commit_fr direct)
         as [drain_st drain_fr] eqn:Hset.
-      exists (R.requeue_changed_controlled_owner commit_st drain_st
-        (R.frame_owner commit_fr)), drain_fr. split.
+      exists (drain_st), drain_fr. split.
       - eapply steps_transitive; [exact Hcommit |]. apply one_step.
         unfold Sem.step. cbn -[R.set_value]. now rewrite Hset.
       - pose proof (@set_value_owner commit_st commit_fr direct
@@ -8585,8 +8475,7 @@ Module Make
         R.set_value commit_st commit_fr direct = (drain_st, drain_fr) /\
         R.frame_owner drain_fr = owner /\
         executed_drain_boundary tf owner k
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain drain_fr k |} boundary.
 
     Lemma run_rhs_reaches_executed_round_boundary :
@@ -8619,15 +8508,13 @@ Module Make
       assert (Hdrain_owner : R.frame_owner drain_fr = owner).
       { now rewrite Hdrain_commit, Hcommit_owner, Howner. }
       assert (Hdrain_reachable : Sem.steps tf (R.initial_config roots)
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain drain_fr k |}).
       { eapply steps_append_one; [exact Hcommit_reachable |].
         unfold Sem.step. cbn -[R.set_value]. now rewrite Hset. }
       destruct (@run_drain_reaches_executed_boundary support tf roots finite
         owner Hsupport Hchildren (RankFinite.bound (Sem.support finite))
-        (R.requeue_changed_controlled_owner commit_st drain_st
-          (R.frame_owner commit_fr)) drain_fr k Hdrain_owner Hdrain_reachable)
+        (drain_st) drain_fr k Hdrain_owner Hdrain_reachable)
         as [boundary Hexecuted].
       - intros next rank Hpeek Hhigher Hlookup.
         eapply reachable_rank_bound; eauto.
@@ -8866,30 +8753,30 @@ Module Make
         [|roots |remaining |owner k |fr body k |fr direct pending k
          |fr direct k |fr k |k].
       - cbn in Hstep. destruct (R.queue_pop (R.queue st)); try discriminate.
-        destruct p. inversion Hstep; subst; clear_requeue_view. apply sigma_extends_with_queue.
+        destruct p. inversion Hstep; subst. apply sigma_extends_with_queue.
       - destruct roots as [|root roots]; cbn -[R.observe] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. apply sigma_extends_refl.
+        + inversion Hstep; subst. apply sigma_extends_refl.
         + destruct (R.is_materialized (R.observe st root) root);
             inversion Hstep; subst; apply sigma_extends_observe.
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[owner rest] |].
-        + inversion Hstep; subst; clear_requeue_view. apply sigma_extends_with_queue.
-        + inversion Hstep; subst; clear_requeue_view. apply sigma_extends_refl.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst. apply sigma_extends_with_queue.
+        + inversion Hstep; subst. apply sigma_extends_refl.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         apply sigma_extends_materialize.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. apply sigma_extends_refl.
+        + cbn in Hstep. inversion Hstep; subst. apply sigma_extends_refl.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. unfold observed.
+          * inversion Hstep; subst. unfold observed.
             apply sigma_extends_observe.
           * set (base := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             destruct (R.complete_get base fr target)
               as [[next_st next_fr] read] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             eapply sigma_extends_trans with (middle := base).
             -- unfold base, observed. destruct (R.is_materialized
                  (R.observe st target) target).
@@ -8904,7 +8791,7 @@ Module Make
           destruct (R.record_side_input fr target raw) as [fr1 input].
           destruct (R.write_side_contribution (R.observe st target)
             fr1 target input) as [next_st changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view. eapply sigma_extends_trans.
+          inversion Hstep; subst. eapply sigma_extends_trans.
           * apply sigma_extends_observe.
           * eapply sigma_extends_trans.
             -- eapply sigma_extends_write_side_contribution; exact Hwrite.
@@ -8912,40 +8799,40 @@ Module Make
         + cbn -[R.observe R.materialize R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. unfold observed. apply sigma_extends_observe.
+          * inversion Hstep; subst. unfold observed. apply sigma_extends_observe.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. unfold observed.
+            -- inversion Hstep; subst. unfold observed.
                apply sigma_extends_observe.
-            -- inversion Hstep; subst; clear_requeue_view. eapply sigma_extends_trans.
+            -- inversion Hstep; subst. eapply sigma_extends_trans.
                ++ unfold observed. apply sigma_extends_observe.
                ++ eapply sigma_extends_trans;
                     [apply sigma_extends_enqueue |apply sigma_extends_materialize].
       - destruct pending as [|target remaining].
-        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
           apply sigma_extends_same. reflexivity.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. apply sigma_extends_refl.
+          * inversion Hstep; subst. apply sigma_extends_refl.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [next_st changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view. eapply sigma_extends_trans.
+            inversion Hstep; subst. eapply sigma_extends_trans.
             -- eapply sigma_extends_write_side_contribution; exact Hwrite.
             -- apply sigma_extends_continue_dead.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [next_st next_fr] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. eapply sigma_extends_set_value; exact Hset.
+        inversion Hstep; subst. eapply sigma_extends_set_value; exact Hset.
       - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |].
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head rest] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view.
+              try discriminate. inversion Hstep; subst.
             apply sigma_extends_with_queue.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head rest] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst.
                apply sigma_extends_with_queue.
-            -- inversion Hstep; subst; clear_requeue_view. apply sigma_extends_reset_registered_cells.
-        + inversion Hstep; subst; clear_requeue_view. apply sigma_extends_reset_registered_cells.
+            -- inversion Hstep; subst. apply sigma_extends_reset_registered_cells.
+        + inversion Hstep; subst. apply sigma_extends_reset_registered_cells.
       - destruct k as
           [|remaining |fr target next rest |fr next rest |fr next rest
            |fr direct pending rest |fr rest];
@@ -8953,7 +8840,7 @@ Module Make
           try (inversion Hstep; subst; apply sigma_extends_refl).
         destruct (R.complete_get st fr target)
           as [[next_st next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. eapply sigma_extends_complete_get; exact Hget.
+        inversion Hstep; subst. eapply sigma_extends_complete_get; exact Hget.
     Qed.
 
     Lemma steps_sigma_extends :
@@ -9170,7 +9057,7 @@ Module Make
         {| R.cfg_state := st; R.cfg_control := R.RunRhs fr body k |}
         after Hstep) as Hextends.
       destruct body as [direct |target next |target raw next |target next].
-      - cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn in Hstep. inversion Hstep; subst.
         eapply continuation_below_extended; eauto. exact (proj1 Hfr).
       - cbn -[R.observe R.complete_get R.enqueue] in Hstep.
         remember (R.observe st target) as observed eqn:Hobserve.
@@ -9186,13 +9073,13 @@ Module Make
         { eapply continuation_below_extended; eauto. exact (proj1 Hfr). }
         destruct (negb (R.is_materialized observed target) &&
           R.rank_lt observed (R.frame_owner fr) target)%bool eqn:Hguard.
-        + apply Bool.andb_true_iff in Hguard. inversion Hstep; subst; clear_requeue_view.
+        + apply Bool.andb_true_iff in Hguard. inversion Hstep; subst.
           cbn. split; [exact (proj2 Hguard) |exact Hordered0].
         + remember (if R.is_materialized observed target
             then observed else R.enqueue observed target) as base.
           destruct (R.complete_get base fr target)
             as [[next_st next_fr] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. cbn. rewrite (complete_get_owner Hget).
+          inversion Hstep; subst. cbn. rewrite (complete_get_owner Hget).
           eapply continuation_below_extended; eauto. exact (proj1 Hfr).
       - cbn -[R.observe R.record_side_input
           R.write_side_contribution R.continue_side] in Hstep.
@@ -9206,12 +9093,12 @@ Module Make
         unfold R.continue_side in Hstep. destruct changed.
         + destruct (R.rank_lt next_st (R.frame_owner fr1) target &&
             negb (R.is_materialized next_st target))%bool eqn:Hguard.
-          * apply Bool.andb_true_iff in Hguard. inversion Hstep; subst; clear_requeue_view.
+          * apply Bool.andb_true_iff in Hguard. inversion Hstep; subst.
             cbn. split; [exact (proj1 Hguard) |]. rewrite Howner.
             eapply continuation_below_extended; eauto. exact (proj1 Hfr).
-          * inversion Hstep; subst; clear_requeue_view. cbn. rewrite Howner.
+          * inversion Hstep; subst. cbn. rewrite Howner.
             eapply continuation_below_extended; eauto. exact (proj1 Hfr).
-        + inversion Hstep; subst; clear_requeue_view. cbn. rewrite Howner.
+        + inversion Hstep; subst. cbn. rewrite Howner.
           eapply continuation_below_extended; eauto. exact (proj1 Hfr).
       - cbn -[R.observe R.materialize R.enqueue] in Hstep.
         remember (R.observe st target) as observed eqn:Hobserve.
@@ -9222,10 +9109,10 @@ Module Make
           continuation_below observed (R.frame_owner fr) k).
         { eapply continuation_below_extended; eauto. exact (proj1 Hfr). }
         destruct (R.is_materialized observed target).
-        + inversion Hstep; subst; clear_requeue_view. exact Hordered0.
+        + inversion Hstep; subst. exact Hordered0.
         + destruct (R.rank_lt observed (R.frame_owner fr) target) eqn:Hlt.
-          * inversion Hstep; subst; clear_requeue_view. cbn. split; assumption.
-          * inversion Hstep; subst; clear_requeue_view.
+          * inversion Hstep; subst. cbn. split; assumption.
+          * inversion Hstep; subst.
             eapply continuation_below_extended; eauto. exact (proj1 Hfr).
     Qed.
 
@@ -9244,23 +9131,23 @@ Module Make
            R.cfg_control := R.RunDead fr direct pending k |}
         after Hstep) as Hextends.
       destruct pending as [|target remaining].
-      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
         eapply continuation_below_extended; eauto. exact (proj1 Hfr).
       - cbn -[R.write_side_contribution R.continue_dead] in Hstep.
         destruct (S.mem target (R.frame_current_targets fr)).
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           eapply continuation_below_extended; eauto. exact (proj1 Hfr).
         + destruct (R.write_side_contribution st fr target D.bottom)
             as [next_st changed] eqn:Hwrite.
           unfold R.continue_dead in Hstep. destruct changed.
           * destruct (R.rank_lt next_st (R.frame_owner fr) target &&
               negb (R.is_materialized next_st target))%bool eqn:Hguard.
-            -- apply Bool.andb_true_iff in Hguard. inversion Hstep; subst; clear_requeue_view.
+            -- apply Bool.andb_true_iff in Hguard. inversion Hstep; subst.
                cbn. split; [exact (proj1 Hguard) |].
                eapply continuation_below_extended; eauto. exact (proj1 Hfr).
-            -- inversion Hstep; subst; clear_requeue_view. cbn.
+            -- inversion Hstep; subst. cbn.
                eapply continuation_below_extended; eauto. exact (proj1 Hfr).
-          * inversion Hstep; subst; clear_requeue_view. cbn.
+          * inversion Hstep; subst. cbn.
             eapply continuation_below_extended; eauto. exact (proj1 Hfr).
     Qed.
 
@@ -9280,7 +9167,7 @@ Module Make
         after Hstep) as Hextends.
       cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [next_st next_fr] eqn:Hset.
-      inversion Hstep; subst; clear_requeue_view. cbn.
+      inversion Hstep; subst. cbn.
       rewrite (@set_value_owner st fr direct next_st next_fr Hset).
       eapply continuation_below_extended; eauto. exact (proj1 Hfr).
     Qed.
@@ -9305,13 +9192,13 @@ Module Make
       destruct (R.queue_peek (R.queue st)) as [next |].
       - destruct (V.eq_dec next (R.frame_owner fr)).
         + destruct (R.queue_pop (R.queue st)) as [[head rest] |];
-            try discriminate. inversion Hstep; subst; clear_requeue_view. exact Hbelow_after.
+            try discriminate. inversion Hstep; subst. exact Hbelow_after.
         + destruct (R.rank_lt st (R.frame_owner fr) next) eqn:Hlt.
           * destruct (R.queue_pop (R.queue st)) as [[head rest] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view. cbn.
+              try discriminate. inversion Hstep; subst. cbn.
             split; [exact Hlt |exact Hbelow_after].
-          * inversion Hstep; subst; clear_requeue_view. now apply continuation_ordered_tail with fr.
-      - inversion Hstep; subst; clear_requeue_view. now apply continuation_ordered_tail with fr.
+          * inversion Hstep; subst. now apply continuation_ordered_tail with fr.
+      - inversion Hstep; subst. now apply continuation_ordered_tail with fr.
     Qed.
 
     Lemma next_return_control_ordered :
@@ -9327,19 +9214,19 @@ Module Make
         after Hstep) as Hextends.
       destruct k; cbn -[R.complete_get] in Hstep;
         cbn in Hranked, Hordered.
-      - inversion Hstep; subst; clear_requeue_view. exact I.
-      - inversion Hstep; subst; clear_requeue_view. exact I.
+      - inversion Hstep; subst. exact I.
+      - inversion Hstep; subst. exact I.
       - destruct Hranked as [Hfr [Htarget Hrest]].
         destruct (R.complete_get st f t) as [[next next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. cbn. rewrite (complete_get_owner Hget).
+        inversion Hstep; subst. cbn. rewrite (complete_get_owner Hget).
         eapply continuation_below_extended; eauto. exact (proj1 Hfr).
-      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst; clear_requeue_view.
+      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst.
         exact Hordered.
-      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst; clear_requeue_view.
+      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst.
         exact Hordered.
-      - destruct Hranked as [Hfr [Hpending Hrest]]. inversion Hstep; subst; clear_requeue_view.
+      - destruct Hranked as [Hfr [Hpending Hrest]]. inversion Hstep; subst.
         exact Hordered.
-      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst; clear_requeue_view.
+      - destruct Hranked as [Hfr Hrest]. inversion Hstep; subst.
         exact Hordered.
     Qed.
 
@@ -9357,15 +9244,15 @@ Module Make
          |fr direct k |fr k |k].
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[owner rest] |]; try discriminate.
-        inversion Hstep; subst; clear_requeue_view. exact I.
+        inversion Hstep; subst. exact I.
       - destruct roots as [|root remaining]; cbn -[R.observe] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
         + destruct (R.is_materialized (R.observe st root) root);
             inversion Hstep; subst; exact I.
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[owner rest] |]; inversion Hstep; subst; exact I.
       - cbn in Hcontrol. destruct Hcontrol as [Howner Hk].
-        cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         eapply continuation_below_extended; eauto.
         apply rank_extends_materialize.
       - cbn in Hcontrol, Hordered. destruct Hcontrol as [Hfr Hk].
@@ -9669,21 +9556,21 @@ Module Make
       unfold Sem.step in Hstep. destruct control as
         [|roots |remaining |current k |fr body k |fr direct pending k
          |fr direct k |fr k |k]; try contradiction.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         now left.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. now left.
+        + cbn in Hstep. inversion Hstep; subst. now left.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. left. cbn. right.
+          * inversion Hstep; subst. left. cbn. right.
             now apply continuation_above_after_get.
           * set (base_st := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             destruct (R.complete_get base_st fr target)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. left.
+            inversion Hstep; subst. left.
             pose proof (@complete_get_owner base_st fr target
               st1 fr1 value Hget) as Howner.
             cbn in Hactive |- *. now rewrite Howner.
@@ -9700,49 +9587,49 @@ Module Make
               negb (R.is_materialized st1 target))%bool;
               inversion Hstep; subst; left; cbn in Hactive |- *;
               rewrite Howner; auto using continuation_above_after_side.
-          * inversion Hstep; subst; clear_requeue_view. left. cbn in Hactive |- *.
+          * inversion Hstep; subst. left. cbn in Hactive |- *.
             now rewrite Howner.
         + cbn -[R.observe R.materialize R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. left. cbn. right.
+            -- inversion Hstep; subst. left. cbn. right.
                now apply continuation_above_after_spawn.
-            -- inversion Hstep; subst; clear_requeue_view. now left.
+            -- inversion Hstep; subst. now left.
       - destruct pending as [|target remaining].
-        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view. now left.
+        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst. now left.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed].
             unfold R.continue_dead in Hstep. destruct changed.
             -- destruct (R.rank_lt st1 (R.frame_owner fr) target &&
                 negb (R.is_materialized st1 target))%bool.
-               ++ inversion Hstep; subst; clear_requeue_view. left. cbn. right.
+               ++ inversion Hstep; subst. left. cbn. right.
                   now apply continuation_above_dead.
-               ++ inversion Hstep; subst; clear_requeue_view. now left.
-            -- inversion Hstep; subst; clear_requeue_view. now left.
+               ++ inversion Hstep; subst. now left.
+            -- inversion Hstep; subst. now left.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. left.
+        inversion Hstep; subst. left.
         pose proof (@set_value_owner st fr direct st1 fr1 Hset) as Howner.
         cbn in Hactive |- *. now rewrite Howner.
       - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |].
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view. now left.
+              try discriminate. inversion Hstep; subst. now left.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view. left. cbn. right.
+                 try discriminate. inversion Hstep; subst. left. cbn. right.
                now apply continuation_above_drain.
-            -- inversion Hstep; subst; clear_requeue_view. cbn in Hactive.
+            -- inversion Hstep; subst. cbn in Hactive.
                destruct Hactive as [[Howner Hbase] |Habove].
                ++ right. now subst.
                ++ now left.
-        + inversion Hstep; subst; clear_requeue_view. cbn in Hactive.
+        + inversion Hstep; subst. cbn in Hactive.
           destruct Hactive as [[Howner Hbase] |Habove].
           * right. now subst.
           * now left.
@@ -9752,16 +9639,16 @@ Module Make
           cbn -[R.complete_get] in Hstep, Hactive; try contradiction.
         + destruct (R.complete_get st fr target)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. left.
+          inversion Hstep; subst. left.
           pose proof (@complete_get_owner st fr target st1 fr1 value Hget)
             as Howner. cbn.
           destruct Hactive as [[Hframe Hbase] |Habove].
           * left. now rewrite Howner.
           * now right.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
     Qed.
 
     Lemma continuation_above_contains :
@@ -9952,20 +9839,20 @@ Module Make
       unfold Sem.step in Hstep. destruct control as
         [|seed_roots |remaining |current k |fr body k |fr direct pending k
          |fr direct k |fr k |k]; try contradiction.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         cbn in Hbefore, Hafter. tauto.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. cbn in Hbefore, Hafter. tauto.
+        + cbn in Hstep. inversion Hstep; subst. cbn in Hbefore, Hafter. tauto.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn in Hbefore, Hafter. tauto.
+          * inversion Hstep; subst. cbn in Hbefore, Hafter. tauto.
           * set (base := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             destruct (R.complete_get base fr target)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             pose proof (@complete_get_owner base fr target st1 fr1 value Hget)
               as Howner. cbn in Hbefore, Hafter. rewrite Howner in Hafter.
             tauto.
@@ -9988,11 +9875,11 @@ Module Make
             try destruct (R.rank_lt observed (R.frame_owner fr) target);
             inversion Hstep; subst; cbn in Hbefore, Hafter; tauto.
       - destruct pending as [|target remaining].
-        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
           cbn in Hbefore, Hafter. tauto.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. cbn in Hbefore, Hafter. tauto.
+          * inversion Hstep; subst. cbn in Hbefore, Hafter. tauto.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed].
             unfold R.continue_dead in Hstep. destruct changed;
@@ -10001,20 +9888,20 @@ Module Make
               inversion Hstep; subst; cbn in Hbefore, Hafter; tauto.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         pose proof (@set_value_owner st fr direct st1 fr1 Hset) as Howner.
         cbn in Hbefore, Hafter. rewrite Howner in Hafter. tauto.
       - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |] eqn:Hpeek.
         + destruct (V.eq_dec next (R.frame_owner fr)) as [Heq |Hneq].
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view.
+              try discriminate. inversion Hstep; subst.
             cbn in Hbefore, Hafter. tauto.
           * destruct (R.rank_lt st (R.frame_owner fr) next) eqn:Hhigher.
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst.
                cbn in Hbefore, Hafter. tauto.
-            -- inversion Hstep; subst; clear_requeue_view. cbn in Hbefore, Hafter.
+            -- inversion Hstep; subst. cbn in Hbefore, Hafter.
                assert (Howner : owner = R.frame_owner fr) by tauto.
                subst owner. exists (R.reset_registered_cells st
                  (R.frame_owner fr)), k. split; [reflexivity |].
@@ -10033,7 +9920,7 @@ Module Make
                    Hvalid Hframe_ranked Hnext_ranked
                    (fun Heq => Hneq (eq_sym Heq)) Hhigher). }
                eapply queue_peek_lower_below; eauto.
-        + inversion Hstep; subst; clear_requeue_view. cbn in Hbefore, Hafter.
+        + inversion Hstep; subst. cbn in Hbefore, Hafter.
           assert (Howner : owner = R.frame_owner fr) by tauto.
           subst owner. exists (R.reset_registered_cells st
             (R.frame_owner fr)), k. split; [reflexivity |].
@@ -10046,13 +9933,13 @@ Module Make
           try contradiction.
         + destruct (R.complete_get st fr target)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           pose proof (@complete_get_owner st fr target st1 fr1 value Hget)
             as Howner. exfalso. apply Hafter. cbn. now rewrite Howner.
-        + inversion Hstep; subst; clear_requeue_view. exfalso. apply Hafter. exact Hbefore.
-        + inversion Hstep; subst; clear_requeue_view. exfalso. apply Hafter. exact Hbefore.
-        + inversion Hstep; subst; clear_requeue_view. exfalso. apply Hafter. exact Hbefore.
-        + inversion Hstep; subst; clear_requeue_view. exfalso. apply Hafter. exact Hbefore.
+        + inversion Hstep; subst. exfalso. apply Hafter. exact Hbefore.
+        + inversion Hstep; subst. exfalso. apply Hafter. exact Hbefore.
+        + inversion Hstep; subst. exfalso. apply Hafter. exact Hbefore.
+        + inversion Hstep; subst. exfalso. apply Hafter. exact Hbefore.
     Qed.
 
     Lemma continuation_contains_below :
@@ -10289,22 +10176,22 @@ Module Make
         [|seed_roots |remaining |owner k |fr body k
          |fr direct pending k |fr direct k |fr k |k];
         try contradiction.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         cbn -[Credits.source_side_credit R.materialize].
         rewrite source_credit_materialize. lia.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. cbn. lia.
+        + cbn in Hstep. inversion Hstep; subst. cbn. lia.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn.
+          * inversion Hstep; subst. cbn.
             subst observed. rewrite source_credit_observe. lia.
           * set (base := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             destruct (R.complete_get base fr target)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. cbn -[Credits.source_side_credit].
+            inversion Hstep; subst. cbn -[Credits.source_side_credit].
             rewrite (@source_credit_complete_get
               support base fr target st1 fr1 value root Hget).
             subst base. destruct (R.is_materialized observed target).
@@ -10334,22 +10221,22 @@ Module Make
         + cbn -[R.observe R.materialize R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. cbn. subst observed.
+          * inversion Hstep; subst. cbn. subst observed.
             rewrite source_credit_observe. lia.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. cbn. subst observed.
+            -- inversion Hstep; subst. cbn. subst observed.
                rewrite source_credit_observe. lia.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                cbn -[Credits.source_side_credit R.materialize R.enqueue].
                rewrite source_credit_materialize, source_credit_enqueue.
                subst observed. rewrite source_credit_observe. lia.
       - destruct pending as [|target remaining].
-        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
           cbn -[Credits.source_side_credit R.publish_targets].
           rewrite source_credit_publish_targets. lia.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. cbn. lia.
+          * inversion Hstep; subst. cbn. lia.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed] eqn:Hwrite.
             unfold R.continue_dead in Hstep. destruct changed.
@@ -10364,24 +10251,22 @@ Module Make
                  D.bottom st1 false Hwrite).
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. cbn -[Credits.source_side_credit].
-        unfold R.requeue_changed_controlled_owner.
-        rewrite source_credit_with_queue.
+        inversion Hstep; subst. cbn -[Credits.source_side_credit].
         rewrite (@source_credit_set_value
           support st fr direct st1 fr1 root Hset). lia.
       - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |] eqn:Hpeek.
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view.
+              try discriminate. inversion Hstep; subst.
             cbn -[Credits.source_side_credit].
             rewrite source_credit_with_queue. lia.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst.
                cbn -[Credits.source_side_credit].
                rewrite source_credit_with_queue. lia.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                cbn -[Credits.source_side_credit R.reset_registered_cells].
                pose proof (@reachable_control_ordered tf roots
                  {| R.cfg_state := st;
@@ -10397,7 +10282,7 @@ Module Make
                    {| R.cfg_state := st;
                       R.cfg_control := R.RunDrain fr k |} Hreachable))
                  Habove). lia.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           cbn -[Credits.source_side_credit R.reset_registered_cells].
           pose proof (@reachable_control_ordered tf roots
             {| R.cfg_state := st;
@@ -10419,7 +10304,7 @@ Module Make
           try (inversion Hstep; subst; cbn; lia).
         destruct (R.complete_get st fr target)
           as [[st1 fr1] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. cbn -[Credits.source_side_credit].
+        inversion Hstep; subst. cbn -[Credits.source_side_credit].
         rewrite (@source_credit_complete_get
           support st fr target st1 fr1 value root Hget). lia.
     Qed.
@@ -10470,19 +10355,19 @@ Module Make
          |fr direct pending k |fr direct k |fr k |k].
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[head tail] |]; try discriminate.
-        inversion Hstep; subst; clear_requeue_view. exact Hmember.
+        inversion Hstep; subst. exact Hmember.
       - destruct roots as [|root rest]; cbn -[R.observe] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact Hmember.
+        + inversion Hstep; subst. exact Hmember.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst;
             apply (@ReaderOrder.controlled_mono_observe st root owner Hmember).
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[head tail] |]; inversion Hstep; subst; exact Hmember.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         apply (@ReaderOrder.controlled_mono_materialize st current owner Hmember).
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. exact Hmember.
+        + cbn in Hstep. inversion Hstep; subst. exact Hmember.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           assert (Hobserved : S.mem owner (R.controlled observed) = true).
@@ -10490,7 +10375,7 @@ Module Make
               (@ReaderOrder.controlled_mono_observe st target owner Hmember). }
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. exact Hobserved.
+          * inversion Hstep; subst. exact Hobserved.
           * set (base := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             assert (Hbase : S.mem owner (R.controlled base) = true).
@@ -10500,7 +10385,7 @@ Module Make
                     observed target owner Hobserved)]. }
             destruct (R.complete_get base fr target)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             eapply complete_get_preserves_controlled; eauto.
         + cbn -[R.observe R.record_side_input
             R.write_side_contribution R.continue_side] in Hstep.
@@ -10527,19 +10412,19 @@ Module Make
           { subst observed. exact
               (@ReaderOrder.controlled_mono_observe st target owner Hmember). }
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. exact Hobserved.
+          * inversion Hstep; subst. exact Hobserved.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. exact Hobserved.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst. exact Hobserved.
+            -- inversion Hstep; subst.
                exact (@ReaderOrder.controlled_mono_materialize
                  (R.enqueue observed target) target owner
                  (@ReaderOrder.controlled_mono_enqueue
                    observed target owner Hobserved)).
       - destruct pending as [|target remaining].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. exact Hmember.
+        + cbn in Hstep. inversion Hstep; subst. exact Hmember.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. exact Hmember.
+          * inversion Hstep; subst. exact Hmember.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed] eqn:Hwrite.
             assert (Hwritten : S.mem owner (R.controlled st1) = true).
@@ -10554,19 +10439,19 @@ Module Make
                 st1 target owner Hwritten).
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. eapply set_value_preserves_controlled; eauto.
+        inversion Hstep; subst. eapply set_value_preserves_controlled; eauto.
       - cbn -[R.reset_registered_cells] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |].
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view. exact Hmember.
+              try discriminate. inversion Hstep; subst. exact Hmember.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view. exact Hmember.
-            -- inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst. exact Hmember.
+            -- inversion Hstep; subst.
                exact (@ReaderOrder.controlled_mono_reset_registered
                  st (R.frame_owner fr) owner Hmember).
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           exact (@ReaderOrder.controlled_mono_reset_registered
             st (R.frame_owner fr) owner Hmember).
       - destruct k as
@@ -10576,7 +10461,7 @@ Module Make
           try (inversion Hstep; subst; exact Hmember).
         destruct (R.complete_get st fr target)
           as [[st1 fr1] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. eapply complete_get_preserves_controlled; eauto.
+        inversion Hstep; subst. eapply complete_get_preserves_controlled; eauto.
     Qed.
 
     Lemma controlled_steps_monotone :
@@ -10841,22 +10726,22 @@ Module Make
         [|seed_roots |remaining |owner k |fr body k
          |fr direct pending k |fr direct k |fr k |k];
         try contradiction.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst.
         cbn -[target_side_credit R.materialize].
         rewrite target_credit_materialize. lia.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. cbn. lia.
+        + cbn in Hstep. inversion Hstep; subst. cbn. lia.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn. subst observed.
+          * inversion Hstep; subst. cbn. subst observed.
             rewrite target_credit_observe. lia.
           * set (base := if R.is_materialized observed target
               then observed else R.enqueue observed target) in *.
             destruct (R.complete_get base fr target)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. cbn -[target_side_credit].
+            inversion Hstep; subst. cbn -[target_side_credit].
             rewrite (@target_credit_complete_get
               support base fr target st1 fr1 value root Hget).
             subst base. destruct (R.is_materialized observed target).
@@ -10882,7 +10767,7 @@ Module Make
             all: rewrite (@target_side_credit_write_other_target support
               observed fr1 target input st1 true root Hwrite Hneq).
             all: subst observed; rewrite target_credit_observe; lia.
-          * inversion Hstep; subst; clear_requeue_view. cbn.
+          * inversion Hstep; subst. cbn.
             destruct (V.eq_dec root target) as [-> |Hneq].
             -- pose proof (@target_side_credit_write_nonincreasing support
                  observed fr1 target input st1 false Hwrite) as Hcredit.
@@ -10893,21 +10778,21 @@ Module Make
         + cbn -[R.observe R.materialize R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. cbn. subst observed.
+          * inversion Hstep; subst. cbn. subst observed.
             rewrite target_credit_observe. lia.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. cbn. subst observed.
+            -- inversion Hstep; subst. cbn. subst observed.
                rewrite target_credit_observe. lia.
-            -- inversion Hstep; subst; clear_requeue_view. cbn -[target_side_credit].
+            -- inversion Hstep; subst. cbn -[target_side_credit].
                rewrite target_credit_materialize, target_credit_enqueue.
                subst observed. rewrite target_credit_observe. lia.
       - destruct pending as [|target remaining].
-        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
           cbn -[target_side_credit R.publish_targets].
           rewrite target_credit_publish_targets. lia.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. cbn. lia.
+          * inversion Hstep; subst. cbn. lia.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed] eqn:Hwrite.
             unfold R.continue_dead in Hstep. destruct changed.
@@ -10920,34 +10805,32 @@ Module Make
                  exact Hwrite).
                all: rewrite (@target_side_credit_write_other_target support
                  st fr target D.bottom st1 true root Hwrite Hneq); lia.
-            -- inversion Hstep; subst; clear_requeue_view. cbn.
+            -- inversion Hstep; subst. cbn.
                destruct (V.eq_dec root target) as [-> |Hneq].
                ++ eapply target_side_credit_write_nonincreasing; exact Hwrite.
                ++ rewrite (@target_side_credit_write_other_target support
                     st fr target D.bottom st1 false root Hwrite Hneq). lia.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. cbn -[target_side_credit].
-        unfold R.requeue_changed_controlled_owner.
-        rewrite target_credit_with_queue.
+        inversion Hstep; subst. cbn -[target_side_credit].
         rewrite (@target_credit_set_value
           support st fr direct st1 fr1 root Hset). lia.
       - cbn -[R.reset_registered_cells] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |].
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view.
+              try discriminate. inversion Hstep; subst.
             cbn -[target_side_credit]. rewrite target_credit_with_queue. lia.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst.
                cbn -[target_side_credit].
                rewrite target_credit_with_queue. lia.
-            -- inversion Hstep; subst; clear_requeue_view. cbn in Hafter.
+            -- inversion Hstep; subst. cbn in Hafter.
                cbn -[target_side_credit R.reset_registered_cells].
                rewrite (@reset_drain_preserves_target_credit support tf roots
                  st fr k root Hreachable Hafter). lia.
-        + inversion Hstep; subst; clear_requeue_view. cbn in Hafter.
+        + inversion Hstep; subst. cbn in Hafter.
           cbn -[target_side_credit R.reset_registered_cells].
           rewrite (@reset_drain_preserves_target_credit support tf roots
             st fr k root Hreachable Hafter). lia.
@@ -10958,7 +10841,7 @@ Module Make
           try (inversion Hstep; subst; cbn; lia).
         destruct (R.complete_get st fr target)
           as [[st1 fr1] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view. cbn -[target_side_credit].
+        inversion Hstep; subst. cbn -[target_side_credit].
         rewrite (@target_credit_complete_get
           support st fr target st1 fr1 value root Hget). lia.
     Qed.
@@ -11324,30 +11207,30 @@ Module Make
          |fr direct pending k |fr direct k |fr k |k]; cbn in Howners.
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[head tail] |]; try discriminate.
-        inversion Hstep; subst; clear_requeue_view. exact I.
+        inversion Hstep; subst. exact I.
       - destruct roots as [|root rest]; cbn -[R.observe] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
         + destruct (R.is_materialized (R.observe st root) root);
             inversion Hstep; subst; exact I.
       - cbn in Hstep. destruct (R.queue_pop (R.queue st))
           as [[head tail] |]; inversion Hstep; subst; exact I.
-      - cbn -[R.materialize] in Hstep. inversion Hstep; subst; clear_requeue_view. cbn. split.
+      - cbn -[R.materialize] in Hstep. inversion Hstep; subst. cbn. split.
         + apply materialize_self.
         + eapply continuation_owners_materialized_mono; eauto.
       - destruct Howners as [Hcurrent Hrest]. destruct body.
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. cbn. split;
+        + cbn in Hstep. inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
         + cbn -[R.observe R.complete_get R.enqueue] in Hstep.
           set (observed := R.observe st t) in *.
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner fr) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn. split;
+          * inversion Hstep; subst. cbn. split;
               eauto using continuation_owners_materialized_mono.
           * set (base := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             destruct (R.complete_get base fr t)
               as [[next next_fr] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. cbn. split.
+            inversion Hstep; subst. cbn. split.
             -- rewrite (complete_get_owner Hget). apply Hmono. exact Hcurrent.
             -- eapply continuation_owners_materialized_mono; eauto.
         + cbn -[R.observe R.record_side_input
@@ -11372,11 +11255,11 @@ Module Make
             eauto using continuation_owners_materialized_mono.
       - destruct Howners as [Hcurrent Hrest].
         destruct pending as [|target remaining].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. cbn. split;
+        + cbn in Hstep. inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. cbn. split;
+          * inversion Hstep; subst. cbn. split;
               eauto using continuation_owners_materialized_mono.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [next changed] eqn:Hwrite.
@@ -11388,7 +11271,7 @@ Module Make
       - destruct Howners as [Hcurrent Hrest].
         cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. cbn. split.
+        inversion Hstep; subst. cbn. split.
         + rewrite (@set_value_owner st fr direct next next_fr Hset).
           apply Hmono. exact Hcurrent.
         + eapply continuation_owners_materialized_mono; eauto.
@@ -11397,39 +11280,39 @@ Module Make
         destruct (R.queue_peek (R.queue st)) as [next |].
         + destruct (V.eq_dec next (R.frame_owner fr)).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-              try discriminate. inversion Hstep; subst; clear_requeue_view. cbn. split;
+              try discriminate. inversion Hstep; subst. cbn. split;
               eauto using continuation_owners_materialized_mono.
           * destruct (R.rank_lt st (R.frame_owner fr) next).
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view. cbn. split;
+                 try discriminate. inversion Hstep; subst. cbn. split;
                  eauto using continuation_owners_materialized_mono.
-            -- inversion Hstep; subst; clear_requeue_view. cbn.
+            -- inversion Hstep; subst. cbn.
                eapply continuation_owners_materialized_mono; eauto.
-        + inversion Hstep; subst; clear_requeue_view. cbn.
+        + inversion Hstep; subst. cbn.
           eapply continuation_owners_materialized_mono; eauto.
       - destruct k as
           [|remaining |fr target next rest |fr next rest |fr next rest
            |fr direct pending rest |fr rest];
           cbn -[R.complete_get] in Hstep, Howners.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
+        + inversion Hstep; subst. exact I.
         + destruct Howners as [Hcurrent Hrest].
           destruct (R.complete_get st fr target)
             as [[next_st next_fr] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. cbn. split.
+          inversion Hstep; subst. cbn. split.
           * rewrite (complete_get_owner Hget). apply Hmono. exact Hcurrent.
           * eapply continuation_owners_materialized_mono; eauto.
         + destruct Howners as [Hcurrent Hrest].
-          inversion Hstep; subst; clear_requeue_view. cbn. split;
+          inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
         + destruct Howners as [Hcurrent Hrest].
-          inversion Hstep; subst; clear_requeue_view. cbn. split;
+          inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
         + destruct Howners as [Hcurrent Hrest].
-          inversion Hstep; subst; clear_requeue_view. cbn. split;
+          inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
         + destruct Howners as [Hcurrent Hrest].
-          inversion Hstep; subst; clear_requeue_view. cbn. split;
+          inversion Hstep; subst. cbn. split;
             eauto using continuation_owners_materialized_mono.
     Qed.
 
@@ -11742,7 +11625,7 @@ Module Make
     Proof.
       intros tf st current k after owner before_fr after_fr Hstep
         Hbefore_frame Hafter_frame Hcontrolled Hcontrolled_after.
-      cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      cbn in Hstep. inversion Hstep; subst.
       assert (Hneq : current <> owner).
       { intro Heq. subst current. cbn [control_frame] in Hbefore_frame.
         destruct (V.eq_dec owner owner); [discriminate |contradiction]. }
@@ -11778,7 +11661,7 @@ Module Make
     Proof.
       intros tf st fr direct k after owner before_fr after_fr Hstep
         Hbefore_frame Hafter_frame Hcontrolled Hcontrolled_after.
-      cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+      cbn in Hstep. inversion Hstep; subst.
       eapply active_ordinary_credit_same_le
         with (before_fr := before_fr) (after_fr := after_fr); eauto;
         try reflexivity.
@@ -11813,7 +11696,7 @@ Module Make
         rewrite observe_sigma. exact Hlookup. }
       destruct (negb (R.is_materialized observed target) &&
         R.rank_lt observed (R.frame_owner fr) target)%bool eqn:Hrecursive.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         assert (Htarget : target <> owner).
         { intro Heq. subst target.
           destruct Hsolved_observed as [value Hlookup].
@@ -11830,7 +11713,7 @@ Module Make
           then observed else R.enqueue observed target) as base.
         destruct (R.complete_get base fr target)
           as [[next_st next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         set (base := if R.is_materialized (R.observe st target) target
           then R.observe st target
           else R.enqueue (R.observe st target) target) in Hget.
@@ -11890,7 +11773,7 @@ Module Make
       unfold R.continue_side in Hstep. destruct changed;
         try destruct (R.rank_lt next_st (R.frame_owner fr1) target &&
           negb (R.is_materialized next_st target))%bool;
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
       all: eapply active_ordinary_credit_same_le
         with (before_fr := before_fr) (after_fr := after_fr); eauto.
       all: try (cbn; unfold R.sigma_value;
@@ -11931,7 +11814,7 @@ Module Make
       { destruct Hsolved as [value Hlookup]. exists value. subst observed.
         rewrite observe_sigma. exact Hlookup. }
       destruct (R.is_materialized observed target) eqn:Hmaterialized.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
@@ -11939,7 +11822,7 @@ Module Make
           congruence.
         + cbn. unfold R.sigma_value. rewrite observe_sigma. reflexivity.
       - destruct (R.rank_lt observed (R.frame_owner fr) target) eqn:Hhigher.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           assert (Htarget : target <> owner).
           { intro Heq. subst target.
             destruct Hsolved_observed as [value Hlookup].
@@ -11953,7 +11836,7 @@ Module Make
             destruct (V.eq_dec target owner); [contradiction |].
             destruct (V.eq_dec (R.frame_owner fr) owner); congruence.
           * cbn. unfold R.sigma_value. rewrite observe_sigma. reflexivity.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           eapply active_ordinary_credit_same_le
             with (before_fr := before_fr) (after_fr := after_fr); eauto.
           * cbn [R.cfg_control control_frame] in Hbefore_frame, Hafter_frame.
@@ -12008,7 +11891,7 @@ Module Make
       intros tf st fr direct pending k after owner before_fr after_fr Hstep
         Hbefore_frame Hafter_frame Hcontrolled Hcontrolled_after.
       destruct pending as [|target remaining].
-      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst; clear_requeue_view.
+      - cbn -[R.publish_targets] in Hstep. inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
@@ -12016,7 +11899,7 @@ Module Make
           congruence.
       - cbn -[R.write_side_contribution R.continue_dead] in Hstep.
         destruct (S.mem target (R.frame_current_targets fr)).
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           eapply active_ordinary_credit_same_le
             with (before_fr := before_fr) (after_fr := after_fr); eauto;
             try reflexivity.
@@ -12029,7 +11912,7 @@ Module Make
           unfold R.continue_dead in Hstep. destruct changed;
             try destruct (R.rank_lt next (R.frame_owner fr) target &&
               negb (R.is_materialized next target))%bool;
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
           all: eapply active_ordinary_credit_same_le
             with (before_fr := before_fr) (after_fr := after_fr); eauto.
           all: try (cbn; unfold R.sigma_value;
@@ -12057,7 +11940,7 @@ Module Make
         Hbefore_frame Hafter_frame Hcontrolled Hcontrolled_after.
       cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
-      inversion Hstep; subst; clear_requeue_view.
+      inversion Hstep; subst.
       pose proof (@set_value_owner st fr direct next next_fr Hset) as Howner.
       destruct (V.eq_dec (R.frame_owner fr) owner) as [Hcurrent |Hnested].
       - cbn [R.cfg_control control_frame] in Hbefore_frame, Hafter_frame.
@@ -12143,7 +12026,7 @@ Module Make
       - destruct (V.eq_dec next (R.frame_owner fr)).
         + destruct (R.queue_pop (R.queue st)) as [[head tail] |];
             try discriminate.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           eapply active_ordinary_credit_same_le
             with (before_fr := before_fr) (after_fr := after_fr);
             try eassumption; try reflexivity.
@@ -12156,7 +12039,7 @@ Module Make
         + destruct (R.rank_lt st (R.frame_owner fr) next).
           * destruct (R.queue_pop (R.queue st)) as [[head tail] |];
               try discriminate.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             eapply active_ordinary_credit_same_le
               with (before_fr := before_fr) (after_fr := after_fr);
               try eassumption; try reflexivity.
@@ -12164,14 +12047,14 @@ Module Make
               in Hbefore_frame, Hafter_frame.
             destruct (V.eq_dec next owner);
               destruct (V.eq_dec (R.frame_owner fr) owner); try congruence.
-          * inversion Hstep; subst; clear_requeue_view.
+          * inversion Hstep; subst.
             eapply active_ordinary_credit_same_le
               with (before_fr := before_fr) (after_fr := after_fr);
               try eassumption.
             -- eapply return_below_frame_phase; eauto.
             -- cbn. unfold R.sigma_value.
               rewrite reset_registered_cells_sigma. reflexivity.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr);
           try eassumption.
@@ -12200,7 +12083,7 @@ Module Make
       - cbn [control_frame] in Hbefore_frame. discriminate.
       - destruct (R.complete_get st f t)
           as [[next next_fr] value] eqn:Hget.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         destruct (@complete_get_preserves_owner_credit_view
           st f t next next_fr value owner Hget
           (solved_materialized Hsolved)) as [Hsigma Hphase].
@@ -12213,25 +12096,25 @@ Module Make
           as Howner.
         destruct (V.eq_dec (R.frame_owner f) owner);
           destruct (V.eq_dec (R.frame_owner next_fr) owner); congruence.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
         cbn [R.cfg_control control_frame continuation_frame]
           in Hbefore_frame, Hafter_frame. congruence.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
         cbn [R.cfg_control control_frame continuation_frame]
           in Hbefore_frame, Hafter_frame. congruence.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
         cbn [R.cfg_control control_frame continuation_frame]
           in Hbefore_frame, Hafter_frame. congruence.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         eapply active_ordinary_credit_same_le
           with (before_fr := before_fr) (after_fr := after_fr); eauto;
           try reflexivity.
@@ -12360,7 +12243,7 @@ Module Make
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool eqn:Hnested.
-          * inversion Hstep; subst; clear_requeue_view.
+          * inversion Hstep; subst.
             apply Bool.andb_true_iff in Hnested. destruct Hnested as [Hfresh _].
             apply Bool.negb_true_iff in Hfresh.
             rewrite Hmaterialized_after in Hfresh. discriminate.
@@ -12377,7 +12260,7 @@ Module Make
           unfold R.continue_side in Hstep. destruct changed.
           * destruct (R.rank_lt next_st (R.frame_owner fr1) target &&
               negb (R.is_materialized next_st target))%bool eqn:Hnested.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                apply Bool.andb_true_iff in Hnested.
                destruct Hnested as [_ Hfresh].
                apply Bool.negb_true_iff in Hfresh.
@@ -12389,7 +12272,7 @@ Module Make
           destruct (R.is_materialized observed target) eqn:Htarget.
           * inversion Hstep.
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                rewrite Hmaterialized_after in Htarget. discriminate.
             -- inversion Hstep.
       - destruct pending as [|target remaining].
@@ -12402,7 +12285,7 @@ Module Make
             unfold R.continue_dead in Hstep. destruct changed.
             -- destruct (R.rank_lt next_st (R.frame_owner fr) target &&
                 negb (R.is_materialized next_st target))%bool eqn:Hnested.
-               ++ inversion Hstep; subst; clear_requeue_view.
+               ++ inversion Hstep; subst.
                   apply Bool.andb_true_iff in Hnested.
                   destruct Hnested as [_ Hfresh].
                   apply Bool.negb_true_iff in Hfresh.
@@ -12421,7 +12304,7 @@ Module Make
           * destruct (R.queue_pop (R.queue st)); [destruct p |]; inversion Hstep.
           * destruct (R.rank_lt st (R.frame_owner fr) next) eqn:Hhigher.
             -- destruct (R.queue_pop (R.queue st)) as [[head tail] |];
-                 try discriminate. inversion Hstep; subst; clear_requeue_view.
+                 try discriminate. inversion Hstep; subst.
                cbn [control_frame] in Hframe.
                destruct (V.eq_dec (R.frame_owner fr) owner) as [Htop |Hbelow].
                ++ apply Hneq. now rewrite Htop.
@@ -12751,7 +12634,7 @@ Module Make
       destruct Hfront.
       - cbn in Hcontrol. destruct Hcontrol as [Hframe [Hbody Hbase]].
         destruct body as [direct |target next |target raw next |target next].
-        + unfold Sem.step in Hstep. cbn in Hstep. inversion Hstep; subst; clear_requeue_view.
+        + unfold Sem.step in Hstep. cbn in Hstep. inversion Hstep; subst.
           split; [apply EvaluationDead; reflexivity |exact Hbelow].
         + pose proof (rhs_supported_get_inv Hbody) as [Htarget Hnext].
           unfold Sem.step in Hstep.
@@ -12764,7 +12647,7 @@ Module Make
               [eapply rank_extends_observe; reflexivity |exact Howner_ranked]. }
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool eqn:Hnested.
-          * inversion Hstep; subst; clear_requeue_view. apply Bool.andb_true_iff in Hnested.
+          * inversion Hstep; subst. apply Bool.andb_true_iff in Hnested.
             destruct Hnested as [Hfresh Hhigher].
             apply Bool.negb_true_iff in Hfresh. split.
             -- apply EvaluationPendingGet; [reflexivity |exact Hfresh].
@@ -12772,7 +12655,7 @@ Module Make
           * destruct (R.is_materialized observed target) eqn:Hfresh.
             -- destruct (R.complete_get observed fr target)
                  as [[st1 fr1] value] eqn:Hget.
-               inversion Hstep; subst; clear_requeue_view. split.
+               inversion Hstep; subst. split.
                ++ apply EvaluationRhs. rewrite (complete_get_owner Hget).
                   reflexivity.
                ++ eapply queue_below_extended.
@@ -12782,7 +12665,7 @@ Module Make
                   ** exact Hbelow_observed.
             -- destruct (R.complete_get (R.enqueue observed target) fr target)
                  as [[st1 fr1] value] eqn:Hget.
-               inversion Hstep; subst; clear_requeue_view.
+               inversion Hstep; subst.
                pose proof (@complete_get_fresh_decreases
                  (Sem.support finite) observed fr target st1 fr1 value
                  Hnodup Htarget Hfresh Hget) as Hdecrease.
@@ -12813,13 +12696,13 @@ Module Make
           unfold R.continue_side in Hstep. destruct changed.
           * destruct (R.rank_lt st1 (R.frame_owner fr1) target &&
               negb (R.is_materialized st1 target))%bool eqn:Hnested.
-            -- inversion Hstep; subst; clear_requeue_view. apply Bool.andb_true_iff in Hnested.
+            -- inversion Hstep; subst. apply Bool.andb_true_iff in Hnested.
                destruct Hnested as [Hhigher Hfresh].
                apply Bool.negb_true_iff in Hfresh. split.
                ++ apply EvaluationPendingSide;
                     [now rewrite Howner1 |exact Hfresh].
                ++ exact Hbelow_written.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                destruct (R.rank_lt st1 target (R.frame_owner fr)) eqn:Htarget_rank.
                ++ split.
                   ** apply EvaluationRhs. now rewrite Howner1.
@@ -12832,7 +12715,7 @@ Module Make
                   cbn in Hsource. rewrite source_credit_enqueue in Hsource.
                   subst observed. rewrite source_credit_observe in Hdecrease.
                   lia.
-          * inversion Hstep; subst; clear_requeue_view. split.
+          * inversion Hstep; subst. split.
             -- apply EvaluationRhs. now rewrite Howner1.
             -- exact Hbelow_written.
         + pose proof (rhs_supported_spawn_inv Hbody) as [Htarget Hnext].
@@ -12842,13 +12725,13 @@ Module Make
           assert (Hbelow_observed : queue_strictly_below owner observed).
           { subst observed. now apply observe_queue_strictly_below. }
           destruct (R.is_materialized observed target) eqn:Hfresh.
-          * inversion Hstep; subst; clear_requeue_view. split;
+          * inversion Hstep; subst. split;
               [apply EvaluationRhs; reflexivity |exact Hbelow_observed].
           * destruct (R.rank_lt observed (R.frame_owner fr) target).
-            -- inversion Hstep; subst; clear_requeue_view. split.
+            -- inversion Hstep; subst. split.
                ++ apply EvaluationPendingSpawn; [reflexivity |exact Hfresh].
                ++ exact Hbelow_observed.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                pose proof (@spawn_fresh_decreases
                  (Sem.support finite) observed target Hnodup Htarget Hfresh)
                  as Hdecrease.
@@ -12858,14 +12741,14 @@ Module Make
       - cbn in Hcontrol. destruct Hcontrol as [Hframe [Hpending Hbase]].
         destruct pending as [|target remaining].
         + unfold Sem.step in Hstep. cbn -[R.publish_targets] in Hstep.
-          inversion Hstep; subst; clear_requeue_view. split;
+          inversion Hstep; subst. split;
             [apply EvaluationCommit; reflexivity |exact Hbelow].
         + assert (Htarget : List.In target (Sem.support finite)).
           { inversion Hpending; subst. assumption. }
           unfold Sem.step in Hstep.
           cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. split;
+          * inversion Hstep; subst. split;
               [apply EvaluationDead; reflexivity |exact Hbelow].
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed] eqn:Hwrite.
@@ -12878,12 +12761,12 @@ Module Make
             unfold R.continue_dead in Hstep. destruct changed.
             -- destruct (R.rank_lt st1 (R.frame_owner fr) target &&
                 negb (R.is_materialized st1 target))%bool eqn:Hnested.
-               ++ inversion Hstep; subst; clear_requeue_view. apply Bool.andb_true_iff in Hnested.
+               ++ inversion Hstep; subst. apply Bool.andb_true_iff in Hnested.
                   destruct Hnested as [Hhigher Hfresh].
                   apply Bool.negb_true_iff in Hfresh. split.
                   ** apply EvaluationPendingDead; [reflexivity |exact Hfresh].
                   ** exact Hbelow_written.
-               ++ inversion Hstep; subst; clear_requeue_view.
+               ++ inversion Hstep; subst.
                   destruct (R.rank_lt st1 target (R.frame_owner fr))
                     eqn:Htarget_rank.
                   ** split.
@@ -12895,32 +12778,32 @@ Module Make
                        Htarget Hwrite) as Hdecrease.
                      cbn in Hsource. rewrite source_credit_enqueue in Hsource.
                      lia.
-            -- inversion Hstep; subst; clear_requeue_view. split;
+            -- inversion Hstep; subst. split;
                  [apply EvaluationDead; reflexivity |exact Hbelow_written].
       - unfold owner_commitb in Hnotcommit. cbn in Hnotcommit.
         rewrite H in Hnotcommit.
         destruct (V.eq_dec owner owner);
           [discriminate |contradiction].
       - unfold Sem.step in Hstep. cbn -[R.materialize] in Hstep.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         pose proof (@unmaterialized_count_materialize_decreases
           (Sem.support finite) st target Hnodup
           (proj1 Hcontrol) H0) as Hdecrease.
         cbn in Hmaterialized. lia.
       - unfold Sem.step in Hstep. cbn -[R.materialize] in Hstep.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         pose proof (@unmaterialized_count_materialize_decreases
           (Sem.support finite) st target Hnodup
           (proj1 Hcontrol) H0) as Hdecrease.
         cbn in Hmaterialized. lia.
       - unfold Sem.step in Hstep. cbn -[R.materialize] in Hstep.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         pose proof (@unmaterialized_count_materialize_decreases
           (Sem.support finite) st target Hnodup
           (proj1 Hcontrol) H0) as Hdecrease.
         cbn in Hmaterialized. lia.
       - unfold Sem.step in Hstep. cbn -[R.materialize] in Hstep.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         pose proof (@unmaterialized_count_materialize_decreases
           (Sem.support finite) st target Hnodup
           (proj1 Hcontrol) H0) as Hdecrease.
@@ -13163,19 +13046,19 @@ Module Make
          |fr direct pending k |fr direct k |fr k |k];
         try contradiction.
       - cbn -[R.materialize] in Hstep.
-        inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+        inversion Hstep; subst. exact Hdrain.
       - destruct body as [value |target next |target raw next |target next].
-        + cbn in Hstep. inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+        + cbn in Hstep. inversion Hstep; subst. exact Hdrain.
         + cbn -[R.observe R.complete_get] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (negb (R.is_materialized observed target) &&
             R.rank_lt observed (R.frame_owner fr) target)%bool.
-          * inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+          * inversion Hstep; subst. exact Hdrain.
           * destruct (R.complete_get
               (if R.is_materialized observed target
                then observed else R.enqueue observed target)
               fr target) as [[st1 fr1] value].
-            inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+            inversion Hstep; subst. exact Hdrain.
         + cbn -[R.observe R.record_side_input
             R.write_side_contribution R.continue_side] in Hstep.
           destruct (R.record_side_input fr target raw) as [fr1 input].
@@ -13188,15 +13071,15 @@ Module Make
         + cbn -[R.observe R.materialize R.enqueue] in Hstep.
           set (observed := R.observe st target) in *.
           destruct (R.is_materialized observed target).
-          * inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+          * inversion Hstep; subst. exact Hdrain.
           * destruct (R.rank_lt observed (R.frame_owner fr) target);
               inversion Hstep; subst; exact Hdrain.
       - destruct pending as [|target remaining].
         + cbn -[R.publish_targets] in Hstep.
-          inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+          inversion Hstep; subst. exact Hdrain.
         + cbn -[R.write_side_contribution R.continue_dead] in Hstep.
           destruct (S.mem target (R.frame_current_targets fr)).
-          * inversion Hstep; subst; clear_requeue_view. exact Hdrain.
+          * inversion Hstep; subst. exact Hdrain.
           * destruct (R.write_side_contribution st fr target D.bottom)
               as [st1 changed].
             unfold R.continue_dead in Hstep. destruct changed;
@@ -13205,13 +13088,13 @@ Module Make
               inversion Hstep; subst; exact Hdrain.
       - cbn -[R.set_value] in Hstep.
         destruct (R.set_value st fr direct) as [st1 fr1].
-        inversion Hstep; subst; clear_requeue_view. cbn in Hdrain |- *. right. exact Hdrain.
+        inversion Hstep; subst. cbn in Hdrain |- *. right. exact Hdrain.
       - cbn -[R.reset_registered_cells] in Hstep.
         destruct (R.queue_peek (R.queue st)) as [next |] eqn:Hpeek.
         + destruct (V.eq_dec next (R.frame_owner fr)) as [Heq |Hneq].
           * destruct (R.queue_pop (R.queue st))
               as [[head tail] |] eqn:Hpop; try discriminate.
-            inversion Hstep; subst; clear_requeue_view. cbn in Hdrain |- *.
+            inversion Hstep; subst. cbn in Hdrain |- *.
             destruct Hdrain as [[Howner Hbase] | Hroot].
             -- exfalso. apply Hnotqueued.
                rewrite <- Howner. now apply queue_peek_member in Hpeek.
@@ -13219,8 +13102,8 @@ Module Make
           * destruct (R.rank_lt st (R.frame_owner fr) next) eqn:Hhigher.
             -- destruct (R.queue_pop (R.queue st))
                  as [[head tail] |] eqn:Hpop; try discriminate.
-               inversion Hstep; subst; clear_requeue_view. exact Hdrain.
-            -- inversion Hstep; subst; clear_requeue_view. cbn in Hdrain |- *.
+               inversion Hstep; subst. exact Hdrain.
+            -- inversion Hstep; subst. cbn in Hdrain |- *.
                destruct Hdrain as [[Howner Hbase] | Hroot].
                ++ exfalso. pose proof (reachable_control_ordered Hreachable)
                     as Hordered. cbn in Hordered, Hcontains.
@@ -13232,7 +13115,7 @@ Module Make
                   rewrite (@rank_lt_irrefl st owner Hranked) in Hfalse.
                   discriminate.
                ++ exact Hroot.
-        + inversion Hstep; subst; clear_requeue_view. cbn in Hdrain |- *.
+        + inversion Hstep; subst. cbn in Hdrain |- *.
           destruct Hdrain as [[Howner Hbase] | Hroot].
           * exfalso. pose proof (reachable_control_ordered Hreachable)
               as Hordered. cbn in Hordered, Hcontains.
@@ -13448,8 +13331,7 @@ Module Make
           (drain_st, owner_drain_fr) ->
         R.frame_owner owner_drain_fr = owner ->
         active_prefix owner tf
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}
           {| R.cfg_state := before;
              R.cfg_control := R.RunDrain drain_fr k |} ->
@@ -13488,15 +13370,13 @@ Module Make
         Sem.step tf
           {| R.cfg_state := commit_st;
              R.cfg_control := R.RunCommit commit_fr direct k |}
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}).
       { unfold Sem.step. cbn -[R.set_value]. now rewrite Hset. }
       pose proof (@steps_append_one tf (R.initial_config roots)
         {| R.cfg_state := commit_st;
            R.cfg_control := R.RunCommit commit_fr direct k |}
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain owner_drain_fr k |}
         Hcommit_reachable Hset_step) as Hdrain_reachable.
       assert (Hbefore_contains :
@@ -13505,8 +13385,7 @@ Module Make
       pose proof (@executed_rerun_step
         tf owner k before drain_fr tail Hdrain_owner Hpop) as Hpop_step.
       pose proof (@active_prefix_snoc owner tf
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain owner_drain_fr k |}
         {| R.cfg_state := before;
            R.cfg_control := R.RunDrain drain_fr k |}
@@ -13610,8 +13489,6 @@ Module Make
             (R.sigma_value drain_st (R.frame_owner commit_fr))
             (R.sigma_value commit_st (R.frame_owner commit_fr)) = true)
             by (now rewrite Hcommit_owner).
-          rewrite (@requeue_unchanged commit_st drain_st
-            (R.frame_owner commit_fr) Hchanged_frame) in *.
           pose proof (@set_value_equivalent_queue commit_st commit_fr direct
             drain_st owner_drain_fr Hset Hchanged_frame) as Hqueue.
           assert (Hdrain_below : queue_strictly_below owner drain_st).
@@ -13635,8 +13512,6 @@ Module Make
         rewrite Hcontrolled in Hcommit_uncontrolled.
         assert (Hskip : S.mem (R.frame_owner commit_fr)
           (R.controlled commit_st) = false) by now rewrite Hcommit_owner.
-        rewrite (@requeue_uncontrolled commit_st drain_st
-          (R.frame_owner commit_fr) Hskip) in *.
         assert (Hdrain_uncontrolled :
           S.mem owner (R.controlled drain_st) = false).
         { rewrite (@set_value_controlled commit_st commit_fr direct
@@ -13699,8 +13574,7 @@ Module Make
           (drain_st, owner_drain_fr) ->
         R.frame_owner owner_drain_fr = owner ->
         active_prefix owner tf
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}
           {| R.cfg_state := before;
              R.cfg_control := R.RunDrain drain_fr k |} ->
@@ -13759,8 +13633,7 @@ Module Make
       assert (Hbefore_controlled :
         S.mem owner (R.controlled before) = true).
       { exact (@controlled_steps_monotone tf
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}
           {| R.cfg_state := before;
              R.cfg_control := R.RunDrain drain_fr k |}
@@ -13799,8 +13672,7 @@ Module Make
           [exact Hcommit_controlled_owner |exact Hset |].
         now rewrite Hcommit_owner. }
       assert (Hdrain_reachable : Sem.steps tf (R.initial_config roots)
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain owner_drain_fr k |}).
       { eapply steps_append_one; [exact Hcommit_reachable |].
         unfold Sem.step. cbn -[R.set_value]. now rewrite Hset. }
@@ -13809,8 +13681,7 @@ Module Make
         active_ordinary_credit drain_st
           (R.RunDrain owner_drain_fr k) owner).
       { eapply (@active_prefix_owner_credit_nonincreasing tf roots owner
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}
           {| R.cfg_state := before;
              R.cfg_control := R.RunDrain drain_fr k |}
@@ -13879,8 +13750,7 @@ Module Make
           (drain_st, owner_drain_fr) ->
         R.frame_owner owner_drain_fr = owner ->
         active_prefix owner tf
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+          {| R.cfg_state := drain_st;
              R.cfg_control := R.RunDrain owner_drain_fr k |}
           {| R.cfg_state := before;
              R.cfg_control := R.RunDrain drain_fr k |} ->
@@ -13902,8 +13772,7 @@ Module Make
       assert (Hset_step : Sem.step tf
         {| R.cfg_state := commit_st;
            R.cfg_control := R.RunCommit commit_fr direct k |}
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain owner_drain_fr k |}).
       { unfold Sem.step. cbn -[R.set_value]. now rewrite Hset. }
       assert (Howner_drain_contains :
@@ -14048,8 +13917,7 @@ Module Make
       assert (Hset_step : Sem.step tf
         {| R.cfg_state := commit_st;
            R.cfg_control := R.RunCommit commit_fr direct k |}
-        {| R.cfg_state := R.requeue_changed_controlled_owner
-               commit_st drain_st (R.frame_owner commit_fr);
+        {| R.cfg_state := drain_st;
            R.cfg_control := R.RunDrain owner_drain_fr k |}).
       { unfold Sem.step. cbn -[R.set_value]. now rewrite Hset. }
       assert (Howner_drain_contains :
@@ -14123,19 +13991,16 @@ Module Make
         assert (Hfirst_set_step : Sem.step tf
           {| R.cfg_state := first_st;
              R.cfg_control := R.RunCommit first_fr first_direct k |}
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               first_st first_drain_st (R.frame_owner first_fr);
+          {| R.cfg_state := first_drain_st;
              R.cfg_control := R.RunDrain first_drain_fr k |}).
         { unfold Sem.step. cbn -[R.set_value]. now rewrite Hfirst_set. }
         assert (Hfirst_drain_reachable : Sem.steps tf (R.initial_config roots)
-          {| R.cfg_state := R.requeue_changed_controlled_owner
-               first_st first_drain_st (R.frame_owner first_fr);
+          {| R.cfg_state := first_drain_st;
              R.cfg_control := R.RunDrain first_drain_fr k |}).
         { eapply steps_append_one; eauto. }
         destruct (@run_drain_reaches_executed_boundary support tf roots finite
           owner Hsupport Hchildren (RankFinite.bound (Sem.support finite))
-          (R.requeue_changed_controlled_owner first_st first_drain_st
-            (R.frame_owner first_fr)) first_drain_fr k Hfirst_drain_owner
+          (first_drain_st) first_drain_fr k Hfirst_drain_owner
           Hfirst_drain_reachable) as [first_boundary Hfirst_executed].
         { intros next rank Hpeek Hhigher Hlookup.
           eapply reachable_rank_bound; eauto. }
@@ -14160,8 +14025,7 @@ Module Make
           * split; [now apply DrainBoundaryReturn |intros st' fr' Hshape;
               discriminate].
         + destruct (@steps_to_episode_boundary owner k tf
-            {| R.cfg_state := R.requeue_changed_controlled_owner
-               first_st first_drain_st (R.frame_owner first_fr);
+            {| R.cfg_state := first_drain_st;
                R.cfg_control := R.RunDrain first_drain_fr k |}
             {| R.cfg_state := before;
                R.cfg_control := R.RunDrain drain_fr k |}
@@ -14204,8 +14068,7 @@ Module Make
                      apply with_queue_strictly_below.
                      --- pose proof (@steps_transitive tf
                            (R.initial_config roots)
-                           {| R.cfg_state := R.requeue_changed_controlled_owner
-               first_st first_drain_st (R.frame_owner first_fr);
+                           {| R.cfg_state := first_drain_st;
                               R.cfg_control := R.RunDrain first_drain_fr k |}
                            {| R.cfg_state := before;
                               R.cfg_control := R.RunDrain drain_fr k |}
@@ -16069,23 +15932,7 @@ Module Make
       all: now apply IHk.
     Qed.
 
-    Lemma summary_valid_requeue tf before after inserted owner :
-      summary_valid tf after owner ->
-      summary_valid tf
-        (R.requeue_changed_controlled_owner before after inserted) owner.
-    Proof.
-      intro H. apply (requeue_preserves (fun st => summary_valid tf st owner));
-        auto using summary_valid_enqueue.
-    Qed.
 
-    Lemma continuation_history_requeue tf before after inserted k :
-      continuation_history tf after k ->
-      continuation_history tf
-        (R.requeue_changed_controlled_owner before after inserted) k.
-    Proof.
-      intro H. apply (requeue_preserves (fun st => continuation_history tf st k));
-        auto using continuation_history_enqueue.
-    Qed.
 
     Lemma materialize_solved_correctness :
       forall st x, Sem.solved (R.materialize st x) x.
@@ -16580,7 +16427,7 @@ Module Make
       all: destruct Hbelow as [Hlt Hbelow].
       all: destruct Hhistory as [Hhead Hhistory].
       all: split.
-      all: clear_requeue_view.
+
     all: try match goal with
       | |- evaluation_witness _ _ _ _ =>
           eapply evaluation_witness_set_value; [exact Hset |exact Hhead]
@@ -16606,7 +16453,7 @@ Module Make
       all: destruct Hbelow as [Hlt Hbelow].
       all: destruct Hhistory as [Hhead Hhistory].
       all: split.
-      all: clear_requeue_view.
+
     all: try match goal with
       | |- evaluation_witness _ _ _ _ =>
           eapply evaluation_witness_write_other_source;
@@ -16642,7 +16489,7 @@ Module Make
         destruct Habove as [-> | Habove];
         [exact Hlt |eapply Termination.rank_lt_trans_true; eauto]).
       all: split.
-      all: clear_requeue_view.
+
     all: try match goal with
       | |- evaluation_witness _ _ _ _ =>
           eapply evaluation_witness_pop_other;
@@ -16688,15 +16535,15 @@ Module Make
       pose proof (configuration_control_ranked Hranked) as Hcontrol_ranked.
       destruct control; cbn in Hordered, Hhistory, Hcontrol_ranked, Hstep.
       - destruct (R.queue_pop (R.queue st)) as [[owner rest]|];
-          try discriminate. inversion Hstep; subst; clear_requeue_view. exact I.
+          try discriminate. inversion Hstep; subst. exact I.
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; exact I.
       - destruct (R.queue_pop (R.queue st)) as [[owner rest]|];
           inversion Hstep; subst; exact I.
-      - inversion Hstep; subst; clear_requeue_view. cbn. split.
+      - inversion Hstep; subst. cbn. split.
         + apply initial_evaluation_witness.
           apply materialize_solved_correctness.
         + now apply continuation_history_materialize.
@@ -16705,7 +16552,7 @@ Module Make
         destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. cbn. split.
+        + inversion Hstep; subst. cbn. split.
           * now apply evaluation_ret_completed.
           * exact Hcontinuation.
         + set (observed := R.observe st t) in *.
@@ -16716,7 +16563,7 @@ Module Make
           { subst observed. now apply continuation_history_observe. }
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn. split; assumption.
+          * inversion Hstep; subst. cbn. split; assumption.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             change (Some
@@ -16726,7 +16573,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. cbn. split.
+            inversion Hstep; subst. cbn. split.
             -- eapply evaluation_witness_complete_get; [exact Hget |].
                unfold st0. destruct (R.is_materialized observed t);
                  [exact Hcurrent0 |now apply evaluation_witness_enqueue].
@@ -16751,7 +16598,7 @@ Module Make
             as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           assert (Hcurrent1 : evaluation_witness tf st1 fr1 r).
           { eapply evaluation_witness_side; eauto. }
           assert (Howner1 : R.frame_owner fr1 = R.frame_owner f).
@@ -16776,10 +16623,10 @@ Module Make
           { subst observed. now apply continuation_history_observe. }
           pose proof (evaluation_witness_spawn Hcurrent0) as Hnext.
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. cbn. split; assumption.
+          * inversion Hstep; subst. cbn. split; assumption.
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. cbn. split; assumption.
-            -- inversion Hstep; subst; clear_requeue_view. cbn. split.
+            -- inversion Hstep; subst. cbn. split; assumption.
+            -- inversion Hstep; subst. cbn. split.
                ++ apply evaluation_witness_materialize.
                   now apply evaluation_witness_enqueue.
                ++ apply continuation_history_materialize.
@@ -16788,13 +16635,13 @@ Module Make
           [Hpending_ranked Hcontinuation_ranked]].
         destruct Hhistory as [Hcurrent Hcontinuation].
         destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. cbn. split.
+        + inversion Hstep; subst. cbn. split.
           * eapply completed_witness_same_solver_view;
               [apply publish_targets_same_solver_view |exact Hcurrent].
           * eapply continuation_history_same_solver_view;
               [apply publish_targets_same_solver_view |exact Hcontinuation].
         + destruct (S.mem target (R.frame_current_targets f)) eqn:Hmem.
-          * inversion Hstep; subst; clear_requeue_view. cbn. split; assumption.
+          * inversion Hstep; subst. cbn. split; assumption.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -16802,7 +16649,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             assert (Hcurrent1 : completed_witness tf st1 f t).
             { eapply completed_witness_dead_side; eauto. }
             assert (Hcontinuation1 : continuation_history tf st1 c).
@@ -16817,22 +16664,22 @@ Module Make
       - destruct Hcontrol_ranked as [Hframe_ranked Hcontinuation_ranked].
         destruct Hhistory as [Hcurrent Hcontinuation].
         destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. cbn.
+        inversion Hstep; subst. cbn.
         assert (Howner : R.frame_owner fr1 = R.frame_owner f)
           by (eapply set_value_frame_owner; eauto). split.
-        + rewrite Howner. apply summary_valid_requeue.
+        + rewrite Howner.
           eapply completed_witness_set_value_summary; eauto.
-        + apply continuation_history_requeue.
+        +
           eapply continuation_history_set_value; eauto.
       - destruct Hcontrol_ranked as [Hframe_ranked Hcontinuation_ranked].
         destruct Hhistory as [Hsummary Hcontinuation].
         destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           eapply continuation_history_same_solver_view;
             [apply reset_registered_cells_same_solver_view
             |exact Hcontinuation].
         + destruct (V.eq_dec next (R.frame_owner f)) as [Heq | Hneq].
-          * inversion Hstep; subst; clear_requeue_view. cbn. split.
+          * inversion Hstep; subst. cbn. split.
             -- apply initial_evaluation_witness. exact (proj1 Hsummary).
             -- eapply continuation_history_pop_above.
                ++ unfold R.queue_pop. rewrite Hqueue. reflexivity.
@@ -16840,7 +16687,7 @@ Module Make
                ++ left. reflexivity.
                ++ exact Hcontinuation.
           * destruct (R.rank_lt st (R.frame_owner f) next) eqn:Hlt.
-            -- inversion Hstep; subst; clear_requeue_view. cbn. split.
+            -- inversion Hstep; subst. cbn. split.
                ++ eapply summary_valid_pop_other.
                   ** unfold R.queue_pop. rewrite Hqueue. reflexivity.
                   ** intro Hback. apply Hneq. symmetry. exact Hback.
@@ -16850,13 +16697,13 @@ Module Make
                   ** exact Hordered.
                   ** now right.
                   ** exact Hcontinuation.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                eapply continuation_history_same_solver_view;
                  [apply reset_registered_cells_same_solver_view
                  |exact Hcontinuation].
       - destruct c; cbn in Hhistory, Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
+        + inversion Hstep; subst. exact I.
         + destruct Hhistory as [Hcurrent Hcontinuation].
           change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
@@ -16865,13 +16712,13 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. cbn. split.
+          inversion Hstep; subst. cbn. split.
           * eapply evaluation_witness_complete_get; eauto.
           * eapply continuation_history_complete_get; eauto.
-        + inversion Hstep; subst; clear_requeue_view. exact Hhistory.
-        + inversion Hstep; subst; clear_requeue_view. exact Hhistory.
-        + inversion Hstep; subst; clear_requeue_view. exact Hhistory.
-        + inversion Hstep; subst; clear_requeue_view. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
+        + inversion Hstep; subst. exact Hhistory.
     Qed.
 
     Lemma summary_valid_complete_get :
@@ -16900,13 +16747,6 @@ Module Make
       apply queue_insert_members. now right.
     Qed.
 
-    Lemma queued_requeue before after inserted x :
-      queued after x ->
-      queued (R.requeue_changed_controlled_owner before after inserted) x.
-    Proof.
-      intro H. apply (requeue_preserves (fun st => queued st x));
-        auto using queued_enqueue.
-    Qed.
 
     Lemma queued_materialize :
       forall st inserted x,
@@ -17022,8 +16862,7 @@ Module Make
           {| R.cfg_state := st; R.cfg_control := R.RunCommit fr direct k |} /\
         R.set_value st fr direct = (st', fr') /\
         after =
-          {| R.cfg_state := R.requeue_changed_controlled_owner st st'
-               (R.frame_owner fr); R.cfg_control := R.RunDrain fr' k |} /\
+          {| R.cfg_state := st'; R.cfg_control := R.RunDrain fr' k |} /\
         x = R.frame_owner fr.
 
     Lemma queued_step_scheduled :
@@ -17036,31 +16875,31 @@ Module Make
       intros tf [st control] after x Hqueued Hstep.
       destruct control; cbn in Hstep.
       - destruct (R.queue st) as [|owner rest] eqn:Hqueue;
-          try discriminate. inversion Hstep; subst; clear_requeue_view.
+          try discriminate. inversion Hstep; subst.
         unfold queued in Hqueued. cbn in Hqueued.
         rewrite Hqueue in Hqueued. cbn in Hqueued.
         destruct Hqueued as [-> | Hqueued]; [right; now left |now left].
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; left; now apply queued_observe_preserved.
       - destruct (R.queue st) as [|owner rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. unfold queued in Hqueued. cbn in Hqueued.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. unfold queued in Hqueued. cbn in Hqueued.
           rewrite Hqueue in Hqueued. cbn in Hqueued.
           destruct Hqueued as [-> | Hqueued]; [right; now left |now left].
-      - inversion Hstep; subst; clear_requeue_view. left. now apply queued_materialize.
+      - inversion Hstep; subst. left. now apply queued_materialize.
       - destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + set (observed := R.observe st t) in *.
           assert (Hqueued0 : queued observed x)
             by (subst observed; now apply queued_observe_preserved).
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             change (Some
@@ -17070,7 +16909,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. left. eapply queued_complete_get;
+            inversion Hstep; subst. left. eapply queued_complete_get;
               [exact Hget |]. unfold st0.
             destruct (R.is_materialized observed t);
               [exact Hqueued0 |now apply queued_enqueue].
@@ -17085,7 +16924,7 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           assert (Hqueued1 : queued st1 x)
             by (eapply queued_write_side; eauto).
           unfold R.continue_side. destruct changed.
@@ -17097,15 +16936,15 @@ Module Make
           assert (Hqueued0 : queued observed x)
             by (subst observed; now apply queued_observe_preserved).
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. now left.
-            -- inversion Hstep; subst; clear_requeue_view. left. apply queued_materialize.
+            -- inversion Hstep; subst. now left.
+            -- inversion Hstep; subst. left. apply queued_materialize.
                now apply queued_enqueue.
       - destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + destruct (S.mem target (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -17113,7 +16952,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             assert (Hqueued1 : queued st1 x)
               by (eapply queued_write_side; eauto).
             unfold R.continue_dead. destruct changed.
@@ -17122,29 +16961,29 @@ Module Make
                  [now left |left; now apply queued_enqueue].
             -- now left.
       - destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. left. apply queued_requeue. eapply queued_set_value; eauto.
+        inversion Hstep; subst. left.  eapply queued_set_value; eauto.
       - destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. left.
+        + inversion Hstep; subst. left.
           eapply queued_same_solver_view;
             [apply reset_registered_cells_same_solver_view |exact Hqueued].
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. unfold queued in Hqueued. cbn in Hqueued.
+          * inversion Hstep; subst. unfold queued in Hqueued. cbn in Hqueued.
             rewrite Hqueue in Hqueued. cbn in Hqueued.
             destruct Hqueued as [Hqueued | Hqueued].
             -- subst x. right. now left.
             -- now left.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view. unfold queued in Hqueued.
+            -- inversion Hstep; subst. unfold queued in Hqueued.
                cbn in Hqueued. rewrite Hqueue in Hqueued. cbn in Hqueued.
                destruct Hqueued as [Hqueued | Hqueued].
                ++ subst x. right. now left.
                ++ now left.
-            -- inversion Hstep; subst; clear_requeue_view. left.
+            -- inversion Hstep; subst. left.
                eapply queued_same_solver_view;
                  [apply reset_registered_cells_same_solver_view |exact Hqueued].
       - destruct c; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
         + change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
              {| R.cfg_state := st1;
@@ -17152,11 +16991,11 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. left. eapply queued_complete_get; eauto.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+          inversion Hstep; subst. left. eapply queued_complete_get; eauto.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
     Qed.
 
     Lemma active_step_scheduled_or_commit :
@@ -17169,15 +17008,15 @@ Module Make
     Proof.
       intros tf [st control] after x Hactive Hstep.
       destruct control; cbn in Hactive, Hstep; try contradiction.
-      - inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+      - inversion Hstep; subst. right. left. exact Hactive.
       - destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
         + set (observed := R.observe st t) in *.
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. right. left. cbn. right. exact Hactive.
+          * inversion Hstep; subst. right. left. cbn. right. exact Hactive.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             change (Some
@@ -17187,7 +17026,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. right. left.
+            inversion Hstep; subst. right. left.
             destruct Hactive as [Howner | Hactive].
             -- left. rewrite (@complete_get_frame_owner
                  st0 f t st1 fr1 value Hget). exact Howner.
@@ -17201,7 +17040,7 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           assert (Howner : R.frame_owner fr1 = R.frame_owner f).
           { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
               as H. cbn in H. symmetry. exact H. }
@@ -17213,14 +17052,14 @@ Module Make
           * right. left. cbn. rewrite Howner. exact Hactive.
         + set (observed := R.observe st t) in *.
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+          * inversion Hstep; subst. right. left. exact Hactive.
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. right. left. cbn. right. exact Hactive.
-            -- inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+            -- inversion Hstep; subst. right. left. cbn. right. exact Hactive.
+            -- inversion Hstep; subst. right. left. exact Hactive.
       - destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
         + destruct (S.mem target (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+          * inversion Hstep; subst. right. left. exact Hactive.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -17228,7 +17067,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             unfold R.continue_dead. destruct changed.
             -- destruct (R.rank_lt st1 (R.frame_owner f) target &&
                  negb (R.is_materialized st1 target))%bool.
@@ -17237,17 +17076,17 @@ Module Make
             -- right. left. cbn. exact Hactive.
       - destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
         destruct Hactive as [Howner | Hactive].
-        + inversion Hstep; subst; clear_requeue_view. right. right.
+        + inversion Hstep; subst. right. right.
           exists st, f, t, c, st1, fr1.
           repeat split; try reflexivity; assumption.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
       - destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. right. left. cbn. right. exact Hactive.
+          * inversion Hstep; subst. right. left. cbn. right. exact Hactive.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view. right. left. cbn. right. exact Hactive.
-            -- inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+            -- inversion Hstep; subst. right. left. cbn. right. exact Hactive.
+            -- inversion Hstep; subst. right. left. exact Hactive.
       - destruct c; cbn in Hactive, Hstep.
         + contradiction.
         + contradiction.
@@ -17258,15 +17097,15 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. right. left.
+          inversion Hstep; subst. right. left.
           destruct Hactive as [Howner | Hactive].
           * left. rewrite (@complete_get_frame_owner
               st f t st1 fr1 value Hget). exact Howner.
           * right. exact Hactive.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
+        + inversion Hstep; subst. right. left. exact Hactive.
     Qed.
 
     Definition aggregate_bounded (st : R.state) (target : V.t) : Prop :=
@@ -17404,27 +17243,27 @@ Module Make
       intros tf [st control] after target Hbounded Hstep.
       destruct control; cbn in Hstep.
       - destruct (R.queue st); try discriminate.
-        inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        inversion Hstep; subst. right. right. exact Hbounded.
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; right; right;
             subst observed; now apply aggregate_bounded_observe.
       - destruct (R.queue st); cbn in Hstep;
           inversion Hstep; subst; right; right; exact Hbounded.
-      - inversion Hstep; subst; clear_requeue_view. right. right.
+      - inversion Hstep; subst. right. right.
         now apply aggregate_bounded_materialize.
       - destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
         + set (observed := R.observe st t) in *.
           assert (Hbounded0 : aggregate_bounded observed target)
             by (subst observed; now apply aggregate_bounded_observe).
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded0.
+          * inversion Hstep; subst. right. right. exact Hbounded0.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             change (Some
@@ -17434,7 +17273,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. right. right.
+            inversion Hstep; subst. right. right.
             eapply aggregate_bounded_complete_get; [exact Hget |].
             unfold st0. destruct (R.is_materialized observed t);
               [exact Hbounded0 |now apply aggregate_bounded_enqueue].
@@ -17449,7 +17288,7 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           destruct (V.eq_dec target t) as [-> | Hneq].
           * unfold R.continue_side. destruct changed.
             -- destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
@@ -17470,16 +17309,16 @@ Module Make
           assert (Hbounded0 : aggregate_bounded observed target)
             by (subst observed; now apply aggregate_bounded_observe).
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded0.
+          * inversion Hstep; subst. right. right. exact Hbounded0.
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded0.
-            -- inversion Hstep; subst; clear_requeue_view. right. right.
+            -- inversion Hstep; subst. right. right. exact Hbounded0.
+            -- inversion Hstep; subst. right. right.
                apply aggregate_bounded_materialize.
                now apply aggregate_bounded_enqueue.
       - destruct l as [|dead remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
         + destruct (S.mem dead (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+          * inversion Hstep; subst. right. right. exact Hbounded.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f dead D.bottom in
@@ -17487,7 +17326,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f dead D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             destruct (V.eq_dec target dead) as [-> | Hneq].
             -- unfold R.continue_dead. destruct changed.
                ++ destruct (R.rank_lt st1 (R.frame_owner f) dead &&
@@ -17506,23 +17345,23 @@ Module Make
                      right; right; now apply aggregate_bounded_enqueue].
                ++ right. right. exact Hbounded1.
       - destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. right. right.
+        inversion Hstep; subst. right. right.
         eapply aggregate_bounded_set_value; eauto.
       - destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right.
+        + inversion Hstep; subst. right. right.
           eapply aggregate_bounded_same_solver_view;
             [apply reset_registered_cells_same_solver_view |exact Hbounded].
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+          * inversion Hstep; subst. right. right. exact Hbounded.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
-            -- inversion Hstep; subst; clear_requeue_view. right. right.
+            -- inversion Hstep; subst. right. right. exact Hbounded.
+            -- inversion Hstep; subst. right. right.
                eapply aggregate_bounded_same_solver_view;
                  [apply reset_registered_cells_same_solver_view
                  |exact Hbounded].
       - destruct c; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
         + change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
              {| R.cfg_state := st1;
@@ -17530,12 +17369,12 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. right. right.
+          inversion Hstep; subst. right. right.
           eapply aggregate_bounded_complete_get; eauto.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
+        + inversion Hstep; subst. right. right. exact Hbounded.
     Qed.
 
     Lemma next_config_aggregate_guarded :
@@ -17560,7 +17399,7 @@ Module Make
           [st [fr [direct [k [st' [fr'
             [-> [Hset [-> ->]]]]]]]]].
         unfold aggregate_bounded. cbn. unfold R.aggregate.
-        clear_requeue_view.
+
         rewrite (@set_value_contributions st fr direct st' fr' Hset).
         eapply set_value_aggregate_sound. exact Hset.
       - eapply aggregate_bounded_step_guarded; eauto.
@@ -17578,7 +17417,7 @@ Module Make
       intros tf [st control] after owner Hhistory Hsummary Hstep.
       destruct control; cbn in Hhistory, Hstep.
       - destruct (R.queue st) as [|head rest] eqn:Hqueue;
-          try discriminate. inversion Hstep; subst; clear_requeue_view.
+          try discriminate. inversion Hstep; subst.
         destruct (V.eq_dec owner head) as [-> | Hneq].
         + right. left. now left.
         + right. right. eapply summary_valid_pop_other.
@@ -17586,32 +17425,32 @@ Module Make
           * exact Hneq.
           * exact Hsummary.
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; right; right;
             subst observed; now apply summary_valid_observe.
       - destruct (R.queue st) as [|head rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst.
           destruct (V.eq_dec owner head) as [-> | Hneq].
           * right. left. now left.
           * right. right. eapply summary_valid_pop_other.
             -- unfold R.queue_pop. rewrite Hqueue. reflexivity.
             -- exact Hneq.
             -- exact Hsummary.
-      - inversion Hstep; subst; clear_requeue_view. right. right.
+      - inversion Hstep; subst. right. right.
         now apply summary_valid_materialize.
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
         + destruct r; cbn -[R.observe R.complete_get R.enqueue
             R.record_side_input R.write_side_contribution R.continue_side
             R.materialize] in Hstep.
-          * inversion Hstep; subst; clear_requeue_view. right. left. now left.
+          * inversion Hstep; subst. right. left. now left.
           * set (observed := R.observe st t) in *.
             destruct (negb (R.is_materialized observed t) &&
               R.rank_lt observed (R.frame_owner f) t)%bool.
-            -- inversion Hstep; subst; clear_requeue_view. right. left. cbn. now right; left.
+            -- inversion Hstep; subst. right. left. cbn. now right; left.
             -- set (st0 := if R.is_materialized observed t
                  then observed else R.enqueue observed t) in *.
                change (Some
@@ -17621,7 +17460,7 @@ Module Make
                  Some after) in Hstep.
                destruct (R.complete_get st0 f t)
                  as [[st1 fr1] value] eqn:Hget.
-               inversion Hstep; subst; clear_requeue_view. right. left. left.
+               inversion Hstep; subst. right. left. left.
                symmetry. eapply complete_get_frame_owner; eauto.
           * set (observed := R.observe st t) in *.
             change (Some
@@ -17633,7 +17472,7 @@ Module Make
               as [fr1 input] eqn:Hrecord.
             destruct (R.write_side_contribution observed fr1 t input)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             assert (Howner : R.frame_owner fr1 = R.frame_owner f).
             { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
                 as H. cbn in H. symmetry. exact H. }
@@ -17645,20 +17484,20 @@ Module Make
             -- right. left. cbn. left. symmetry. exact Howner.
           * set (observed := R.observe st t) in *.
             destruct (R.is_materialized observed t).
-            -- inversion Hstep; subst; clear_requeue_view. right. left. now left.
+            -- inversion Hstep; subst. right. left. now left.
             -- destruct (R.rank_lt observed (R.frame_owner f) t).
-               ++ inversion Hstep; subst; clear_requeue_view. right. left. cbn. now right; left.
-               ++ inversion Hstep; subst; clear_requeue_view. right. left. now left.
+               ++ inversion Hstep; subst. right. left. cbn. now right; left.
+               ++ inversion Hstep; subst. right. left. now left.
         + destruct r; cbn -[R.observe R.complete_get R.enqueue
             R.record_side_input R.write_side_contribution R.continue_side
             R.materialize] in Hstep.
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+          * inversion Hstep; subst. right. right. exact Hsummary.
           * set (observed := R.observe st t) in *.
             assert (Hsummary0 : summary_valid tf observed owner)
               by (subst observed; now apply summary_valid_observe).
             destruct (negb (R.is_materialized observed t) &&
               R.rank_lt observed (R.frame_owner f) t)%bool.
-            -- inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary0.
+            -- inversion Hstep; subst. right. right. exact Hsummary0.
             -- set (st0 := if R.is_materialized observed t
                  then observed else R.enqueue observed t) in *.
                change (Some
@@ -17668,7 +17507,7 @@ Module Make
                  Some after) in Hstep.
                destruct (R.complete_get st0 f t)
                  as [[st1 fr1] value] eqn:Hget.
-               inversion Hstep; subst; clear_requeue_view. right. right.
+               inversion Hstep; subst. right. right.
                eapply summary_valid_complete_get; [exact Hget |].
                unfold st0. destruct (R.is_materialized observed t);
                  [exact Hsummary0 |now apply summary_valid_enqueue].
@@ -17684,7 +17523,7 @@ Module Make
               as [fr1 input] eqn:Hrecord.
             destruct (R.write_side_contribution observed fr1 t input)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             assert (Hsummary1 : summary_valid tf st1 owner).
             { eapply summary_valid_write_other_source;
                 [exact Hwrite | |exact Hsummary0].
@@ -17700,18 +17539,18 @@ Module Make
             assert (Hsummary0 : summary_valid tf observed owner)
               by (subst observed; now apply summary_valid_observe).
             destruct (R.is_materialized observed t).
-            -- inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary0.
+            -- inversion Hstep; subst. right. right. exact Hsummary0.
             -- destruct (R.rank_lt observed (R.frame_owner f) t).
-               ++ inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary0.
-               ++ inversion Hstep; subst; clear_requeue_view. right. right.
+               ++ inversion Hstep; subst. right. right. exact Hsummary0.
+               ++ inversion Hstep; subst. right. right.
                   apply summary_valid_materialize.
                   now apply summary_valid_enqueue.
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
         + destruct l as [|dead remaining]; cbn in Hstep.
-          * inversion Hstep; subst; clear_requeue_view. right. left. now left.
+          * inversion Hstep; subst. right. left. now left.
           * destruct (S.mem dead (R.frame_current_targets f)).
-            -- inversion Hstep; subst; clear_requeue_view. right. left. now left.
+            -- inversion Hstep; subst. right. left. now left.
             -- change (Some
                 (let '(st1, changed) :=
                    R.write_side_contribution st f dead D.bottom in
@@ -17719,7 +17558,7 @@ Module Make
                 Some after) in Hstep.
                destruct (R.write_side_contribution st f dead D.bottom)
                  as [st1 changed] eqn:Hwrite.
-               inversion Hstep; subst; clear_requeue_view. unfold R.continue_dead.
+               inversion Hstep; subst. unfold R.continue_dead.
                destruct changed.
                ++ destruct (R.rank_lt st1 (R.frame_owner f) dead &&
                     negb (R.is_materialized st1 dead))%bool.
@@ -17727,9 +17566,9 @@ Module Make
                   ** right. left. cbn. now left.
                ++ right. left. cbn. now left.
         + destruct l as [|dead remaining]; cbn in Hstep.
-          * inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+          * inversion Hstep; subst. right. right. exact Hsummary.
           * destruct (S.mem dead (R.frame_current_targets f)).
-            -- inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+            -- inversion Hstep; subst. right. right. exact Hsummary.
             -- change (Some
                 (let '(st1, changed) :=
                    R.write_side_contribution st f dead D.bottom in
@@ -17737,7 +17576,7 @@ Module Make
                 Some after) in Hstep.
                destruct (R.write_side_contribution st f dead D.bottom)
                  as [st1 changed] eqn:Hwrite.
-               inversion Hstep; subst; clear_requeue_view.
+               inversion Hstep; subst.
                assert (Hsummary1 : summary_valid tf st1 owner)
                  by (eapply summary_valid_write_other_source; eauto).
                unfold R.continue_dead. destruct changed.
@@ -17748,19 +17587,19 @@ Module Make
                ++ right. right. exact Hsummary1.
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hother].
-        + right. right. apply summary_valid_requeue.
+        + right. right.
           eapply completed_witness_set_value_summary; eauto.
-        + right. right. apply summary_valid_requeue.
+        + right. right.
           eapply summary_valid_set_value_other; eauto.
       - destruct Hhistory as [Hframe Hcontinuation].
         destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right.
+        + inversion Hstep; subst. right. right.
           eapply summary_valid_same_solver_view;
             [apply reset_registered_cells_same_solver_view |exact Hsummary].
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view.
+          * inversion Hstep; subst.
             destruct (V.eq_dec owner (R.frame_owner f)) as [-> | Hneq].
             -- right. left. now left.
             -- right. right. eapply summary_valid_pop_other.
@@ -17768,20 +17607,20 @@ Module Make
                ++ exact Hneq.
                ++ exact Hsummary.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                destruct (V.eq_dec owner next) as [-> | Hneq].
                ++ right. left. now left.
                ++ right. right. eapply summary_valid_pop_other.
                   ** unfold R.queue_pop. rewrite Hqueue. reflexivity.
                   ** exact Hneq.
                   ** exact Hsummary.
-            -- inversion Hstep; subst; clear_requeue_view. right. right.
+            -- inversion Hstep; subst. right. right.
                eapply summary_valid_same_solver_view;
                  [apply reset_registered_cells_same_solver_view
                  |exact Hsummary].
       - destruct c; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
         + change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
              {| R.cfg_state := st1;
@@ -17789,12 +17628,12 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view. right. right.
+          inversion Hstep; subst. right. right.
           eapply summary_valid_complete_get; eauto.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
-        + inversion Hstep; subst; clear_requeue_view. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
+        + inversion Hstep; subst. right. right. exact Hsummary.
     Qed.
 
     Definition expects_get (owner : V.t) (k : R.continuation) : Prop :=
@@ -17849,24 +17688,24 @@ Module Make
       intros tf [st control] after Hconsistent Hhistory Hstep.
       destruct control; cbn in Hconsistent, Hhistory, Hstep.
       - destruct (R.queue st); try discriminate.
-        inversion Hstep; subst; clear_requeue_view. split; exact I.
+        inversion Hstep; subst. split; exact I.
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; cbn; repeat split; exact I.
       - destruct (R.queue st); cbn in Hstep;
           inversion Hstep; subst; cbn; repeat split; exact I.
-      - inversion Hstep; subst; clear_requeue_view. exact Hconsistent.
+      - inversion Hstep; subst. exact Hconsistent.
       - destruct Hconsistent as [Hexpect Hcontinuation].
         destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. split; assumption.
+        + inversion Hstep; subst. split; assumption.
         + set (observed := R.observe st t) in *.
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. cbn. split; [reflexivity |].
+          * inversion Hstep; subst. cbn. split; [reflexivity |].
             split; assumption.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
@@ -17877,7 +17716,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view. split.
+            inversion Hstep; subst. split.
             -- rewrite (@complete_get_frame_owner
                  st0 f t st1 fr1 value Hget). exact Hexpect.
             -- exact Hcontinuation.
@@ -17890,7 +17729,7 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           assert (Howner : R.frame_owner fr1 = R.frame_owner f).
           { pose proof (f_equal (fun p => R.frame_owner (fst p)) Hrecord)
               as H. cbn in H. symmetry. exact H. }
@@ -17904,16 +17743,16 @@ Module Make
           * cbn. split; [now rewrite Howner |exact Hcontinuation].
         + set (observed := R.observe st t) in *.
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. split; assumption.
+          * inversion Hstep; subst. split; assumption.
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. cbn. split; [exact I |].
+            -- inversion Hstep; subst. cbn. split; [exact I |].
                split; assumption.
-            -- inversion Hstep; subst; clear_requeue_view. split; assumption.
+            -- inversion Hstep; subst. split; assumption.
       - destruct Hconsistent as [Hexpect Hcontinuation].
         destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. split; assumption.
+        + inversion Hstep; subst. split; assumption.
         + destruct (S.mem target (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. split; assumption.
+          * inversion Hstep; subst. split; assumption.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -17921,7 +17760,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view. unfold R.continue_dead. destruct changed.
+            inversion Hstep; subst. unfold R.continue_dead. destruct changed.
             -- destruct (R.rank_lt st1 (R.frame_owner f) target &&
                  negb (R.is_materialized st1 target))%bool.
                ++ cbn. split; [exact I |]. split; assumption.
@@ -17929,25 +17768,25 @@ Module Make
             -- cbn. split; assumption.
       - destruct Hconsistent as [Hexpect Hcontinuation].
         destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view. split.
+        inversion Hstep; subst. split.
         + rewrite (@set_value_frame_owner st f t st1 fr1 Hset).
           exact Hexpect.
         + exact Hcontinuation.
       - destruct Hconsistent as [Hexpect Hcontinuation].
         destruct Hhistory as [Hsummary Hhistory].
         destruct (R.queue st) as [|next rest] eqn:Hqueue; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view.
+        + inversion Hstep; subst.
           destruct c; cbn in Hexpect, Hcontinuation |- *;
             split; try exact I; try exact Hcontinuation.
           rewrite <- Hexpect. eapply solved_same_solver_view;
             [apply reset_registered_cells_same_solver_view
             |exact (proj1 Hsummary)].
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. split; assumption.
+          * inversion Hstep; subst. split; assumption.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view. cbn. split; [exact I |].
+            -- inversion Hstep; subst. cbn. split; [exact I |].
                split; assumption.
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                destruct c; cbn in Hexpect, Hcontinuation |- *;
                  split; try exact I; try exact Hcontinuation.
                rewrite <- Hexpect. eapply solved_same_solver_view;
@@ -17955,8 +17794,8 @@ Module Make
                  |exact (proj1 Hsummary)].
       - destruct Hconsistent as [Hready Hcontinuation].
         destruct c; cbn in Hready, Hcontinuation, Hstep.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
-        + inversion Hstep; subst; clear_requeue_view. exact I.
+        + inversion Hstep; subst. exact I.
+        + inversion Hstep; subst. exact I.
         + change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
              {| R.cfg_state := st1;
@@ -17964,15 +17803,15 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           destruct Hcontinuation as [Hexpect Hcontinuation]. split.
           * rewrite (@complete_get_frame_owner st f t st1 fr1 value Hget).
             exact Hexpect.
           * exact Hcontinuation.
-        + inversion Hstep; subst; clear_requeue_view. exact Hcontinuation.
-        + inversion Hstep; subst; clear_requeue_view. exact Hcontinuation.
-        + inversion Hstep; subst; clear_requeue_view. exact Hcontinuation.
-        + inversion Hstep; subst; clear_requeue_view. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
+        + inversion Hstep; subst. exact Hcontinuation.
     Qed.
 
     Lemma materialize_solved_origin_correctness :
@@ -18033,27 +17872,27 @@ Module Make
       intros tf [st control] after x Hconsistent Hhistory Hsolved Hstep.
       destruct control; cbn in Hconsistent, Hhistory, Hstep.
       - destruct (R.queue st); try discriminate.
-        inversion Hstep; subst; clear_requeue_view. now left.
+        inversion Hstep; subst. now left.
       - destruct l as [|root remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + set (observed := R.observe st root) in *.
           destruct (R.is_materialized observed root);
             inversion Hstep; subst; left; subst observed;
             exact (@solved_observe_back st root x Hsolved).
       - destruct (R.queue st); cbn in Hstep;
           inversion Hstep; subst; now left.
-      - inversion Hstep; subst; clear_requeue_view.
+      - inversion Hstep; subst.
         destruct (@materialize_solved_origin_correctness st t x Hsolved)
           as [Hbefore | ->]; [now left |right; right; now left].
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + set (observed := R.observe st t) in *.
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. left. subst observed.
+          * inversion Hstep; subst. left. subst observed.
             exact (@solved_observe_back st t x Hsolved).
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
@@ -18064,7 +17903,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.complete_get st0 f t)
               as [[st1 fr1] value] eqn:Hget.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             destruct (@complete_get_solved_origin
               st0 f t st1 fr1 value x Hget Hsolved) as [Hst0 | ->].
             -- left. unfold st0 in Hst0.
@@ -18088,7 +17927,7 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input] eqn:Hrecord.
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed] eqn:Hwrite.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           destruct (write_side_contribution_same_read_view Hwrite)
             as [Hsigma _].
           left. apply solved_observe_back with (observed := t).
@@ -18100,12 +17939,12 @@ Module Make
           * cbn in Hlookup. now rewrite Hsigma in Hlookup.
         + set (observed := R.observe st t) in *.
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. left. subst observed.
+          * inversion Hstep; subst. left. subst observed.
             exact (@solved_observe_back st t x Hsolved).
           * destruct (R.rank_lt observed (R.frame_owner f) t).
-            -- inversion Hstep; subst; clear_requeue_view. left. subst observed.
+            -- inversion Hstep; subst. left. subst observed.
                exact (@solved_observe_back st t x Hsolved).
-            -- inversion Hstep; subst; clear_requeue_view.
+            -- inversion Hstep; subst.
                destruct (@materialize_solved_origin_correctness
                  (R.enqueue observed t) t x Hsolved) as [Horigin | ->].
                ++ left. subst observed.
@@ -18114,9 +17953,9 @@ Module Make
                   unfold queued. apply queue_insert_members. now left.
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
         + destruct (S.mem target (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -18124,7 +17963,7 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed] eqn:Hwrite.
-            inversion Hstep; subst; clear_requeue_view.
+            inversion Hstep; subst.
             destruct (write_side_contribution_same_read_view Hwrite)
               as [Hsigma _].
             left. destruct Hsolved as [value Hlookup]. exists value.
@@ -18135,26 +17974,26 @@ Module Make
             -- cbn in Hlookup. now rewrite Hsigma in Hlookup.
       - destruct Hhistory as [Hcurrent Hcontinuation].
         destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
-        inversion Hstep; subst; clear_requeue_view.
+        inversion Hstep; subst.
         destruct (@set_value_solved_origin
           st f t st1 fr1 x Hset Hsolved) as [Hbefore | ->].
         + now left.
         + left. exact (proj1 Hcurrent).
       - destruct (R.queue st) as [|next rest]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. left.
+        + inversion Hstep; subst. left.
           eapply solved_same_solver_view_back;
             [apply reset_registered_cells_same_solver_view |exact Hsolved].
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. now left.
+          * inversion Hstep; subst. now left.
           * destruct (R.rank_lt st (R.frame_owner f) next).
-            -- inversion Hstep; subst; clear_requeue_view. now left.
-            -- inversion Hstep; subst; clear_requeue_view. left.
+            -- inversion Hstep; subst. now left.
+            -- inversion Hstep; subst. left.
                eapply solved_same_solver_view_back;
                  [apply reset_registered_cells_same_solver_view |exact Hsolved].
       - destruct Hconsistent as [Hready Hcontinuation].
         destruct c; cbn in Hready, Hstep.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
         + change (Some
             (let '(st1, fr1, value) := R.complete_get st f t in
              {| R.cfg_state := st1;
@@ -18162,15 +18001,15 @@ Module Make
             Some after) in Hstep.
           destruct (R.complete_get st f t)
             as [[st1 fr1] value] eqn:Hget.
-          inversion Hstep; subst; clear_requeue_view.
+          inversion Hstep; subst.
           destruct (@complete_get_solved_origin
             st f t st1 fr1 value x Hget Hsolved) as [Hbefore | ->].
           * now left.
           * left. exact Hready.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
-        + inversion Hstep; subst; clear_requeue_view. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
+        + inversion Hstep; subst. now left.
     Qed.
 
     Lemma next_config_preserves_solved :
@@ -18220,7 +18059,7 @@ Module Make
           * right. right. destruct Hcommit as
               [st [fr [direct [k [st' [fr'
                 [-> [Hset [-> ->]]]]]]]]].
-            cbn in Hhistory. apply summary_valid_requeue.
+            cbn in Hhistory.
             eapply completed_witness_set_value_summary; eauto.
             exact (proj1 Hhistory).
         + eapply summary_valid_step_guarded; eauto.
@@ -18286,21 +18125,21 @@ Module Make
         set (observed := R.observe st root) in *.
         destruct Hpending as [Heq | Hpending].
         + subst x. destruct (R.is_materialized observed root) eqn:Hmat.
-          * inversion Hstep; subst; clear_requeue_view. left. now apply materialized_solved.
-          * inversion Hstep; subst; clear_requeue_view. right. right. now left.
+          * inversion Hstep; subst. left. now apply materialized_solved.
+          * inversion Hstep; subst. right. right. now left.
         + destruct (R.is_materialized observed root);
             inversion Hstep; subst; right; left; exact Hpending.
       - destruct (R.queue st); cbn in Hstep;
           inversion Hstep; subst; right; left; exact Hpending.
-      - inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+      - inversion Hstep; subst. right. left. exact Hpending.
       - destruct r; cbn -[R.observe R.complete_get R.enqueue
           R.record_side_input R.write_side_contribution R.continue_side
           R.materialize] in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
         + set (observed := R.observe st t) in *.
           destruct (negb (R.is_materialized observed t) &&
             R.rank_lt observed (R.frame_owner f) t)%bool.
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+          * inversion Hstep; subst. right. left. exact Hpending.
           * set (st0 := if R.is_materialized observed t
               then observed else R.enqueue observed t) in *.
             change (Some
@@ -18309,7 +18148,7 @@ Module Make
                   R.cfg_control := R.RunRhs fr1 (r value) c |}) =
               Some after) in Hstep.
             destruct (R.complete_get st0 f t). destruct p.
-            inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+            inversion Hstep; subst. right. left. exact Hpending.
         + set (observed := R.observe st t) in *.
           change (Some
             (let '(fr1, input) := R.record_side_input f t t0 in
@@ -18319,20 +18158,20 @@ Module Make
           destruct (R.record_side_input f t t0) as [fr1 input].
           destruct (R.write_side_contribution observed fr1 t input)
             as [st1 changed].
-          inversion Hstep; subst; clear_requeue_view. unfold R.continue_side.
+          inversion Hstep; subst. unfold R.continue_side.
           destruct changed;
             destruct (R.rank_lt st1 (R.frame_owner fr1) t &&
               negb (R.is_materialized st1 t))%bool;
             cbn; right; left; exact Hpending.
         + set (observed := R.observe st t) in *.
           destruct (R.is_materialized observed t).
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+          * inversion Hstep; subst. right. left. exact Hpending.
           * destruct (R.rank_lt observed (R.frame_owner f) t);
               inversion Hstep; subst; right; left; exact Hpending.
       - destruct l as [|target remaining]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
         + destruct (S.mem target (R.frame_current_targets f)).
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+          * inversion Hstep; subst. right. left. exact Hpending.
           * change (Some
               (let '(st1, changed) :=
                  R.write_side_contribution st f target D.bottom in
@@ -18340,28 +18179,28 @@ Module Make
               Some after) in Hstep.
             destruct (R.write_side_contribution st f target D.bottom)
               as [st1 changed].
-            inversion Hstep; subst; clear_requeue_view. unfold R.continue_dead.
+            inversion Hstep; subst. unfold R.continue_dead.
             destruct changed;
               destruct (R.rank_lt st1 (R.frame_owner f) target &&
                 negb (R.is_materialized st1 target))%bool;
               cbn; right; left; exact Hpending.
       - destruct (R.set_value st f t).
-        inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+        inversion Hstep; subst. right. left. exact Hpending.
       - destruct (R.queue st) as [|next rest]; cbn in Hstep.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
         + destruct (V.eq_dec next (R.frame_owner f)).
-          * inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+          * inversion Hstep; subst. right. left. exact Hpending.
           * destruct (R.rank_lt st (R.frame_owner f) next);
               inversion Hstep; subst; right; left; exact Hpending.
       - destruct c; cbn in Hpending, Hstep.
         + contradiction.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
         + destruct (R.complete_get st f t). destruct p.
-          inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
-        + inversion Hstep; subst; clear_requeue_view. right. left. exact Hpending.
+          inversion Hstep; subst. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
+        + inversion Hstep; subst. right. left. exact Hpending.
     Qed.
 
     Lemma roots_guarded_step :

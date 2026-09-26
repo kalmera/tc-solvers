@@ -9,7 +9,7 @@ all: regenerate
 	$(MAKE) test
 RocqMakefile: _RocqProject
 	$(ROCQ) makefile -f _RocqProject -o $@
-# Keep concrete examples separate from the public theorem/assumption audits.
+# Keep concrete examples separate from the generic public theorem files.
 PROOF_TESTS := $(wildcard rocq/solvers/slr/*/tests/*.v) \
  rocq/solvers/slr/restarting/NarrowingStabilityCounterexample.v
 PROOF_SOURCES := $(filter-out $(PROOF_TESTS) rocq/extraction/%.v,$(filter %.v,$(shell cat _RocqProject)))

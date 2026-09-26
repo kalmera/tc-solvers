@@ -24,17 +24,23 @@ Module Make
   Module Sem := Internal.Sem.
   Module R := Internal.R.
 
+  Definition solved (final : R.state) (owner : V.t) : Prop :=
+    exists value, M.lookup (R.sigma final) owner = Some value.
+
   Definition replay (final : R.state) :=
     Sem.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
+
+  Definition owner_post_solution (tf : R.ConstraintSystem.system)
+    (final : R.state) (owner : V.t) : Prop :=
+    forall direct reads effects, replay final (tf owner) direct reads effects ->
+      D.leq direct (R.sigma_value final owner) = true /\
+      (forall target value, List.In (target,value) effects ->
+        D.leq value (R.sigma_value final target) = true).
 
   Definition correct_final_state (tf : R.ConstraintSystem.system)
     (roots : list V.t) (final : R.state) : Prop :=
     forall owner, List.In owner roots ->
-      (exists value, M.lookup (R.sigma final) owner = Some value) /\
-      (forall direct reads effects, replay final (tf owner) direct reads effects ->
-        D.leq direct (R.sigma_value final owner) = true /\
-        (forall target value, List.In (target,value) effects ->
-          D.leq value (R.sigma_value final target) = true)).
+      solved final owner /\ owner_post_solution tf final owner.
 
   Theorem total_correct : forall tf roots,
     Sem.finite_system tf roots ->
