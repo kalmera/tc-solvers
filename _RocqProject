@@ -31,6 +31,7 @@ rocq/solvers/slr/narrowing_fixed_point/proofs/LeastSolution.v
 rocq/solvers/slr/narrowing_fixed_point/proofs/Replay.v
 rocq/solvers/slr/narrowing_fixed_point/proofs/Transitions.v
 rocq/solvers/slr/narrowing_fixed_point/tests/Chain.v
+rocq/solvers/slr/narrowing_fixed_point/tests/SpawnClosure.v
 rocq/solvers/slr/narrowing_fixed_point/tests/Instances.v
 rocq/solvers/slr/narrowing_fixed_point/tests/LeastInstances.v
 rocq/solvers/slr/restarting/NarrowingStabilityCounterexample.v

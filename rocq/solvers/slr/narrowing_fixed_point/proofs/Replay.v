@@ -9411,11 +9411,32 @@ End Termination.
     Definition rhs := Sem.ConstraintSyntax.rhs.
     Definition observation := Sem.observation.
     Definition observed_sides := Sem.observed_sides.
+    Definition observed_spawns := Sem.observed_spawns.
+    Definition observes_at := Sem.observes_at.
     Definition rhs_observes := Sem.rhs_observes.
     Definition rhs_eval_with := Sem.rhs_eval_with.
     Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
     Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
   End TransferView.
   Module Spec := SolverSpecifications.Make V D M TransferView Store.
+
+  Theorem successful_run_spawn_correct : forall fuel tf roots final,
+    N.solve_fuel fuel tf roots = Some final -> Spec.correct_final_state tf roots final.
+  Proof.
+    intros fuel tf roots final Hrun. split.
+    - intros owner Hin.
+      exact (proj1 (@successful_run_correct fuel tf roots final Hrun owner Hin)).
+    - intros owner Hsolved.
+      destruct (@successful_run_replay_post_solution fuel tf roots final Hrun owner Hsolved)
+        as [Hexists Hpost]. split; [exact Hexists |]. split; [exact Hpost |].
+      intros result Hobs target Hin.
+      destruct (@Demand.successful_run_spawned fuel tf roots final Hrun owner Hsolved)
+        as [canonical [Hcanonical [Hreplay Hspawned]]].
+      assert (Hcanonical_at : Sem.observes_at (R.sigma_value final) (tf owner) canonical).
+      { split; [exact Hcanonical |]. intros read value Hread.
+        eapply replay_read_value; eassumption. }
+      pose proof (Sem.observes_at_deterministic Hcanonical_at Hobs) as Hequal.
+      subst result. exact (Hspawned target Hin).
+  Qed.
 
 End Make.

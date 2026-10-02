@@ -4245,11 +4245,11 @@ Definition total_correct :=
  fun tf roots finite =>
  match @sufficient_fuel tf roots finite return
    (exists fuel final, N.solve_fuel fuel tf roots = Some final /\
-      Sem.correct_final_state tf roots final)
+      Replay.Spec.correct_final_state tf roots final)
  with
  | ex_intro _ fuel (ex_intro _ final Hsolve) =>
    ex_intro _ fuel (ex_intro _ final
-     (conj Hsolve (@Replay.successful_run_correct fuel tf roots final Hsolve)))
+     (conj Hsolve (@Replay.successful_run_spawn_correct fuel tf roots final Hsolve)))
  end.
 Module N := Replay.Front.N.
 Module Spec := Replay.Spec.
@@ -4265,7 +4265,7 @@ Proof.
  intros tf roots finite Hmono.
  destruct (@sufficient_fuel tf roots finite) as [fuel [final Hsolve]].
  exists fuel, final. split; [exact Hsolve |]. split.
- - exact (@Replay.successful_run_correct fuel tf roots final Hsolve).
+ - exact (@Replay.successful_run_spawn_correct fuel tf roots final Hsolve).
  - exact (@successful_run_fixedpoint fuel tf roots final Hsolve Hmono).
 Qed.
 End WithCollections.

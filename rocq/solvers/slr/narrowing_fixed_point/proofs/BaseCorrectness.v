@@ -35,6 +35,20 @@ Module Make
     ConstraintSemantics.Make V D ConstraintSyntax.
   Include ConstraintSemantics.
 
+  Lemma rhs_observes_spawns_supported : forall supported body result,
+    rhs_supported supported body -> rhs_observes body result ->
+    forall target, List.In target (observed_spawns result) -> supported target.
+  Proof.
+    intros supported body result Hsupported Hobs. revert Hsupported.
+    induction Hobs; intros Hsupported observed Hin;
+      inversion Hsupported; subst; cbn in Hin.
+    - contradiction.
+    - eapply IHHobs; [apply H2 |exact Hin].
+    - eapply IHHobs; eassumption.
+    - destruct Hin as [<- | Hin]; [exact H1 |].
+      eapply IHHobs; eassumption.
+  Qed.
+
   Definition step
     (tf : R.ConstraintSystem.system) (before after : R.config) : Prop :=
     R.next_config tf before = Some after.
@@ -59,6 +73,31 @@ Module Make
     steps tf (R.initial_config initial) (terminal_config final) /\
     quiescent final.
 
+  Lemma observes_at_deterministic : forall values body left right,
+    observes_at values body left -> observes_at values body right -> left = right.
+  Proof.
+    intros values body left right [Hleft Hleftreads]. revert right Hleftreads.
+    induction Hleft; intros right Hleftreads [Hright Hrightreads];
+      inversion Hright; subst; cbn in *.
+    - reflexivity.
+    - assert (Heq : value = value0).
+      { rewrite (Hleftreads target value (or_introl eq_refl)),
+          (Hrightreads target value0 (or_introl eq_refl)). reflexivity. }
+      subst value0.
+      assert (Htail : result = result0).
+      { apply IHHleft.
+        - intros observed v Hin. apply Hleftreads. right; exact Hin.
+        - split; [exact H2 |].
+          intros observed v Hin. apply Hrightreads. right; exact Hin. }
+      subst result0. reflexivity.
+    - assert (Htail : result = result0) by
+        (apply IHHleft; [exact Hleftreads |split; assumption]).
+      subst result0. reflexivity.
+    - assert (Htail : result = result0) by
+        (apply IHHleft; [exact Hleftreads |split; assumption]).
+      subst result0. reflexivity.
+  Qed.
+
   Definition solved (st : R.state) (x : V.t) : Prop :=
     exists value, M.lookup (R.sigma st) x = Some value.
 
@@ -74,6 +113,7 @@ Module Make
       List.In (target, value) effects ->
       D.leq value (R.sigma_value st target) = true.
 
+  (** Numerical replay bounds; public owner_post_solution also requires spawn closure. *)
   Definition rhs_post_solution
     (st : R.state) (owner : V.t)
     (body : R.ConstraintSystem.rhs) : Prop :=

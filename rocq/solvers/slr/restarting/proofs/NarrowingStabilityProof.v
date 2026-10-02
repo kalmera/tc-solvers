@@ -538,15 +538,15 @@ Module Make
   Qed.
 
   Lemma invariant_trace_observes :
-    forall body direct reads sides,
-      Inv.rhs_trace body direct reads sides ->
+    forall st body direct reads sides,
+      Inv.rhs_trace st body direct reads sides ->
       exists result,
         trace_observes body result /\
         observed_direct result = direct /\
         observed_reads result = reads /\
         observed_sides result = sides.
   Proof.
-    intros body direct reads sides Htrace.
+    intros st body direct reads sides Htrace.
     induction Htrace.
     - exists
         {| observed_direct := direct;
@@ -669,53 +669,7 @@ Module Make
         [constructor; exact Hresult | exact Hbottom].
   Qed.
 
-  Lemma trace_observes_invariant_trace :
-    forall body result,
-      trace_observes body result ->
-      Inv.rhs_trace body
-        (observed_direct result)
-        (observed_reads result)
-        (observed_sides result).
-  Proof.
-    intros body result Hresult.
-    induction Hresult; cbn; constructor; assumption.
-  Qed.
 
-  Lemma rhs_context_bottom_completion :
-    forall root current prefix_reads prefix_sides supported,
-      Inv.rhs_context root current
-        prefix_reads prefix_sides ->
-      Sem.rhs_supported supported current ->
-      exists suffix result,
-        trace_observes current suffix /\
-        reads_are_bottom suffix /\
-        trace_observes root result /\
-        observed_reads result =
-          prefix_reads ++ observed_reads suffix /\
-        observed_sides result =
-          prefix_sides ++ observed_sides suffix.
-  Proof.
-    intros root current prefix_reads prefix_sides supported
-      Hcontext Hsupported.
-    destruct
-      (supported_bottom_trace_observes Hsupported)
-      as [suffix [Hsuffix Hbottom]].
-    pose proof
-      (trace_observes_invariant_trace Hsuffix)
-      as Hsuffix_trace.
-    pose proof
-      (Hcontext
-        (observed_direct suffix)
-        (observed_reads suffix)
-        (observed_sides suffix)
-        Hsuffix_trace)
-      as Hroot_trace.
-    destruct (invariant_trace_observes Hroot_trace)
-      as [result
-        [Hresult [Hdirect [Hreads Hsides]]]].
-    exists suffix, result.
-    repeat split; assumption.
-  Qed.
 
   Lemma full_rhs_context_bottom_completion :
     forall root current prefix_reads prefix_sides
@@ -916,9 +870,9 @@ Module Make
   Qed.
 
   Lemma current_get_in_upper_reads :
-    forall root target next prefix_reads prefix_sides supported upper,
-      Inv.rhs_context root (R.ConstraintSystem.Get target next)
-        prefix_reads prefix_sides ->
+    forall root target next prefix_reads prefix_sides prefix_spawns supported upper,
+      full_rhs_context root (R.ConstraintSystem.Get target next)
+        prefix_reads prefix_sides prefix_spawns ->
       Sem.rhs_supported supported (R.ConstraintSystem.Get target next) ->
       rhs_dependencies_monotone root ->
       trace_observes root upper ->
@@ -926,13 +880,13 @@ Module Make
       exists upper_value,
         List.In (target, upper_value) (observed_reads upper).
   Proof.
-    intros root target next prefix_reads prefix_sides supported upper
+    intros root target next prefix_reads prefix_sides prefix_spawns supported upper
       Hcontext Hsupported Hdependencies Hupper Hprefix.
-    destruct (@rhs_context_bottom_completion
+    destruct (@full_rhs_context_bottom_completion
       root (R.ConstraintSystem.Get target next)
-      prefix_reads prefix_sides supported Hcontext Hsupported)
+      prefix_reads prefix_sides prefix_spawns supported Hcontext Hsupported)
       as [suffix [lower
-        [Hsuffix [Hbottom [Hlower [Hreads Hsides]]]]]].
+        [Hsuffix [Hbottom [Hlower [Hdirect [Hreads [Hsides Hspawns]]]]]]]].
     assert (Hcommon : common_read_values_le lower upper).
     { eapply bottom_completion_common_reads; eassumption. }
     pose proof (Hdependencies lower upper Hlower Hupper Hcommon)
@@ -991,6 +945,35 @@ Module Make
     exact (Total.invariant_history Hinv).
   Qed.
 
+  Lemma invariant_prefix_observes : forall st root current reads sides,
+    Inv.rhs_context st root current reads sides ->
+    forall suffix, trace_observes current suffix ->
+    exists result, trace_observes root result /\
+      observed_sides result = sides ++ observed_sides suffix.
+  Proof.
+    intros st root current reads sides Hprefix. induction Hprefix;
+      intros suffix Hsuffix.
+    - exists suffix. split; [exact Hsuffix |reflexivity].
+    - destruct (IHHprefix suffix Hsuffix) as [result [Hresult Hsides]].
+      exists {| observed_direct := observed_direct result;
+                observed_reads := (target, value) :: observed_reads result;
+                observed_sides := observed_sides result;
+                observed_spawns := observed_spawns result |}.
+      split; [constructor; exact Hresult |exact Hsides].
+    - destruct (IHHprefix suffix Hsuffix) as [result [Hresult Hsides]].
+      exists {| observed_direct := observed_direct result;
+                observed_reads := observed_reads result;
+                observed_sides := (target, raw) :: observed_sides result;
+                observed_spawns := observed_spawns result |}.
+      split; [constructor; exact Hresult |cbn; now rewrite Hsides].
+    - destruct (IHHprefix suffix Hsuffix) as [result [Hresult Hsides]].
+      exists {| observed_direct := observed_direct result;
+                observed_reads := observed_reads result;
+                observed_sides := observed_sides result;
+                observed_spawns := target :: observed_spawns result |}.
+      split; [constructor; exact Hresult |exact Hsides].
+  Qed.
+
   Lemma ordinary_reachable_side_impossible :
     forall tf roots (finite : Sem.finite_system tf roots)
       st fr target raw next k,
@@ -1012,19 +995,13 @@ Module Make
     destruct Hcontrol_supported as [_ [Hbody_supported _]].
     destruct (supported_trace_observes Hbody_supported)
       as [suffix Hsuffix].
-    pose proof (trace_observes_invariant_trace Hsuffix) as Hsuffix_trace.
     pose proof (reachable_control_history Hsteps) as Hhistory.
     cbn in Hhistory.
     destruct Hhistory as
       [[_ [prefix_reads [prefix_effects
         [Hcontext [Hreads [Heffects Hframe]]]]]] Hcontinuation].
-    pose proof (Hcontext
-      (observed_direct suffix)
-      (observed_reads suffix)
-      (observed_sides suffix)
-      Hsuffix_trace) as Hroot_trace.
-    destruct (invariant_trace_observes Hroot_trace)
-      as [result [Hresult [_ [_ Hsides]]]].
+    destruct (invariant_prefix_observes Hcontext Hsuffix)
+      as [result [Hresult Hsides]].
     pose proof (@ordinary_has_no_side_effects
       tf Hordinary (R.frame_owner fr) result Hresult) as Hnone.
     cbn in Hsides.
@@ -1531,23 +1508,6 @@ Module Make
     all: repeat split; reflexivity.
   Qed.
 
-  Lemma full_rhs_context_implies_rhs_context :
-    forall root current prefix_reads prefix_sides prefix_spawns,
-      full_rhs_context root current
-        prefix_reads prefix_sides prefix_spawns ->
-      Inv.rhs_context root current prefix_reads prefix_sides.
-  Proof.
-    intros root current prefix_reads prefix_sides prefix_spawns
-      Hfull direct reads sides Hsuffix.
-    destruct (invariant_trace_observes Hsuffix)
-      as [suffix [Hsuffix' [Hdirect [Hreads Hsides]]]].
-    destruct (Hfull suffix Hsuffix') as
-      [result [Hresult [Hresult_direct
-        [Hresult_reads [Hresult_sides Hresult_spawns]]]]].
-    pose proof (trace_observes_invariant_trace Hresult) as Htrace.
-    rewrite Hresult_direct, Hresult_reads, Hresult_sides in Htrace.
-    now rewrite Hdirect, Hreads, Hsides in Htrace.
-  Qed.
 
   Lemma wave_evaluation_get :
     forall tf supported st fr target next st' fr' value,
@@ -1563,14 +1523,9 @@ Module Make
         [Hupper [Hcontext [Hprefix [Hdirect
           [Hupper_reads [Hupper_spawns [Hreads Hspawns]]]]]]]]]]]
       Hget.
-    assert (Hrhs_context : Inv.rhs_context
-      (tf (R.frame_owner fr)) (R.ConstraintSystem.Get target next)
-      prefix_reads prefix_sides).
-    { now apply full_rhs_context_implies_rhs_context
-        with (prefix_spawns := prefix_spawns). }
     destruct (@current_get_in_upper_reads
-      (tf (R.frame_owner fr)) target next prefix_reads prefix_sides
-      supported upper Hrhs_context Hsupported Hdependencies Hupper Hprefix)
+      (tf (R.frame_owner fr)) target next prefix_reads prefix_sides prefix_spawns
+      supported upper Hcontext Hsupported Hdependencies Hupper Hprefix)
       as [upper_value Hupper_read].
     destruct (Hupper_reads target upper_value Hupper_read)
       as [Htarget_solved Htarget_below].
@@ -1630,12 +1585,9 @@ Module Make
       [upper [prefix_reads [prefix_sides [prefix_spawns
         [Hupper [Hcontext [Hprefix [Hdirect
           [Hupper_reads [Hupper_spawns [Hreads Hspawns]]]]]]]]]]].
-    pose proof (@full_rhs_context_implies_rhs_context
-      (tf (R.frame_owner fr)) (R.ConstraintSystem.Get target next)
-      prefix_reads prefix_sides prefix_spawns Hcontext) as Hrhs_context.
     destruct (@current_get_in_upper_reads
-      (tf (R.frame_owner fr)) target next prefix_reads prefix_sides
-      supported upper Hrhs_context Hsupported Hdependencies Hupper Hprefix)
+      (tf (R.frame_owner fr)) target next prefix_reads prefix_sides prefix_spawns
+      supported upper Hcontext Hsupported Hdependencies Hupper Hprefix)
       as [upper_value Hupper_read].
     exact (proj1 (Hupper_reads target upper_value Hupper_read)).
   Qed.
@@ -1845,7 +1797,12 @@ Module Make
     - contradiction.
     - destruct Hactive as [-> | Hactive].
       + right. exists t, c. now split.
-      + left. eapply Inv.continuation_history_active_solved; eassumption.
+      + pose proof (@Inv.continuation_history_active_solved tf
+          (R.materialize st t) c variable Hhistory Hactive) as Hsolved.
+        destruct (@Inv.materialize_solved_origin_correctness st t variable Hsolved)
+          as [Hsolved0 | ->].
+        * now left.
+        * right. exists t, c. now split.
     - destruct Hhistory as [Hframe Hk].
       destruct Hactive as [-> | Hactive].
       + left. exact (proj1 Hframe).

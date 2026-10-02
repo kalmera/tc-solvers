@@ -44,7 +44,7 @@ Module Make
 
   Theorem successful_run_correct : forall fuel tf roots final,
     R.solve_fuel fuel tf roots = Some final -> correct_final_state tf roots final.
-  Proof. exact Internal.solve_fuel_correct. Qed.
+  Proof. exact Internal.solve_fuel_spawn_correct. Qed.
 
   Corollary total_correct : forall tf roots,
     Sem.finite_system tf roots ->

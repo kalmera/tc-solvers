@@ -22,7 +22,8 @@ Module Make
     forall target value, List.In (target, value) effects ->
       D.leq value (values target) = true.
 
-  Definition post_solution_on
+  (** Numerical satisfaction only; callers separately establish spawn closure. *)
+  Definition value_post_solution_on
     (tf : V.t -> rhs) (support : list V.t) (values : V.t -> D.t) : Prop :=
     forall owner, List.In owner support ->
     forall result, observes_at values (tf owner) result ->
@@ -44,7 +45,7 @@ Module Make
 
   (** Unsolved constraints are harmless under source strictness. The caller
       proves solvedness and local satisfaction from the solver invariants. *)
-  Lemma bottom_completion_is_post_solution :
+  Lemma bottom_completion_is_value_post_solution :
     forall tf support roots values (solved : V.t -> Prop),
       (forall x, {solved x} + {~ solved x}) ->
       source_strict_on tf support roots ->
@@ -54,7 +55,7 @@ Module Make
         forall result, observes_at values (tf owner) result ->
         D.leq (observed_direct result) (values owner) = true /\
         side_effects_below values (observed_sides result)) ->
-      post_solution_on tf support values.
+      value_post_solution_on tf support values.
   Proof.
     intros tf support roots values solved Hdec Hstrict Hroots Hbottom Hlocal
       owner Hin result Hobs.

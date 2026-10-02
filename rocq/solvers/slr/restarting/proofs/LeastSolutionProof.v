@@ -951,7 +951,7 @@ Module Make
     destruct (side_effects_le Heffects target payload Hinlower)
       as [upper_payload [Hinupper Hpayload]].
     pose proof (Hpost owner Howner upper_result
-      (conj Hupper Hupper_reads)) as [_ Hpost_sides].
+      (conj Hupper Hupper_reads)) as [_ [Hpost_sides _]].
     eapply DL.leq_trans; [exact Hpayload |].
     now apply Hpost_sides with (target := target).
   Qed.
@@ -1427,15 +1427,20 @@ Module Make
     intros fuel tf roots finite final Hstrict Hrun.
     pose proof (@Total.successful_run_terminates_to
       fuel tf roots final Hrun) as Hterm.
-    eapply (@Strict.bottom_completion_is_post_solution _ _ Sem.observes_at
+    eapply Sem.post_solution_on_intro.
+    - intros owner Hin result [Hobs _] target Hspawn.
+      eapply Sem.rhs_observes_spawns_supported with
+        (supported := fun y => List.In y (Sem.support finite));
+        [exact (Sem.system_supported finite owner Hin) |exact Hobs |exact Hspawn].
+    - eapply (@Strict.bottom_completion_is_value_post_solution _ _ Sem.observes_at
       Sem.observed_direct Sem.observed_sides tf (Sem.support finite) roots
       (R.sigma_value final) (Sem.solved final)).
-    - apply solved_dec.
-    - exact Hstrict.
-    - intros x Hin. exact (proj1 (@Total.solve_fuel_correct
+      + apply solved_dec.
+      + exact Hstrict.
+      + intros x Hin. exact (proj1 (@Total.solve_fuel_correct
         fuel tf roots final Hrun x Hin)).
-    - apply unsolved_value_bottom.
-    - intros owner Hin Hsolved result Hobs.
+      + apply unsolved_value_bottom.
+      + intros owner Hin Hsolved result Hobs.
       eapply terminal_solved_observation_post; eauto.
   Qed.
 
@@ -1528,7 +1533,13 @@ Module Make
       Sem.correct_final_state tf variables final ->
       post_solution_on tf variables (R.sigma_value final).
   Proof.
-    intros tf variables final Hclosed Hcorrect owner Howner result Hobserves.
+    intros tf variables final Hclosed Hcorrect.
+    eapply Sem.post_solution_on_intro.
+    - intros owner Hin result [Hobs _] target Hspawn.
+      eapply Sem.rhs_observes_spawns_supported with
+        (supported := fun y => List.In y variables);
+        [exact (closed_system_supported Hclosed owner Hin) |exact Hobs |exact Hspawn].
+    - intros owner Howner result Hobserves.
     pose proof (Hcorrect owner Howner) as [Howner_solved Howner_post].
     assert (Hall_solved : forall target,
       List.In target variables -> Sem.solved final target).

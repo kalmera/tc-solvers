@@ -36,7 +36,7 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
 
   Theorem successful_run_correct : forall fuel tf roots final,
     N.solve_fuel fuel tf roots = Some final -> correct_final_state tf roots final.
-  Proof. exact Internal.successful_run_correct. Qed.
+  Proof. exact Internal.successful_run_spawn_correct. Qed.
 
   Corollary total_correct : forall tf roots,
     Sem.finite_system tf roots ->

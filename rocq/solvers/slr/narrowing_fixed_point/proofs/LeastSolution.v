@@ -955,7 +955,7 @@ Module Total := Replay.B.
     destruct (side_effects_le Heffects target payload Hinlower)
       as [upper_payload [Hinupper Hpayload]].
     pose proof (Hpost owner Howner upper_result
-      (conj Hupper Hupper_reads)) as [_ Hpost_sides].
+      (conj Hupper Hupper_reads)) as [_ [Hpost_sides _]].
     eapply DL.leq_trans; [exact Hpayload |].
     now apply Hpost_sides with (target := target).
   Qed.
@@ -1697,14 +1697,19 @@ Theorem successful_source_strict_solution fuel tf roots (finite : Sem.finite_sys
  post_solution_on tf (Sem.support finite) (R.sigma_value final).
 Proof.
  intros Hstrict Hrun.
- eapply (@Strict.bottom_completion_is_post_solution _ _ Sem.observes_at
+ eapply Sem.post_solution_on_intro.
+    - intros owner Hin result [Hobs _] target Hspawn.
+      eapply Sem.rhs_observes_spawns_supported with
+        (supported := fun y => List.In y (Sem.support finite));
+        [exact (@Sem.system_supported tf roots finite owner Hin) |exact Hobs |exact Hspawn].
+    - eapply (@Strict.bottom_completion_is_value_post_solution _ _ Sem.observes_at
  Sem.observed_direct Sem.observed_sides tf (Sem.support finite) roots
  (R.sigma_value final) (Sem.solved final)).
- - apply solved_dec.
- - exact Hstrict.
- - intros x Hin. exact (proj1 (@successful_run_correct fuel tf roots final Hrun x Hin)).
- - apply unsolved_value_bottom.
- - intros owner Hin Hsolved result Hobs. eapply successful_solved_observation_post;eassumption.
+   + apply solved_dec.
+   + exact Hstrict.
+   + intros x Hin. exact (proj1 (@successful_run_correct fuel tf roots final Hrun x Hin)).
+   + apply unsolved_value_bottom.
+   + intros owner Hin Hsolved result Hobs. eapply successful_solved_observation_post;eassumption.
 Qed.
 Definition finite_replay tf roots (finite : Sem.finite_system tf roots) : Replay.Sem.finite_system tf roots.
 Proof.

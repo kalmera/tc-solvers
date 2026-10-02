@@ -31,6 +31,12 @@ Both use first-discovery ranking and ordinary value idempotency of the combined
 update. Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
 The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
+`correct_final_state` requires every root to be materialized and every
+materialized unknown to satisfy `owner_post_solution`. Each constraint has a
+replay, satisfies its direct and side-contribution bounds, and has every spawn
+at the final valuation materialized. This covers spawned descendants as well
+as the roots. `common/ConstraintSemantics.v` likewise requires `post_solution_on`
+to include every observed spawn in its covered set.
 It supplies solvedness, replay, final-state correctness, operational monotonicity,
 absence of side effects, and narrowing fixedness parameterized by its input.
 The theorem files include these definitions and state the main results;
@@ -66,7 +72,9 @@ OneBox instance between its correctness and fixedness audits; the idempotent
 chain is a common instance, not a dependency on tests. `make proof-tests` checks
 the separate examples and counterexample. The new regression checks execute the
 solver and verify three RHS completions instead of a redundant fourth, phase
-changes under value idempotency, genuine self-read wakeups, and effectful fanout.
+changes under value idempotency, genuine self-read wakeups, effectful fanout,
+and recursive spawn closure. A missing-spawn regression shows that numerical
+satisfaction alone does not form a post-solution.
 They do not re-instantiate the full fixedness proof for each example.
 
 Restarting's auxiliary narrowing theorem and counterexample remain available as

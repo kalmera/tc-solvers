@@ -94,6 +94,19 @@ Module Make
         rhs_eval_with lookup next direct reads effects ->
         rhs_eval_with lookup (CS.Spawn target next) direct reads effects.
 
+  Lemma rhs_eval_reads_lookup : forall lookup body direct reads effects,
+    rhs_eval_with lookup body direct reads effects ->
+    forall target value, List.In (target, value) reads -> lookup target = Some value.
+  Proof.
+    intros lookup body direct reads effects Heval. induction Heval;
+      intros observed value' Hin; cbn in Hin.
+    - contradiction.
+    - destruct Hin as [Heq | Hin];
+        [inversion Heq; subst; exact H |now apply IHHeval].
+    - now apply IHHeval.
+    - now apply IHHeval.
+  Qed.
+
   Inductive rhs_supported
     (supported : V.t -> Prop) : CS.rhs -> Prop :=
   | SupportedRet :
@@ -151,7 +164,29 @@ Module Make
       forall result,
         observes_at values (tf owner) result ->
         D.leq (observed_direct result) (values owner) = true /\
-        valuation_side_effects_below values (observed_sides result).
+        valuation_side_effects_below values (observed_sides result) /\
+        list_included (observed_spawns result) variables.
+
+  (** The covered unknowns include every spawn encountered at this valuation. *)
+  Definition spawn_closed_on
+    (tf : CS.system) (variables : list V.t) (values : valuation) : Prop :=
+    forall owner, List.In owner variables ->
+      forall result, observes_at values (tf owner) result ->
+        list_included (observed_spawns result) variables.
+
+  Lemma post_solution_on_intro : forall tf variables values,
+    spawn_closed_on tf variables values ->
+    (forall owner, List.In owner variables ->
+      forall result, observes_at values (tf owner) result ->
+        D.leq (observed_direct result) (values owner) = true /\
+        valuation_side_effects_below values (observed_sides result)) ->
+    post_solution_on tf variables values.
+  Proof.
+    intros tf variables values Hclosed Hvalues owner Hin result Hobs.
+    destruct (Hvalues owner Hin result Hobs) as [Hdirect Hsides].
+    split; [exact Hdirect |]. split; [exact Hsides |].
+    exact (Hclosed owner Hin result Hobs).
+  Qed.
 
   Definition least_solution_on
     (tf : CS.system) (variables : list V.t) (values : valuation) : Prop :=

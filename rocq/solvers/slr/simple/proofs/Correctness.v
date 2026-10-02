@@ -31,6 +31,20 @@ Module Make
     ConstraintSemantics.Make V D ConstraintSyntax.
   Include ConstraintSemantics.
 
+  Lemma rhs_observes_spawns_supported : forall supported body result,
+    rhs_supported supported body -> rhs_observes body result ->
+    forall target, List.In target (observed_spawns result) -> supported target.
+  Proof.
+    intros supported body result Hsupported Hobs. revert Hsupported.
+    induction Hobs; intros Hsupported observed Hin;
+      inversion Hsupported; subst; cbn in Hin.
+    - contradiction.
+    - eapply IHHobs; [apply H2 |exact Hin].
+    - eapply IHHobs; eassumption.
+    - destruct Hin as [<- | Hin]; [exact H1 |].
+      eapply IHHobs; eassumption.
+  Qed.
+
   Definition step
     (tf : R.ConstraintSystem.system) (before after : R.config) : Prop :=
     R.next_config tf before = Some after.
@@ -67,6 +81,7 @@ Module Make
       List.In (target, value) effects ->
       D.leq value (R.sigma_value st target) = true.
 
+  (** Numerical replay bounds; public owner_post_solution also requires spawn closure. *)
   Definition rhs_post_solution
     (st : R.state) (owner : V.t)
     (body : R.ConstraintSystem.rhs) : Prop :=
@@ -9724,73 +9739,75 @@ Module Make
   Definition read_event := (V.t * D.t)%type.
   Definition side_effect := (V.t * D.t)%type.
 
-  Inductive rhs_trace :
+  Inductive rhs_trace (st : R.state) :
     R.ConstraintSystem.rhs ->
     D.t -> list read_event -> list side_effect -> Prop :=
   | TraceRet :
       forall direct,
-        rhs_trace (R.ConstraintSystem.Ret direct) direct [] []
+        rhs_trace st (R.ConstraintSystem.Ret direct) direct [] []
   | TraceGet :
       forall target value next direct reads effects,
-        rhs_trace (next value) direct reads effects ->
-        rhs_trace (R.ConstraintSystem.Get target next)
+        rhs_trace st (next value) direct reads effects ->
+        rhs_trace st (R.ConstraintSystem.Get target next)
           direct ((target, value) :: reads) effects
   | TraceSide :
       forall target raw next direct reads effects,
-        rhs_trace next direct reads effects ->
-        rhs_trace (R.ConstraintSystem.Side target raw next)
+        rhs_trace st next direct reads effects ->
+        rhs_trace st (R.ConstraintSystem.Side target raw next)
           direct reads ((target, raw) :: effects)
   | TraceSpawn :
       forall target next direct reads effects,
-        rhs_trace next direct reads effects ->
-        rhs_trace (R.ConstraintSystem.Spawn target next)
+        rhs_trace st next direct reads effects ->
+        Sem.solved st target ->
+        rhs_trace st (R.ConstraintSystem.Spawn target next)
           direct reads effects.
 
-  Inductive rhs_prefix :
+  Inductive rhs_prefix (st : R.state) :
     R.ConstraintSystem.rhs -> R.ConstraintSystem.rhs ->
     list read_event -> list side_effect -> Prop :=
   | PrefixHere :
-      forall body, rhs_prefix body body [] []
+      forall body, rhs_prefix st body body [] []
   | PrefixGet :
       forall target value next current reads effects,
-        rhs_prefix (next value) current reads effects ->
-        rhs_prefix (R.ConstraintSystem.Get target next) current
+        rhs_prefix st (next value) current reads effects ->
+        rhs_prefix st (R.ConstraintSystem.Get target next) current
           ((target, value) :: reads) effects
   | PrefixSide :
       forall target raw next current reads effects,
-        rhs_prefix next current reads effects ->
-        rhs_prefix (R.ConstraintSystem.Side target raw next) current
+        rhs_prefix st next current reads effects ->
+        rhs_prefix st (R.ConstraintSystem.Side target raw next) current
           reads ((target, raw) :: effects)
   | PrefixSpawn :
       forall target next current reads effects,
-        rhs_prefix next current reads effects ->
-        rhs_prefix (R.ConstraintSystem.Spawn target next) current
+        rhs_prefix st next current reads effects ->
+        Sem.solved st target ->
+        rhs_prefix st (R.ConstraintSystem.Spawn target next) current
           reads effects.
 
   Lemma rhs_prefix_snoc_get :
-    forall original target next reads effects value,
-      rhs_prefix original (R.ConstraintSystem.Get target next)
+    forall st original target next reads effects value,
+      rhs_prefix st original (R.ConstraintSystem.Get target next)
         reads effects ->
-      rhs_prefix original (next value)
+      rhs_prefix st original (next value)
         (reads ++ [(target, value)]) effects.
   Proof.
-    intros original target next reads effects value Hprefix.
+    intros st original target next reads effects value Hprefix.
     remember (R.ConstraintSystem.Get target next) as current eqn:Hcurrent.
     revert target next value Hcurrent.
     induction Hprefix; intros target0 next0 value0 Hcurrent.
     - inversion Hcurrent; subst. cbn. constructor. constructor.
     - cbn. constructor. eapply IHHprefix. exact Hcurrent.
     - cbn. constructor. eapply IHHprefix. exact Hcurrent.
-    - cbn. constructor. eapply IHHprefix. exact Hcurrent.
+    - cbn. constructor; [eapply IHHprefix; exact Hcurrent |assumption].
   Qed.
 
   Lemma rhs_prefix_snoc_side :
-    forall original target raw next reads effects,
-      rhs_prefix original (R.ConstraintSystem.Side target raw next)
+    forall st original target raw next reads effects,
+      rhs_prefix st original (R.ConstraintSystem.Side target raw next)
         reads effects ->
-      rhs_prefix original next reads (effects ++ [(target, raw)]).
+      rhs_prefix st original next reads (effects ++ [(target, raw)]).
   Proof.
-    intros original target raw next reads effects Hprefix.
+    intros st original target raw next reads effects Hprefix.
     remember (R.ConstraintSystem.Side target raw next)
       as current eqn:Hcurrent.
     revert target raw next Hcurrent.
@@ -9798,40 +9815,85 @@ Module Make
     - inversion Hcurrent; subst. cbn. constructor. constructor.
     - cbn. constructor. eapply IHHprefix. exact Hcurrent.
     - cbn. constructor. eapply IHHprefix. exact Hcurrent.
-    - cbn. constructor. eapply IHHprefix. exact Hcurrent.
+    - cbn. constructor; [eapply IHHprefix; exact Hcurrent |assumption].
   Qed.
 
   Lemma rhs_prefix_snoc_spawn :
-    forall original target next reads effects,
-      rhs_prefix original (R.ConstraintSystem.Spawn target next)
+    forall st original target next reads effects,
+      rhs_prefix st original (R.ConstraintSystem.Spawn target next)
         reads effects ->
-      rhs_prefix original next reads effects.
+      Sem.solved st target ->
+      rhs_prefix st original next reads effects.
   Proof.
-    intros original target next reads effects Hprefix.
+    intros st original target next reads effects Hprefix.
     remember (R.ConstraintSystem.Spawn target next) as current eqn:Hcurrent.
-    revert target next Hcurrent.
-    induction Hprefix; intros target0 next0 Hcurrent.
-    - inversion Hcurrent; subst. constructor. constructor.
-    - constructor. eapply IHHprefix. exact Hcurrent.
-    - constructor. eapply IHHprefix. exact Hcurrent.
-    - constructor. eapply IHHprefix. exact Hcurrent.
+    intro Hsolved. revert target next Hcurrent Hsolved.
+    induction Hprefix; intros target0 next0 Hcurrent Hsolved.
+    - inversion Hcurrent; subst. constructor; [constructor |exact Hsolved].
+    - constructor. eapply IHHprefix; eauto.
+    - constructor. eapply IHHprefix; eauto.
+    - constructor; [eapply IHHprefix; eauto |assumption].
   Qed.
 
   Lemma rhs_prefix_complete :
-    forall original direct reads effects,
-      rhs_prefix original (R.ConstraintSystem.Ret direct) reads effects ->
-      rhs_trace original direct reads effects.
+    forall st original direct reads effects,
+      rhs_prefix st original (R.ConstraintSystem.Ret direct) reads effects ->
+      rhs_trace st original direct reads effects.
   Proof.
-    intros original direct reads effects Hprefix.
+    intros st original direct reads effects Hprefix.
     remember (R.ConstraintSystem.Ret direct) as current eqn:Hcurrent.
     revert direct Hcurrent.
     induction Hprefix; intros direct0 Hcurrent.
     - inversion Hcurrent; subst. constructor.
     - constructor. eapply IHHprefix. exact Hcurrent.
     - constructor. eapply IHHprefix. exact Hcurrent.
-    - constructor. eapply IHHprefix. exact Hcurrent.
+    - constructor; [eapply IHHprefix; eauto |assumption].
   Qed.
 
+
+  Lemma rhs_trace_spawn_closed : forall st body direct reads effects,
+    rhs_trace st body direct reads effects ->
+    (forall target value, List.In (target, value) reads ->
+      M.lookup (R.sigma st) target = Some value) ->
+    forall result, Sem.observes_at (R.sigma_value st) body result ->
+    forall target, List.In target (Sem.observed_spawns result) -> Sem.solved st target.
+  Proof.
+    intros st body direct reads effects Htrace. induction Htrace;
+      intros Hagree result [Hobs Hreads] spawned Hin;
+      inversion Hobs; subst; cbn in *.
+    - contradiction.
+    - assert (Hvalue : value = value0).
+      { pose proof (Hreads target value0 (or_introl eq_refl)) as Hvalue0.
+        unfold R.sigma_value in Hvalue0. cbn in Hvalue0.
+        rewrite (Hagree target value (or_introl eq_refl)) in Hvalue0.
+        symmetry. exact Hvalue0. }
+      subst value0. eapply IHHtrace.
+      + intros read v Hread. apply Hagree. right. exact Hread.
+      + split; [eassumption |].
+        intros read v Hread. apply Hreads. right. exact Hread.
+      + exact Hin.
+    - eapply IHHtrace; [exact Hagree |split; eassumption |exact Hin].
+    - destruct Hin as [<- | Hin]; [assumption |].
+      eapply IHHtrace; [exact Hagree |split; eassumption |exact Hin].
+  Qed.
+
+  Lemma rhs_trace_carries : forall before after body direct reads effects,
+    (forall target, Sem.solved before target -> Sem.solved after target) ->
+    rhs_trace before body direct reads effects ->
+    rhs_trace after body direct reads effects.
+  Proof.
+    intros before after body direct reads effects Hcarry Htrace.
+    induction Htrace; constructor; auto.
+  Qed.
+
+  Lemma rhs_prefix_carries : forall before after root current reads effects,
+    (forall target, Sem.solved before target -> Sem.solved after target) ->
+    rhs_prefix before root current reads effects ->
+    rhs_prefix after root current reads effects.
+  Proof.
+    intros before after root current reads effects Hcarry Hprefix.
+    induction Hprefix; constructor; auto.
+  Qed.
   Definition reader_registered
     (st : R.state) (reader target : V.t) : Prop :=
     S.mem reader (R.lookup_set (R.readers st) target) = true.
@@ -9872,7 +9934,7 @@ Module Make
     (tf : R.ConstraintSystem.system) (st : R.state)
     (owner : V.t) (current : R.ConstraintSystem.rhs) : Prop :=
     exists reads effects,
-      rhs_prefix (tf owner) current reads effects /\
+      rhs_prefix st (tf owner) current reads effects /\
       reads_guarded st owner reads /\
       effects_recorded st owner effects /\
       effects_accumulated st owner effects.
@@ -9880,7 +9942,7 @@ Module Make
   Definition summary_valid
     (tf : R.ConstraintSystem.system) (st : R.state) (owner : V.t) : Prop :=
     exists direct reads effects,
-      rhs_trace (tf owner) direct reads effects /\
+      rhs_trace st (tf owner) direct reads effects /\
       reads_guarded st owner reads /\
       effects_recorded st owner effects /\
       D.leq direct (R.sigma_value st owner) = true.
@@ -10171,7 +10233,9 @@ Module Make
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
     exists reads, (effects ++ [(R.handle_variable target, raw)]).
     repeat split.
-    - eapply rhs_prefix_snoc_side. exact Hprefix.
+    - eapply rhs_prefix_snoc_side.
+      eapply rhs_prefix_carries with (before := st);
+        [intros; apply Progress.solved_side_ready; assumption |exact Hprefix].
     - apply reads_guarded_side_ready. exact Hreads.
     - eapply effects_recorded_side_ready; eauto.
     - apply effects_accumulated_side_ready. exact Haccumulated.
@@ -10366,7 +10430,9 @@ Module Make
     cbn. exists (reads ++ [(R.handle_variable target,
       R.sigma_value (R.get_ready_state st owner target)
         (R.handle_variable target))]), effects. repeat split.
-    - eapply rhs_prefix_snoc_get. exact Hprefix.
+    - eapply rhs_prefix_snoc_get.
+      eapply rhs_prefix_carries with (before := st);
+        [intros; apply Progress.solved_get_ready; assumption |exact Hprefix].
     - apply reads_guarded_get_ready. exact Hreads.
     - apply effects_recorded_get_ready. exact Hrecorded.
     - apply effects_accumulated_get_ready. exact Haccumulated.
@@ -10375,12 +10441,13 @@ Module Make
   Lemma rhs_progress_spawn :
     forall tf st owner target next,
       rhs_progress tf st owner (R.ConstraintSystem.Spawn target next) ->
+      Sem.solved st target ->
       rhs_progress tf st owner next.
   Proof.
     intros tf st owner target next
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try assumption.
-    eapply rhs_prefix_snoc_spawn. exact Hprefix.
+    intro Hsolved. exists reads, effects. repeat split; try assumption.
+    eapply rhs_prefix_snoc_spawn; eassumption.
   Qed.
 
   Lemma enqueue_queues_variable :
@@ -10534,7 +10601,9 @@ Module Make
     intros tf st owner direct Hrank Hqueue
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
     exists direct, reads, effects. repeat split.
-    - apply rhs_prefix_complete. exact Hprefix.
+    - apply rhs_prefix_complete.
+      eapply rhs_prefix_carries with (before := st);
+        [intros; apply Progress.solved_set_value; assumption |exact Hprefix].
     - eapply reads_guarded_set_value; eauto.
     - apply effects_recorded_set_value. exact Hrecorded.
     - apply set_value_direct_below.
@@ -10542,7 +10611,7 @@ Module Make
 
   Lemma guarded_trace_evaluates :
     forall st owner body direct reads effects,
-      rhs_trace body direct reads effects ->
+      rhs_trace st body direct reads effects ->
       reads_guarded st owner reads ->
       ~ queued st owner ->
       Sem.rhs_eval st body direct reads effects.
@@ -10687,7 +10756,10 @@ Module Make
   Proof.
     intros tf st owner target
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hdirect]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_materialize; exact Hsolved
+        |exact Htrace].
     - eapply Forall_impl; [|exact Hreads].
       intros. now apply read_guarded_materialize.
     - unfold R.materialize, R.is_materialized.
@@ -10702,7 +10774,10 @@ Module Make
   Proof.
     intros tf st observed next entry owner Hobserve
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hdirect]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; eapply Progress.solved_observe; eassumption
+        |exact Htrace].
     - eapply reads_guarded_observe; eauto.
     - unfold R.observe in Hobserve.
       destruct (R.Ranking.observe (R.ranking st) observed);
@@ -10718,7 +10793,10 @@ Module Make
   Proof.
     intros tf st owner inserted
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hdirect]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_enqueue_handle; exact Hsolved
+        |exact Htrace].
     - apply reads_guarded_enqueue_handle. exact Hreads.
     - exact Hrecorded.
     - exact Hdirect.
@@ -10732,7 +10810,10 @@ Module Make
   Proof.
     intros tf st active owner Hneq
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hdirect]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_start_evaluation; exact Hsolved
+        |exact Htrace].
     - eapply Forall_impl; [|exact Hreads]. intros.
       unfold R.start_evaluation, R.reset_local_sides.
       now apply read_guarded_materialize.
@@ -10749,7 +10830,10 @@ Module Make
   Proof.
     intros tf st summary_owner owner target
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hdirect]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_get_ready; exact Hsolved
+        |exact Htrace].
     - eapply Forall_impl; [|exact Hreads].
       intros [observed value] [Hsolved [Hregistered Hvalue]].
       repeat split.
@@ -10790,7 +10874,10 @@ Module Make
     intros tf st active direct owner Hrank Hqueue Hneq
       [summary_direct [reads [effects
         [Htrace [Hreads [Hrecorded Hbelow]]]]]].
-    exists summary_direct, reads, effects. repeat split; try exact Htrace.
+    exists summary_direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_set_value; exact Hsolved
+        |exact Htrace].
     - eapply reads_guarded_set_value; eauto.
     - apply effects_recorded_set_value. exact Hrecorded.
     - rewrite Payment.sigma_value_set_value_other by exact Hneq.
@@ -10805,7 +10892,10 @@ Module Make
   Proof.
     intros tf st active target raw owner Hneq
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hbelow]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_side_ready; exact Hsolved
+        |exact Htrace].
     - apply reads_guarded_side_ready. exact Hreads.
     - eapply effects_recorded_side_other; eauto.
     - rewrite Payment.sigma_value_side_ready. exact Hbelow.
@@ -10820,7 +10910,10 @@ Module Make
   Proof.
     intros tf st popped rest owner Hpop Hneq
       [direct [reads [effects [Htrace [Hreads [Hrecorded Hbelow]]]]]].
-    exists direct, reads, effects. repeat split; try exact Htrace.
+    exists direct, reads, effects. repeat split.
+    - eapply rhs_trace_carries with (before := st);
+        [intros other_target Hsolved; exact Hsolved
+        |exact Htrace].
     - eapply Forall_impl; [|exact Hreads].
       intros [target value] [Hsolved [Hregistered Hvalue]].
       repeat split; [exact Hsolved | |].
@@ -10848,13 +10941,16 @@ Module Make
         continuation_history tf st rest
     end.
 
+  (** A pending recursive solve materializes its child before the suspended
+      caller resumes, so its history accounts for that materialization. *)
   Definition control_history
     (tf : R.ConstraintSystem.system) (st : R.state)
     (control : R.control) : Prop :=
     match control with
     | R.RunLoop | R.RunSeeds _ | R.RunSeedLoop _ => True
-    | R.RunSolveOne _ rest | R.RunSolveOneLoop _ rest =>
-        continuation_history tf st rest
+    | R.RunSolveOne owner rest =>
+        continuation_history tf (R.materialize st (R.handle_variable owner)) rest
+    | R.RunSolveOneLoop _ rest => continuation_history tf st rest
     | R.RunRhs owner body rest =>
         rhs_progress tf st (R.handle_variable owner) body /\
         continuation_history tf st rest
@@ -10920,7 +11016,10 @@ Module Make
   Proof.
     intros tf st source body owner direct Hrank Hqueue
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_set_value; exact Hsolved
+        |exact Hprefix].
     - eapply reads_guarded_set_value; eauto.
     - apply effects_recorded_set_value. exact Hrecorded.
     - apply effects_accumulated_set_value. exact Haccumulated.
@@ -10952,7 +11051,10 @@ Module Make
   Proof.
     intros tf st active target raw source body Hneq
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_side_ready; exact Hsolved
+        |exact Hprefix].
     - apply reads_guarded_side_ready. exact Hreads.
     - eapply effects_recorded_side_other; eauto.
     - eapply effects_accumulated_side_other; eauto.
@@ -10965,7 +11067,10 @@ Module Make
   Proof.
     intros tf st owner body target
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_materialize; exact Hsolved
+        |exact Hprefix].
     - eapply Forall_impl; [|exact Hreads].
       intros. now apply read_guarded_materialize.
     - unfold R.materialize, R.is_materialized.
@@ -10981,7 +11086,10 @@ Module Make
   Proof.
     intros tf st active source body Hneq
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_start_evaluation; exact Hsolved
+        |exact Hprefix].
     - eapply Forall_impl; [|exact Hreads]. intros.
       unfold R.start_evaluation, R.reset_local_sides.
       now apply read_guarded_materialize.
@@ -11011,7 +11119,10 @@ Module Make
   Proof.
     intros tf st observed next entry owner body Hobserve
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; eapply Progress.solved_observe; eassumption
+        |exact Hprefix].
     - eapply reads_guarded_observe; eauto.
     - unfold R.observe in Hobserve.
       destruct (R.Ranking.observe (R.ranking st) observed);
@@ -11028,7 +11139,10 @@ Module Make
   Proof.
     intros tf st inserted owner body
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_enqueue_handle; exact Hsolved
+        |exact Hprefix].
     - apply reads_guarded_enqueue_handle. exact Hreads.
     - exact Hrecorded.
     - exact Haccumulated.
@@ -11041,7 +11155,10 @@ Module Make
   Proof.
     intros tf st source body owner target
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; apply Progress.solved_get_ready; exact Hsolved
+        |exact Hprefix].
     - eapply Forall_impl; [|exact Hreads].
       intros [observed value] [Hsolved [Hregistered Hvalue]].
       repeat split.
@@ -11092,7 +11209,10 @@ Module Make
   Proof.
     intros tf st popped rest owner body Hpop Hneq
       [reads [effects [Hprefix [Hreads [Hrecorded Haccumulated]]]]].
-    exists reads, effects. repeat split; try exact Hprefix.
+    exists reads, effects. repeat split.
+    - eapply rhs_prefix_carries with (before := st);
+        [intros other_target Hsolved; exact Hsolved
+        |exact Hprefix].
     - eapply Forall_impl; [|exact Hreads].
       intros [target value] [Hsolved [Hregistered Hvalue]].
       repeat split; [exact Hsolved | |].
@@ -11263,7 +11383,12 @@ Module Make
     forall tf st started owner body,
       rhs_progress tf st owner body ->
       rhs_progress tf (R.with_started st started) owner body.
-  Proof. intros. exact H. Qed.
+  Proof.
+    intros tf st started owner body [reads [effects [Hprefix Hrest]]].
+    exists reads, effects. split; [|exact Hrest].
+    eapply rhs_prefix_carries with (before := st);
+        [intros; assumption |exact Hprefix].
+  Qed.
 
   Lemma continuation_history_with_started :
     forall tf st started k,
@@ -11274,6 +11399,15 @@ Module Make
     intros. now apply rhs_progress_with_started.
   Qed.
 
+  Lemma summary_with_started : forall tf st started owner,
+    summary_valid tf st owner -> summary_valid tf (R.with_started st started) owner.
+  Proof.
+    intros tf st started owner [direct [reads [effects [Htrace Hrest]]]].
+    exists direct, reads, effects. split; [|exact Hrest].
+    eapply rhs_trace_carries with (before := st);
+        [intros; assumption |exact Htrace].
+  Qed.
+
   Lemma continuation_valid_observe :
     forall st observed next entry k,
       R.observe st observed = (next, entry) ->
@@ -11282,6 +11416,27 @@ Module Make
   Proof.
     intros. eapply continuation_valid_extended; [|exact H0].
     eapply rank_extends_observe; eauto.
+  Qed.
+
+  Lemma materialize_idempotent : forall st target,
+    R.materialize (R.materialize st target) target = R.materialize st target.
+  Proof.
+    intros st target.
+    pose proof (proj1 (Progress.solved_is_materialized (R.materialize st target) target)
+      (Progress.solved_materialize_self st target)) as Hmaterialized.
+    unfold R.materialize at 1. rewrite Hmaterialized. reflexivity.
+  Qed.
+
+  Lemma continuation_history_pending_start : forall tf st target k,
+    continuation_excludes target k ->
+    continuation_history tf (R.materialize st target) k ->
+    continuation_history tf (R.start_evaluation st target) k.
+  Proof.
+    intros tf st target k Hexcludes Hhistory.
+    unfold R.start_evaluation, R.reset_local_sides in *.
+    rewrite <- (materialize_idempotent st target).
+    change (continuation_history tf (R.start_evaluation (R.materialize st target) target) k).
+    apply continuation_history_start; assumption.
   Qed.
 
   Lemma control_history_step :
@@ -11303,9 +11458,10 @@ Module Make
       end;
       try discriminate; inversion Hstep; subst; cbn in *.
     all: try exact I.
+    all: try apply continuation_history_materialize.
     - split.
       + apply rhs_progress_with_started, initial_rhs_progress.
-      + apply continuation_history_with_started, continuation_history_start.
+      + apply continuation_history_with_started, continuation_history_pending_start.
         * pose proof (handles_control_valid Hvalid) as Hcontrol.
           cbn in Hcontrol. eapply continuation_ordered_excludes; eauto.
           exact (proj1 Hcontrol). exact (proj2 Hcontrol).
@@ -11349,7 +11505,7 @@ Module Make
         as Hvariable.
       rewrite <- Hvariable in Hhistory.
       destruct Hhistory as [Hprogress Hrest]. split;
-        [eapply rhs_progress_observe |eapply continuation_history_observe];
+        [apply rhs_progress_materialize; eapply rhs_progress_observe |apply continuation_history_materialize; eapply continuation_history_observe];
         eauto.
     - pose proof (@observed_handle_variable st t s h0 Hcase0)
         as Hvariable.
@@ -11364,8 +11520,8 @@ Module Make
         as Hvariable.
       rewrite <- Hvariable in Hhistory.
       destruct Hhistory as [Hprogress Hrest]. split.
-      + apply rhs_progress_side. eapply rhs_progress_observe; eauto.
-      + apply continuation_history_side.
+      + apply rhs_progress_materialize, rhs_progress_side. eapply rhs_progress_observe; eauto.
+      + apply continuation_history_materialize, continuation_history_side.
         * pose proof (handles_control_valid Hvalid) as Hcontrol.
           cbn in Hcontrol. eapply continuation_ordered_excludes.
           -- eapply handle_valid_extended.
@@ -11407,14 +11563,21 @@ Module Make
           -- exact Hordered.
         * eapply continuation_history_observe; eauto.
     - destruct Hhistory as [Hprogress Hrest]. split.
-      + eapply rhs_progress_spawn. eapply rhs_progress_observe; eauto.
+      + eapply rhs_progress_spawn.
+        * eapply rhs_progress_observe; eauto.
+        * apply Progress.solved_is_materialized. exact Hcase1.
       + eapply continuation_history_observe; eauto.
     - destruct Hhistory as [Hprogress Hrest]. split.
-      + eapply rhs_progress_spawn. eapply rhs_progress_observe; eauto.
-      + eapply continuation_history_observe; eauto.
+      + eapply rhs_progress_spawn.
+        * apply rhs_progress_materialize. eapply rhs_progress_observe; eauto.
+        * pose proof (@observed_handle_variable st t s h0 Hcase0) as Hvariable.
+          rewrite Hvariable. apply Progress.solved_materialize_self.
+      + apply continuation_history_materialize. eapply continuation_history_observe; eauto.
     - destruct Hhistory as [Hprogress Hrest]. split.
-      + apply rhs_progress_materialize, rhs_progress_enqueue_handle.
-        eapply rhs_progress_spawn. eapply rhs_progress_observe; eauto.
+      + eapply rhs_progress_spawn.
+        * apply rhs_progress_materialize, rhs_progress_enqueue_handle.
+          eapply rhs_progress_observe; eauto.
+        * apply Progress.solved_materialize_self.
       + apply continuation_history_materialize,
           continuation_history_enqueue_handle.
         eapply continuation_history_observe; eauto.
@@ -11516,8 +11679,7 @@ Module Make
       continuation_completed tf (R.with_started st started) k.
   Proof.
     intros. eapply continuation_completed_map; [|exact H].
-    intros owner [direct [reads [effects Hsummary]]].
-    now exists direct, reads, effects.
+    intros. now apply summary_with_started.
   Qed.
 
   Lemma continuation_completed_start :
@@ -12026,7 +12188,7 @@ Module Make
     end.
     - destruct (V.eq_dec x (R.handle_variable h)) as [-> | Hneq].
       + right. left. now left.
-      + right. right. cbn. eapply summary_start_other; eauto.
+      + right. right. cbn. apply summary_with_started; eapply summary_start_other; eauto.
     - destruct (V.eq_dec x (R.handle_variable h)) as [-> | Hneq].
       + right. left. now left.
       + right. right. eapply summary_set_value_other.
@@ -12373,6 +12535,29 @@ Module Make
     - discriminate Hquiet.
   Qed.
 
+  Lemma terminal_solved_summaries : forall tf roots final,
+    Sem.terminates_to tf roots final ->
+    (forall target, D.leq (R.aggregate final target) (R.sigma_value final target) = true) /\
+    (forall owner, Sem.solved final owner -> summary_valid tf final owner).
+  Proof.
+    intros tf roots final Hterminates.
+    pose proof (@terminal_invariant tf roots final Hterminates) as Hinv.
+    destruct Hterminates as [_ Hquiet].
+    assert (Hnotqueued : forall x, ~ queued final x).
+    { intros x. eapply quiescent_not_queued; exact Hquiet. }
+    split.
+    - intros target. destruct (invariant_aggregate Hinv target)
+        as [Hqueued | [Hactive | Hbounded]].
+      + contradiction (Hnotqueued target Hqueued).
+      + contradiction.
+      + exact Hbounded.
+    - intros owner Hsolved. destruct (invariant_summaries Hinv Hsolved)
+        as [Hqueued | [Hactive | Hsummary]].
+      + contradiction (Hnotqueued owner Hqueued).
+      + contradiction.
+      + exact Hsummary.
+  Qed.
+
   Theorem terminal_state_correct :
     forall tf roots final,
       Sem.terminates_to tf roots final ->
@@ -12527,12 +12712,40 @@ Module Make
     Definition rhs := Sem.ConstraintSyntax.rhs.
     Definition observation := Sem.observation.
     Definition observed_sides := Sem.observed_sides.
+    Definition observed_spawns := Sem.observed_spawns.
+    Definition observes_at := Sem.observes_at.
     Definition rhs_observes := Sem.rhs_observes.
     Definition rhs_eval_with := Sem.rhs_eval_with.
     Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
     Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
   End TransferView.
   Module Spec := SolverSpecifications.Make V D M TransferView Store.
+
+  Theorem solve_fuel_spawn_correct : forall fuel tf roots final,
+    R.solve_fuel fuel tf roots = Some final -> Spec.correct_final_state tf roots final.
+  Proof.
+    intros fuel tf roots final Hrun.
+    pose proof (@successful_run_terminates_to fuel tf roots final Hrun) as Hterm.
+    destruct (@Total.terminal_solved_summaries tf roots final Hterm)
+      as [Haggregate Hsummaries].
+    split.
+    - intros owner Hin. exact (proj1 (@solve_fuel_correct fuel tf roots final Hrun owner Hin)).
+    - intros owner Hsolved.
+      pose proof (Hsummaries owner Hsolved) as Hsummary.
+      destruct Hsummary as [direct [reads [effects [Htrace [Hreads [Heffects Hdirect]]]]]].
+      assert (Hreplay : Sem.rhs_eval final (tf owner) direct reads effects).
+      { eapply Total.guarded_trace_evaluates;
+          [exact Htrace |exact Hreads |].
+        apply Total.quiescent_not_queued. exact (proj2 Hterm). }
+      split; [now exists direct, reads, effects |]. split.
+      + eapply Total.summary_valid_replay;
+          [apply Total.quiescent_not_queued; exact (proj2 Hterm)
+          |exact Haggregate |exact (Hsummaries owner Hsolved)].
+      + intros result Hobs target Hin.
+        eapply Total.rhs_trace_spawn_closed;
+          [exact Htrace | |exact Hobs |exact Hin].
+        intros read value Hread. eapply Sem.rhs_eval_reads_lookup; eassumption.
+  Qed.
 
 End Make.
 

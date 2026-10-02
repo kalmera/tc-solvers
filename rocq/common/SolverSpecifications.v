@@ -13,6 +13,8 @@ End STORE.
 Module Type TRANSFER (V : VAR) (D : DOMAIN).
   Parameter rhs observation : Type.
   Parameter observed_sides : observation -> list (V.t * D.t).
+  Parameter observed_spawns : observation -> list V.t.
+  Parameter observes_at : (V.t -> D.t) -> rhs -> observation -> Prop.
   Parameter rhs_observes : rhs -> observation -> Prop.
   Parameter rhs_eval_with : (V.t -> option D.t) ->
     rhs -> D.t -> list (V.t * D.t) -> list (V.t * D.t) -> Prop.
@@ -39,17 +41,24 @@ Module Make (V : VAR) (D : DOMAIN) (M : MAP V)
   Definition replay (final : R.state) :=
     Transfer.rhs_eval_with (fun target => M.lookup (R.sigma final) target).
 
+  (** A covered constraint can be replayed, satisfies its value bounds, and
+      keeps every spawn in the materialized store. *)
   Definition owner_post_solution (tf : V.t -> Transfer.rhs)
     (final : R.state) (owner : V.t) : Prop :=
-    forall direct reads effects, replay final (tf owner) direct reads effects ->
+    (exists direct reads effects, replay final (tf owner) direct reads effects) /\
+    (forall direct reads effects, replay final (tf owner) direct reads effects ->
       D.leq direct (R.sigma_value final owner) = true /\
-      (forall target value, In (target,value) effects ->
-        D.leq value (R.sigma_value final target) = true).
+      (forall target value, In (target, value) effects ->
+        D.leq value (R.sigma_value final target) = true)) /\
+    (forall result, Transfer.observes_at (R.sigma_value final) (tf owner) result ->
+      forall target, In target (Transfer.observed_spawns result) -> solved final target).
 
+  (** Roots are covered; all materialized constraints, including spawned
+      unknowns and their descendants, form the post-solution. *)
   Definition correct_final_state (tf : V.t -> Transfer.rhs)
     (roots : list V.t) (final : R.state) : Prop :=
-    forall owner, In owner roots ->
-      solved final owner /\ owner_post_solution tf final owner.
+    (forall owner, In owner roots -> solved final owner) /\
+    (forall owner, solved final owner -> owner_post_solution tf final owner).
 
   (** Replay existence rules out vacuous fixedness on an incomplete store.
       [input] selects the direct result or includes incoming contributions. *)
