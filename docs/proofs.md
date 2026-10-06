@@ -8,7 +8,7 @@ example systems remain beside it. Shared concrete instances live in
 | Solver directory | Algorithm | Public results |
 | --- | --- | --- |
 | `simple` | `Simple.v` | Total correctness; leastness under upper-bound-preserving updates |
-| `restarting` | `Restarting.v` | Total correctness for all eight feature settings; leastness; ordinary-system narrowing fixedness with controlled-owner recomputation |
+| `restarting` | `Restarting.v` | Total correctness for all eight feature settings; leastness; ordinary-system absence of fallback; narrowing fixedness with controlled-owner recomputation |
 | `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
 
 Each public correctness interface follows the paper's order: `semantic_termination`,
@@ -31,6 +31,18 @@ Both use first-discovery ranking and repeat changed controlled-owner updates.
 Restarting requires `recompute_controlled = true` for ordinary fixedness.
 Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
+
+Restarting's `OrdinaryFixedPointMake.WithLaws.WithCollections` also exposes
+`ordinary_avoids_fallback`: finite support, `monotonic_system`, and
+`no_side_effects` imply `avoids_fallback tf roots`. This means that every
+configuration reachable from `R.initial_config roots` has
+`control_avoids_fallback`: every active and suspended owner frame has a phase
+other than `U.Widen`. It covers the whole run, including unfinished prefixes,
+and requires neither successful termination nor `recompute_controlled = true`.
+All eight feature settings satisfy this property with first-discovery ranking;
+ordinary systems may still spawn unknowns. Initial `BoxW` widening and restarts
+into `BoxW` are allowed; the theorem excludes the permanent fallback `Widen`.
+
 The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
 `correct_final_state` requires every root to be materialized and every
 materialized unknown to satisfy `owner_post_solution`. Each constraint has a
@@ -74,5 +86,6 @@ effectful fanout, and recursive spawn closure. A missing-spawn regression shows
 that numerical satisfaction alone does not form a post-solution.
 The examples do not re-instantiate the full fixedness proof for each system.
 
-Restarting's auxiliary narrowing theorem and counterexample remain available as
-supporting results, not additional solver implementations.
+Restarting's internal narrowing-stability proof supports the public no-fallback
+theorem. The fixed-rank counterexample explains why the public theorem uses
+first-discovery ranking.

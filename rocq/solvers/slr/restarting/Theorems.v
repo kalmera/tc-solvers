@@ -89,8 +89,9 @@ Module LeastSolutionMake
   Qed.
 End LeastSolutionMake.
 
-(** Ordinary systems have no side effects. Fixedness uses first-discovery ranks
-    and repeated updates of changed controlled owners with their returned phases. *)
+(** Ordinary systems have no side effects. First-discovery ranks ensure that
+    their owner frames never enter the fallback phase. Fixedness additionally
+    uses repeated updates of changed controlled owners with their returned phases. *)
 Module OrdinaryFixedPointMake (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   Module Fixed := FixedPoint.Make V D WN.
   Module U := Fixed.U.
@@ -106,6 +107,27 @@ Module OrdinaryFixedPointMake (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       Include Spec.
       Definition narrowing_fixed := narrowing_fixed_with WN.narrow
         (fun _ _ direct => direct).
+
+      (** Every active and suspended owner frame has a phase other than [U.Widen]. *)
+      Definition control_avoids_fallback := Internal.N.control_avoids_fallback.
+
+      (** The invariant holds throughout the run, including unfinished prefixes. *)
+      Definition avoids_fallback
+        (tf : R.ConstraintSystem.system) (roots : list V.t) : Prop :=
+        forall c,
+          Sem.steps tf (R.initial_config roots) c ->
+          control_avoids_fallback (R.cfg_control c).
+
+      (** Ordinary monotone systems never enter [U.Widen]. This holds for every
+          feature setting; it does not require controlled-owner recomputation. *)
+      Theorem ordinary_avoids_fallback : forall tf roots,
+        Sem.finite_system tf roots -> monotonic_system tf -> no_side_effects tf ->
+        avoids_fallback tf roots.
+      Proof.
+        intros tf roots finite Hmono Hpure.
+        exact (@Internal.N.first_discovery_ordinary_avoids_fallback
+          tf roots finite (Internal.ordinary_system_from_common Hmono Hpure)).
+      Qed.
 
       Theorem successful_run_fixed : Features.recompute_controlled = true ->
         forall fuel tf roots final,
@@ -136,6 +158,8 @@ Module Instances.
   Module FixedLaws := Fixed.WithLaws IE.DL IE.WNL FixedUL.
   Module Ordinary := FixedLaws.WithCollections IE.S IE.M Restarting.AllEnabledFeatures
     IE.SL IE.ML.
+  Module OrdinaryReaderWakeups := FixedLaws.WithCollections IE.S IE.M
+    Restarting.ReaderWakeupsOnlyFeatures IE.SL IE.ML.
   Definition ordinary_fixed := Ordinary.successful_run_fixed eq_refl.
 End Instances.
 
@@ -144,6 +168,10 @@ Print Assumptions Instances.Correct.total_correct.
 
 Goal True. idtac "SLR-TC_R leastness proven with assumptions:". Abort.
 Print Assumptions Instances.Least.total_least_solution.
+
+Goal True. idtac "SLR-TC_R ordinary no-fallback proven with assumptions:". Abort.
+Print Assumptions Instances.Ordinary.ordinary_avoids_fallback.
+Print Assumptions Instances.OrdinaryReaderWakeups.ordinary_avoids_fallback.
 
 Goal True. idtac "SLR-TC_R ordinary narrowing fixedness proven with assumptions:". Abort.
 Print Assumptions Instances.ordinary_fixed.
