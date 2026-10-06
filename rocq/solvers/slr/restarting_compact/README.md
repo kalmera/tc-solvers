@@ -49,17 +49,40 @@ currently add no value and risk duplicating module contents.
   Combining this fact with the independent upper-bound proof gives
   `successful_run_least`, which assumes source strictness, monotonicity, finite
   support, and an upper-bound update law. It has no correctness premise.
+- Every reachable reset registration has its scope at or below its source
+  and strictly below its target. Closing a higher recursive owner preserves
+  the parent owner's incoming and outgoing cell credit.
+- Controlled status persists. Every reader of an uncontrolled owner is
+  strictly below that owner, so its direct assignment preserves a queue that
+  is already below the owner. This covers both recomputation settings.
+- Changed side aggregates consume credit in the updated cell. Incoming and
+  outgoing credit are combined in one sum. The round budget is lexicographic:
+  missing materializations, promotion reserve, and combined side/ordinary
+  credit, with a separate allowance for the first round. Its order is well
+  founded. Reads, side writes, and commits cannot increase the local budget;
+  new materializations, promotions, incident side changes, and controlled
+  value changes decrease it. Higher-owner closes preserve it.
+- Assuming completion of strictly higher episodes, structural induction
+  carries RHS evaluation and dead-side cleanup to a commit. A separate
+  induction on the queue's rank ceiling carries draining to either episode
+  return or a fresh evaluation of the same owner. `round_reaches_boundary`
+  combines these results. Its higher-episode premise is still explicit.
 
 All new proofs end with `Qed`; there are no admitted goals or new axioms.
-The six public-result assumption audits report `Closed under the global context`.
+The fourteen assumption audits report `Closed under the global context`.
 The concrete regression also checks two accumulated side effects, a controlling
 back read, and spawn closure, then derives correctness from the new theorem.
+Budget regressions check an incoming side change without owner promotion,
+new materialization, and an already materialized owner.
 
 ## Remaining obligations before replacement or merge as a finished solver
 
-1. Prove finite-system termination. Use owner rank induction and a round
-   measure accounting for materialization, promotion, ordinary update credit,
-   and side-cell credit/resets. Derive sufficient fuel and total correctness.
+1. Finish finite-system termination. Preserve the budget across whole
+   recursive episode segments and prove that a fresh same-owner evaluation
+   after the first round pays for its queue entry. Then combine the checked
+   round order with owner rank induction, discharge the higher-episode
+   premise, and finish root seeding and outer draining. Derive sufficient
+   fuel and total correctness.
 2. Prove ordinary monotone fallback avoidance for both recomputation settings.
 3. Prove ordinary narrowing fixedness when controlled-owner recomputation is
    enabled. Do not introduce an idempotency assumption.
@@ -70,6 +93,9 @@ The existing results do not imply these remaining guarantees. In particular,
 `termination_iff_fuel` proves equivalence, not that either side always exists.
 The correctness and leastness theorems concern successful runs; they do not
 establish that every finite system has a successful run.
+Likewise, the local budget laws and `round_reaches_boundary` do not yet prove
+that every same-owner rerun decreases the budget or that higher episodes
+always finish.
 
 ## Build and measurement
 
@@ -88,8 +114,8 @@ mistaken for measurements of an equivalent finished proof stack.
 On Rocq 9.1.1 / OCaml 5.4.0, one reference measurement took 24.54 seconds and
 produced 51,323,366 bytes of compiled objects across six targets. Its public
 theorem unit alone produced 23,968,527 bytes. The current compact subset has
-3,506 proof lines; across three runs the median was 2.49 seconds for `Proofs.v`
-and 3.33 seconds including the algorithm and audit. Its three compiled objects
-total 2,347,101 bytes. The proof unit itself is 1,887,266 bytes. These numbers
+4,565 proof lines; across three runs the median was 3.25 seconds for `Proofs.v`
+and 4.68 seconds including the algorithm and audit. Its three compiled objects
+total 2,778,180 bytes. The proof unit itself is 2,297,198 bytes. These numbers
 show the current development baseline; they do **not** establish a speedup
 for a completed replacement.

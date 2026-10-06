@@ -1,4 +1,4 @@
-From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sorting.Sorted.
+From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sorting.Sorted Arith.Wf_nat Relations.Relation_Operators Wellfounded.Inverse_Image Wellfounded.Lexicographic_Product.
 From TcSolvers Require Import common.Assumptions common.ConstraintSemantics
   common.SolverSpecifications common.SourceStrictness
   solvers.slr.common.DiscoveryOrderLaws
@@ -3501,6 +3501,1065 @@ Proof.
   intros Hpath Hlookup; eapply RF.generated_lookup_bound;
     [exact (store_valid (proj1 (@reachable_configuration_wf tf roots finite c Hpath)))
     |exact (@reachable_generated tf roots finite c Hpath) |exact Hlookup].
+Qed.
+
+(** Reset scopes lie at or below the source and strictly below the target.
+    This is the reason a recursive child cannot refill its parent's credit. *)
+Definition rank_le order x y := x = y \/ R.ranking_lt order x y = true.
+Lemma rank_le_trans order x y z : rank_le order x y -> rank_le order y z -> rank_le order x z.
+Proof. unfold rank_le; intros [-> |Hxy] [-> |Hyz]; auto; right; eapply lt_trans; eauto. Qed.
+Lemma rank_le_extends before after x y : extends before after -> rank_le before x y -> rank_le after x y.
+Proof.
+  intros Hext [-> |Hlt]; [now left |right].
+  destruct (@lt_ranks before x y Hlt) as [rx [ry [Hx [Hy _]]]].
+  rewrite (@lt_stable before after x y Hext (ex_intro _ rx Hx) (ex_intro _ ry Hy)); exact Hlt.
+Qed.
+Lemma lt_extends before after x y : extends before after ->
+  R.ranking_lt before x y = true -> R.ranking_lt after x y = true.
+Proof.
+  intros Hext Hlt; destruct (@lt_ranks before x y Hlt) as [rx [ry [Hx [Hy _]]]].
+  rewrite (@lt_stable before after x y Hext (ex_intro _ rx Hx) (ex_intro _ ry Hy)); exact Hlt.
+Qed.
+Definition reset_scoped st := forall scope source target,
+  In (source,target) (R.lookup_reset_ids (R.reset_at_close st) scope) ->
+  rank_le (R.ranking st) scope source /\ R.rank_lt st scope target = true.
+Definition frame_scoped st fr := rank_le (R.ranking st) (R.frame_min_scope fr) (R.frame_owner fr).
+Fixpoint scoped_stack st k : Prop :=
+  match k with
+  | R.KLoop | R.KSeedLoop _ => True
+  | R.KAfterGet fr _ _ rest | R.KAfterSide fr _ rest | R.KAfterSpawn fr _ rest
+  | R.KDead fr _ _ rest | R.KDrain fr rest => frame_scoped st fr /\ scoped_stack st rest
+  end.
+Definition scoped_control st ctrl :=
+  match ctrl with
+  | R.RunLoop | R.RunSeeds _ | R.RunSeedLoop _ => True
+  | R.StartEpisode _ k | R.Return k => scoped_stack st k
+  | R.RunRhs fr _ k | R.RunDead fr _ _ k | R.RunCommit fr _ k | R.RunDrain fr k =>
+      frame_scoped st fr /\ scoped_stack st k
+  end.
+Definition scoped_config c := reset_scoped (R.cfg_state c) /\
+  scoped_control (R.cfg_state c) (R.cfg_control c).
+Lemma scoped_frame_extends before after fr : extends (R.ranking before) (R.ranking after) ->
+  frame_scoped before fr -> frame_scoped after fr.
+Proof. apply rank_le_extends. Qed.
+Lemma scoped_stack_extends before after k : extends (R.ranking before) (R.ranking after) ->
+  scoped_stack before k -> scoped_stack after k.
+Proof. intros Hext; induction k; cbn; intuition eauto using scoped_frame_extends. Qed.
+Lemma scoped_layout before after : extends (R.ranking before) (R.ranking after) ->
+  R.reset_at_close after = R.reset_at_close before -> reset_scoped before -> reset_scoped after.
+Proof.
+  intros Hext Hresets H scope source target Hin; rewrite Hresets in Hin.
+  destruct (H scope source target Hin) as [Hsource Htarget]; split;
+    eauto using rank_le_extends, lt_extends.
+Qed.
+Lemma removed_member id ids observed : In observed (R.remove_cell_id id ids) -> In observed ids.
+Proof.
+  induction ids as [|head rest IH]; cbn; [auto |].
+  destruct (R.cell_id_eq_dec id head); cbn; intuition.
+Qed.
+Lemma added_member id ids observed : In observed (R.add_cell_id id ids) -> observed = id \/ In observed ids.
+Proof. unfold R.add_cell_id; destruct (in_dec R.cell_id_eq_dec id ids); cbn; intuition congruence. Qed.
+Lemma reset_lookup_put table scope ids observed :
+  R.lookup_reset_ids (M.update table scope ids) observed =
+    if V.eq_dec observed scope then ids else R.lookup_reset_ids table observed.
+Proof.
+  unfold R.lookup_reset_ids; destruct (V.eq_dec observed scope) as [-> |Hneq];
+    [rewrite ML.lookup_update_same |rewrite ML.lookup_update_other]; auto.
+Qed.
+Lemma scoped_remove st previous id : reset_scoped st ->
+  forall scope source target,
+    In (source,target) (R.lookup_reset_ids (R.remove_registration (R.reset_at_close st) previous id) scope) ->
+    rank_le (R.ranking st) scope source /\ R.rank_lt st scope target = true.
+Proof.
+  intros H scope source target Hin; unfold R.remove_registration in Hin;
+    rewrite reset_lookup_put in Hin; destruct (V.eq_dec scope previous) as [-> |Hneq];
+    eapply H; eauto using removed_member.
+Qed.
+Lemma scoped_register st source target scope phase : reset_scoped st ->
+  rank_le (R.ranking st) scope source -> reset_scoped (R.register_reset st source target scope phase).
+Proof.
+  intros Hreset Hsource; unfold R.register_reset.
+  set (requested := if Features.restart_side_phases then
+    if R.rank_lt st scope target then Some scope else None else None).
+  set (same := R.same_scope (R.side_reset_at (R.stored_side_cell st source target)) requested).
+  set (without := if same then R.reset_at_close st else
+    match R.side_reset_at (R.stored_side_cell st source target) with
+    | Some previous => R.remove_registration (R.reset_at_close st) previous (source,target)
+    | None => R.reset_at_close st end).
+  assert (Hwithout : forall location x y, In (x,y) (R.lookup_reset_ids without location) ->
+    rank_le (R.ranking st) location x /\ R.rank_lt st location y = true).
+  { unfold without; destruct same; [exact Hreset |].
+    destruct (R.side_reset_at (R.stored_side_cell st source target));
+      [apply scoped_remove; exact Hreset |exact Hreset]. }
+  unfold reset_scoped; cbn [R.with_cells_and_resets R.reset_at_close R.ranking R.rank_lt].
+  destruct same; [exact Hwithout |].
+  unfold requested; destruct Features.restart_side_phases; [|exact Hwithout].
+  destruct (R.rank_lt st scope target) eqn:Heligible; [|exact Hwithout].
+  intros location x y Hin; unfold R.add_registration in Hin; rewrite reset_lookup_put in Hin.
+  destruct (V.eq_dec location scope) as [-> |Hneq]; [|apply Hwithout; exact Hin].
+  apply added_member in Hin; destruct Hin as [Heq |Hin];
+    [inversion Heq; subst; auto |apply Hwithout; exact Hin].
+Qed.
+Lemma scoped_close st owner : reset_scoped st -> reset_scoped (R.reset_registered_cells st owner).
+Proof.
+  intro H; unfold R.reset_registered_cells; destruct Features.restart_side_phases; auto.
+  intros scope source target Hin; cbn in Hin |- *; rewrite reset_lookup_put in Hin.
+  destruct (V.eq_dec scope owner); [contradiction |apply H; exact Hin].
+Qed.
+Lemma scoped_materialize st owner : reset_scoped st -> reset_scoped (R.materialize st owner).
+Proof. intro H; eapply scoped_layout with (before := st); [rewrite materialize_rank; apply extends_refl |unfold R.materialize; destruct (M.lookup (R.sigma st) owner); reflexivity |exact H]. Qed.
+Lemma scoped_observe st target : reset_scoped st -> reset_scoped (R.observe st target).
+Proof. intro H; eapply scoped_layout with (before := st); [apply observe_extends |unfold R.observe; destruct (Ranks.observe (R.ranking st) target); reflexivity |exact H]. Qed.
+Lemma scoped_get st fr target next next_fr value : R.complete_get st fr target = (next,next_fr,value) ->
+  reset_scoped st -> frame_scoped st fr -> reset_scoped next /\ frame_scoped next next_fr.
+Proof.
+  intros Hget Hreset Hframe; split.
+  - destruct (get_layout Hget) as [Hr [_ [_ [_ [Hresets _]]]]];
+      eapply scoped_layout with (before := st); [rewrite Hr; apply extends_refl |exact Hresets |exact Hreset].
+  - unfold R.complete_get in Hget; destruct (R.rank_lt st (R.frame_owner fr) target);
+      destruct (R.rank_lt st target (R.frame_min_scope fr)) eqn:Hmin;
+      split_program Hget; unfold frame_scoped in *; cbn in *;
+      unfold R.materialize; destruct (M.lookup _ target); cbn; try exact Hframe.
+    all: eapply rank_le_trans; [right; exact Hmin |exact Hframe].
+Qed.
+Lemma scoped_write st fr target input next changed : R.write_side_contribution st fr target input = (next,changed) ->
+  reset_scoped st -> frame_scoped st fr -> reset_scoped next.
+Proof.
+  intros Hwrite Hreset Hframe; unfold R.write_side_contribution in Hwrite.
+  destruct (U.update _ _ _ _ _) as [phase value]; inversion Hwrite; subst next.
+  apply scoped_register.
+  - eapply scoped_layout with (before := st); [| |exact Hreset]; unfold R.promote_side_target, R.promote_controlled;
+      destruct (R.rank_lt st target (R.frame_owner fr)); cbn; auto using extends_refl.
+  - unfold R.promote_side_target, R.promote_controlled;
+      destruct (R.rank_lt st target (R.frame_owner fr)); exact Hframe.
+Qed.
+Lemma scoped_commit st fr direct next next_fr : R.set_value st fr direct = (next,next_fr) ->
+  reset_scoped st -> frame_scoped st fr -> reset_scoped next /\ frame_scoped next next_fr.
+Proof.
+  intros Hset Hreset Hframe; pose proof (@commit_footprint st fr direct next next_fr Hset) as Hview; split.
+  - eapply scoped_layout with (before := st); [rewrite (commit_ranking Hview); apply extends_refl |exact (commit_resets Hview) |exact Hreset].
+  - unfold R.set_value in Hset; split_program Hset; exact Hframe.
+Qed.
+
+Lemma scoped_queue st q : reset_scoped st -> reset_scoped (R.with_queue st q).
+Proof. auto. Qed.
+Lemma scoped_enqueue st x : reset_scoped st -> reset_scoped (R.enqueue st x).
+Proof. auto. Qed.
+Lemma scoped_publish st fr : reset_scoped st -> reset_scoped (R.publish_targets st fr).
+Proof. auto. Qed.
+Lemma scoped_requeue before after owner : reset_scoped after ->
+  reset_scoped (R.requeue_changed_controlled_owner before after owner).
+Proof. auto. Qed.
+Lemma scoped_fresh st owner phase : frame_scoped st (R.fresh_frame st owner phase).
+Proof. left; reflexivity. Qed.
+Lemma scoped_side_frame st fr target input : frame_scoped st fr ->
+  frame_scoped st (R.with_frame_side fr target input).
+Proof. auto. Qed.
+Lemma next_scoped_config tf before after : scoped_config before -> step tf before after -> scoped_config after.
+Proof.
+  intros [Hreset Hcontrol] Hstep; pose proof (next_ranking_extends Hstep) as Hext.
+  destruct before as [st ctrl]; unfold step, R.next_config in Hstep;
+    cbn [R.cfg_state R.cfg_control] in Hstep, Hreset, Hcontrol, Hext.
+  destruct ctrl as [|roots|roots|owner k|fr body k|fr direct pending k|fr direct k|fr k|k];
+    unfold scoped_control in Hcontrol; cbn [R.cfg_control] in Hstep;
+    try match type of Hcontrol with _ /\ _ => destruct Hcontrol as [Hframe Hstack] end.
+  - destruct (R.queue_pop (R.queue st)) as [[owner rest]|] eqn:Hpop; [|discriminate].
+    inversion Hstep; subst after; split; [exact Hreset |exact I].
+  - destruct roots as [|root roots].
+    + inversion Hstep; subst after; split; [exact Hreset |exact I].
+    + destruct (R.is_materialized (R.observe st root) root); inversion Hstep; subst after.
+      all: split; [apply scoped_observe; exact Hreset |exact I].
+  - destruct (R.queue_pop (R.queue st)) as [[owner rest]|] eqn:Hpop;
+      inversion Hstep; subst after.
+    all: split; [exact Hreset |exact I].
+  - inversion Hstep; subst after; split; [apply scoped_materialize; exact Hreset |].
+    split; [apply scoped_fresh |eapply scoped_stack_extends; [exact Hext |exact Hcontrol]].
+  - destruct body as [direct|target tail|target raw tail|target tail].
+    + inversion Hstep; subst after; split; [exact Hreset |split; [exact Hframe |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+    + set (st0 := R.observe st target) in *.
+      assert (Hreset0 : reset_scoped st0) by (apply scoped_observe; exact Hreset).
+      assert (Hframe0 : frame_scoped st0 fr) by
+        (eapply scoped_frame_extends; [apply observe_extends |exact Hframe]).
+      destruct (negb (R.is_materialized st0 target) && R.rank_lt st0 (R.frame_owner fr) target).
+      * inversion Hstep; subst after; split; [exact Hreset0 |].
+        split; [exact Hframe0 |eapply scoped_stack_extends; [exact Hext |exact Hstack]].
+      * set (st1 := if R.is_materialized st0 target then st0 else R.enqueue st0 target) in *.
+        assert (Hreset1 : reset_scoped st1) by (unfold st1; destruct (R.is_materialized st0 target); exact Hreset0).
+        assert (Hframe1 : frame_scoped st1 fr) by (unfold st1; destruct (R.is_materialized st0 target); exact Hframe0).
+        destruct (R.complete_get st1 fr target) as [[next next_fr] value] eqn:Hget.
+        inversion Hstep; subst after; destruct (scoped_get Hget Hreset1 Hframe1) as [Hnext Hfr].
+        split; [exact Hnext |split; [exact Hfr |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+    + unfold R.record_side_input in Hstep.
+      destruct (R.write_side_contribution (R.observe st target)
+        (R.with_frame_side fr target (R.accumulated_side_input fr target raw)) target
+        (R.accumulated_side_input fr target raw)) as [next changed] eqn:Hwrite.
+      assert (Hnext : reset_scoped next).
+      { eapply scoped_write; [exact Hwrite |apply scoped_observe; exact Hreset |].
+        apply scoped_side_frame; eapply scoped_frame_extends; [apply observe_extends |exact Hframe]. }
+      unfold R.continue_side in Hstep; split_program Hstep; split;
+        [exact Hnext | |apply scoped_enqueue; exact Hnext | |exact Hnext |].
+      all: cbn [R.cfg_state R.cfg_control scoped_control scoped_stack]; split;
+        [apply scoped_side_frame; eapply scoped_frame_extends; [exact Hext |exact Hframe]
+        |eapply scoped_stack_extends; [exact Hext |exact Hstack]].
+    + destruct (R.is_materialized (R.observe st target) target);
+        [|destruct (R.rank_lt (R.observe st target) (R.frame_owner fr) target)];
+        inversion Hstep; subst after; split;
+        [apply scoped_observe; exact Hreset | |apply scoped_observe; exact Hreset | |
+         apply scoped_materialize, scoped_enqueue, scoped_observe; exact Hreset |].
+      all: split; [eapply scoped_frame_extends; [exact Hext |exact Hframe]
+        |eapply scoped_stack_extends; [exact Hext |exact Hstack]].
+  - destruct pending as [|target rest].
+    + inversion Hstep; subst after; split; [exact Hreset |split; [exact Hframe |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+    + destruct (S.mem target (R.frame_current_targets fr)).
+      * inversion Hstep; subst after; split; [exact Hreset |split; [exact Hframe |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+      * destruct (R.write_side_contribution st fr target D.bottom) as [next changed] eqn:Hwrite.
+        assert (Hnext : reset_scoped next) by (eapply scoped_write; eauto).
+        unfold R.continue_dead in Hstep; split_program Hstep; split;
+          [exact Hnext | |apply scoped_enqueue; exact Hnext | |exact Hnext |].
+        all: split; [eapply scoped_frame_extends; [exact Hext |exact Hframe]
+          |eapply scoped_stack_extends; [exact Hext |exact Hstack]].
+  - destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
+    inversion Hstep; subst after; destruct (@scoped_commit st fr direct next next_fr Hset Hreset Hframe) as [Hnext Hfr].
+    split; [apply scoped_requeue; exact Hnext |split; [exact Hfr |]].
+    eapply scoped_stack_extends; [exact Hext |exact Hstack].
+  - destruct (R.queue_peek (R.queue st)) as [head|].
+    + destruct (V.eq_dec head (R.frame_owner fr)).
+      * destruct (R.queue_pop (R.queue st)) as [[popped rest]|]; [|discriminate].
+        inversion Hstep; subst after; split; [exact Hreset |split; [apply scoped_fresh |]].
+        eapply scoped_stack_extends; [exact Hext |exact Hstack].
+      * destruct (R.rank_lt st (R.frame_owner fr) head).
+        -- destruct (R.queue_pop (R.queue st)) as [[popped rest]|]; [|discriminate].
+           inversion Hstep; subst after; split; [exact Hreset |split; [exact Hframe |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+        -- inversion Hstep; subst after; split; [apply scoped_close; exact Hreset |].
+           eapply scoped_stack_extends; [exact Hext |exact Hstack].
+    + inversion Hstep; subst after; split; [apply scoped_close; exact Hreset |].
+      eapply scoped_stack_extends; [exact Hext |exact Hstack].
+  - destruct k as [|remaining|fr target tail k|fr tail k|fr tail k|fr direct pending k|fr k]; cbn [scoped_stack] in Hcontrol;
+      try match type of Hcontrol with _ /\ _ => destruct Hcontrol as [Hframe Hstack] end.
+    all: try solve [inversion Hstep; subst after; split; [exact Hreset |exact I]].
+    all: try solve [inversion Hstep; subst after; split;
+      [exact Hreset |split; [exact Hframe |eapply scoped_stack_extends; [exact Hext |exact Hstack]]]].
+    destruct (R.complete_get st fr target) as [[next next_fr] value] eqn:Hget;
+      inversion Hstep; subst after; destruct (scoped_get Hget Hreset Hframe) as [Hnext Hfr].
+    split; [exact Hnext |split; [exact Hfr |eapply scoped_stack_extends; [exact Hext |exact Hstack]]].
+Qed.
+Theorem reachable_scoped_config tf roots c : steps tf (R.initial_config roots) c -> scoped_config c.
+Proof.
+  intro Hpath; assert (Hinitial : scoped_config (R.initial_config roots)).
+  { split; [|exact I]; intros scope source target Hin.
+    change (In (source,target) (R.lookup_reset_ids (M.empty (list R.side_cell_id)) scope)) in Hin.
+    unfold R.lookup_reset_ids in Hin; rewrite ML.lookup_empty in Hin; contradiction. }
+  revert Hinitial; induction Hpath; auto; intro Hfirst; apply IHHpath; eapply next_scoped_config; eauto.
+Qed.
+
+Lemma row_lookup_other {A} (rows : M.t (M.t A)) outer inner value x y :
+  (x,y) <> (outer,inner) ->
+  M.lookup (R.lookup_map (R.update_map rows outer inner value) x) y =
+    M.lookup (R.lookup_map rows x) y.
+Proof.
+  intro Hneq; destruct (V.eq_dec x outer) as [-> |Hx].
+  - unfold R.update_map, R.lookup_map; rewrite ML.lookup_update_same.
+    apply ML.lookup_update_other; congruence.
+  - rewrite row_other; auto.
+Qed.
+Lemma reset_cells_other ids cells source target :
+  ~ In (source,target) ids ->
+  M.lookup (R.lookup_map (R.reset_cells ids cells) source) target =
+    M.lookup (R.lookup_map cells source) target.
+Proof.
+  revert cells; induction ids as [|[x y] ids IH]; intros cells Hnot; cbn; [reflexivity |].
+  rewrite IH; [apply row_lookup_other; intro Heq; apply Hnot; left; symmetry; exact Heq
+    |intro Hin; apply Hnot; right; exact Hin].
+Qed.
+Lemma rank_le_no_cycle order x y : R.ranking_lt order x y = true -> ~ rank_le order y x.
+Proof.
+  intros Hxy [Heq |Hyx]; [subst; rewrite lt_irrefl in Hxy; discriminate |].
+  pose proof (@lt_trans order x y x Hxy Hyx) as Hfalse; rewrite lt_irrefl in Hfalse; discriminate.
+Qed.
+Lemma higher_close_cells st owner child source target : reset_scoped st ->
+  R.rank_lt st owner child = true -> (source = owner \/ target = owner) ->
+  R.stored_side_cell (R.reset_registered_cells st child) source target = R.stored_side_cell st source target.
+Proof.
+  intros Hscoped Hhigher Hincident; unfold R.reset_registered_cells;
+    destruct Features.restart_side_phases; [|reflexivity].
+  unfold R.stored_side_cell; cbn; rewrite reset_cells_other; [reflexivity |].
+  intro Hin; destruct (Hscoped child source target Hin) as [Hs Ht].
+  destruct Hincident as [-> | ->].
+  - exact (@rank_le_no_cycle (R.ranking st) owner child Hhigher Hs).
+  - apply (@rank_le_no_cycle (R.ranking st) owner child Hhigher); right; exact Ht.
+Qed.
+Definition side_credit st source target := UL.remaining_changes
+  (R.side_phase (R.stored_side_cell st source target)) (R.stored_contribution st source target).
+Lemma side_credit_layout before after source target :
+  R.side_cells after = R.side_cells before -> R.contributions after = R.contributions before ->
+  side_credit after source target = side_credit before source target.
+Proof. intros Hcells Hcontrib; unfold side_credit, R.stored_side_cell, R.stored_contribution; now rewrite Hcells, Hcontrib. Qed.
+Lemma higher_close_credit st owner child source target : reset_scoped st ->
+  R.rank_lt st owner child = true -> (source = owner \/ target = owner) ->
+  side_credit (R.reset_registered_cells st child) source target = side_credit st source target.
+Proof.
+  intros Hreset Hhigher Hincident; unfold side_credit; rewrite (@higher_close_cells st owner child source target Hreset Hhigher Hincident).
+  unfold R.stored_contribution, R.reset_registered_cells; destruct Features.restart_side_phases; reflexivity.
+Qed.
+Lemma promoted_side_credit st fr written source target :
+  side_credit (R.promote_side_target st fr written) source target = side_credit st source target.
+Proof. unfold R.promote_side_target, R.promote_controlled; destruct (R.rank_lt st written (R.frame_owner fr)); reflexivity. Qed.
+Lemma side_credit_put st source target scope phase value :
+  side_credit (R.register_reset (R.with_contributions st
+    (R.update_map (R.contributions st) target source value)) source target scope phase) source target =
+    UL.remaining_changes phase value.
+Proof.
+  unfold side_credit, R.stored_side_cell, R.stored_contribution, R.register_reset;
+    cbn [R.with_cells_and_resets R.with_contributions R.side_cells R.contributions];
+    rewrite !row_lookup; reflexivity.
+Qed.
+Lemma aggregate_equivalent_put st source target value : eqv value (R.stored_contribution st source target) ->
+  eqv (R.aggregate (R.with_contributions st (R.update_map (R.contributions st) target source value)) target)
+    (R.aggregate st target).
+Proof.
+  intro Hvalue; unfold R.aggregate, R.update_map; cbn; unfold R.lookup_map at 1;
+    rewrite ML.lookup_update_same.
+  set (row := R.lookup_map (R.contributions st) target) in *.
+  destruct (ML.values_update row source value) as [rest [Hnew Hold]].
+  eapply eqv_trans; [apply fold_permutation; exact Hnew |].
+  unfold R.stored_contribution in Hvalue; fold row in Hvalue;
+    destruct (M.lookup row source) as [previous|] eqn:Hlookup.
+  - eapply eqv_trans; [apply join_eqv; [exact Hvalue |apply eqv_refl] |].
+    exact (eqv_sym (@fold_permutation (M.values row) (previous :: rest) Hold)).
+  - eapply eqv_trans; [apply join_eqv; [exact Hvalue |apply eqv_refl] |].
+    eapply eqv_trans; [apply join_bottom |exact (eqv_sym (@fold_permutation (M.values row) rest Hold))].
+Qed.
+Lemma side_credit_write st fr target input next changed :
+  R.write_side_contribution st fr target input = (next,changed) ->
+  side_credit next (R.frame_owner fr) target <= side_credit st (R.frame_owner fr) target /\
+  (changed = true -> side_credit next (R.frame_owner fr) target < side_credit st (R.frame_owner fr) target).
+Proof.
+  unfold R.write_side_contribution.
+  set (base := R.promote_side_target st fr target).
+  set (phase := R.side_phase (R.stored_side_cell base (R.frame_owner fr) target)).
+  set (old := R.stored_contribution base (R.frame_owner fr) target).
+  destruct (U.update true target phase old input) as [new_phase value] eqn:Hupdate.
+  intro Hwrite; inversion Hwrite; subst next changed; clear Hwrite; rewrite side_credit_put.
+  rewrite <- (promoted_side_credit st fr target (R.frame_owner fr) target).
+  unfold side_credit; fold base; fold phase old.
+  pose proof (UL.remaining_changes_nonincreasing true target phase old input) as Hcredit;
+    rewrite Hupdate in Hcredit; cbn in Hcredit; split; [exact Hcredit |].
+  intro Hchanged; pose proof (@UL.update_change_consumes true target phase old input) as Hstrict;
+    rewrite Hupdate in Hstrict; cbn in Hstrict; apply Hstrict.
+  intro Heq; apply negb_true_iff in Hchanged.
+  assert (Hagg : eqv
+    (R.aggregate (R.with_contributions base (R.update_map (R.contributions base) target (R.frame_owner fr) value)) target)
+    (R.aggregate base target)) by (apply aggregate_equivalent_put; exact Heq).
+  unfold R.aggregate, R.register_reset in Hchanged; cbn [R.with_cells_and_resets R.contributions] in Hchanged.
+  apply (proj2 (eqv_bool _ _)) in Hagg; unfold R.aggregate in Hagg; congruence.
+Qed.
+Lemma side_credit_write_other st fr written input next changed source target :
+  R.write_side_contribution st fr written input = (next,changed) ->
+  (source,target) <> (R.frame_owner fr,written) -> side_credit next source target = side_credit st source target.
+Proof.
+  intros Hwrite Hother; unfold R.write_side_contribution in Hwrite;
+    destruct (U.update _ _ _ _ _) as [phase value]; inversion Hwrite; subst next.
+  unfold side_credit, R.stored_side_cell, R.stored_contribution, R.register_reset;
+    cbn [R.with_cells_and_resets R.with_contributions R.side_cells R.contributions];
+    rewrite !row_lookup_other by congruence.
+  unfold R.promote_side_target, R.promote_controlled;
+    destruct (R.rank_lt st written (R.frame_owner fr)); reflexivity.
+Qed.
+Lemma side_credit_write_all st fr written input next changed source target :
+  R.write_side_contribution st fr written input = (next,changed) ->
+  side_credit next source target <= side_credit st source target.
+Proof.
+  intro Hwrite; destruct (R.cell_id_eq_dec (source,target) (R.frame_owner fr,written)) as [Heq |Hneq].
+  - inversion Heq; subst; apply (proj1 (side_credit_write Hwrite)).
+  - rewrite (side_credit_write_other Hwrite Hneq); lia.
+Qed.
+
+Arguments side_credit_write_all {st fr written input next changed} source target _.
+
+Fixpoint sum_over (f : V.t -> nat) (support : list V.t) : nat :=
+  match support with [] => 0 |x :: xs => f x + sum_over f xs end.
+Lemma sum_over_le f g support : (forall x, In x support -> f x <= g x) -> sum_over f support <= sum_over g support.
+Proof. induction support as [|x xs IH]; cbn; intros H; [lia |]; assert (Hhead := H x (or_introl eq_refl)); assert (Htail : sum_over f xs <= sum_over g xs) by (apply IH; auto); lia. Qed.
+Lemma sum_over_lt f g support x : In x support -> f x < g x ->
+  (forall y, In y support -> f y <= g y) -> sum_over f support < sum_over g support.
+Proof.
+  induction support as [|head rest IH]; cbn; [contradiction |].
+  intros [<- |Hin] Hstrict Hle.
+  - assert (Htail : sum_over f rest <= sum_over g rest) by (apply sum_over_le; auto); lia.
+  - assert (Hhead := Hle head (or_introl eq_refl)).
+    assert (Htail : sum_over f rest < sum_over g rest) by (apply IH; auto); lia.
+Qed.
+Definition incident_credit support st owner :=
+  sum_over (fun target => side_credit st owner target) support +
+  sum_over (fun source => side_credit st source owner) support.
+Lemma incident_credit_write support st fr target input next changed owner :
+  R.write_side_contribution st fr target input = (next,changed) ->
+  incident_credit support next owner <= incident_credit support st owner.
+Proof.
+  intro Hwrite; unfold incident_credit;
+    pose proof (sum_over_le (fun t => side_credit next owner t) (fun t => side_credit st owner t) support
+      (fun t _ => side_credit_write_all owner t Hwrite)) as Hsource;
+    pose proof (sum_over_le (fun s => side_credit next s owner) (fun s => side_credit st s owner) support
+      (fun s _ => side_credit_write_all s owner Hwrite)) as Htarget; lia.
+Qed.
+Lemma incident_credit_write_strict support st fr target input next owner :
+  R.write_side_contribution st fr target input = (next,true) -> In (R.frame_owner fr) support -> In target support ->
+  (owner = R.frame_owner fr \/ owner = target) ->
+  incident_credit support next owner < incident_credit support st owner.
+Proof.
+  intros Hwrite Hsource Htarget Hincident;
+    pose proof (proj2 (side_credit_write Hwrite) eq_refl) as Hstrict.
+  unfold incident_credit; destruct Hincident as [-> | ->].
+  - pose proof (sum_over_lt (fun t => side_credit next (R.frame_owner fr) t)
+      (fun t => side_credit st (R.frame_owner fr) t) support target Htarget Hstrict
+      (fun t _ => side_credit_write_all (R.frame_owner fr) t Hwrite)) as Hout.
+    pose proof (sum_over_le (fun s => side_credit next s (R.frame_owner fr))
+      (fun s => side_credit st s (R.frame_owner fr)) support
+      (fun s _ => side_credit_write_all s (R.frame_owner fr) Hwrite)) as Hin; lia.
+  - pose proof (sum_over_lt (fun s => side_credit next s target) (fun s => side_credit st s target)
+      support (R.frame_owner fr) Hsource Hstrict (fun s _ => side_credit_write_all s target Hwrite)) as Hin.
+    pose proof (sum_over_le (fun t => side_credit next target t) (fun t => side_credit st target t)
+      support (fun t _ => side_credit_write_all target t Hwrite)) as Hout; lia.
+Qed.
+Lemma incident_credit_higher_close support st owner child : reset_scoped st -> R.rank_lt st owner child = true ->
+  incident_credit support (R.reset_registered_cells st child) owner = incident_credit support st owner.
+Proof.
+  intros Hreset Hhigher; unfold incident_credit; f_equal.
+  - induction support as [|head rest IH]; cbn; [reflexivity |].
+    rewrite (@higher_close_credit st owner child owner head Hreset Hhigher (or_introl eq_refl)), IH; reflexivity.
+  - induction support as [|head rest IH]; cbn; [reflexivity |].
+    rewrite (@higher_close_credit st owner child head owner Hreset Hhigher (or_intror eq_refl)), IH; reflexivity.
+Qed.
+
+Definition controlled_mono before after := forall owner,
+  S.mem owner (R.controlled before) = true -> S.mem owner (R.controlled after) = true.
+Lemma controlled_layout before after : R.controlled after = R.controlled before -> controlled_mono before after.
+Proof. intros H owner Hmem; now rewrite H. Qed.
+Lemma controlled_get st fr target next next_fr value : R.complete_get st fr target = (next,next_fr,value) -> controlled_mono st next.
+Proof.
+  unfold R.complete_get, R.materialize, R.promote_controlled; intro H; split_program H;
+    intros owner Hmem; cbn; try exact Hmem; apply SL.add_spec; auto.
+Qed.
+Lemma controlled_write st fr target input next changed : R.write_side_contribution st fr target input = (next,changed) -> controlled_mono st next.
+Proof.
+  unfold R.write_side_contribution, R.promote_side_target, R.promote_controlled, R.register_reset;
+    intro H; split_program H; intros owner Hmem; cbn; try exact Hmem; apply SL.add_spec; auto.
+Qed.
+Lemma controlled_commit st fr direct next next_fr : R.set_value st fr direct = (next,next_fr) -> controlled_mono st next.
+Proof. intro H; apply controlled_layout; exact (commit_controlled (@commit_footprint st fr direct next next_fr H)). Qed.
+Arguments controlled_commit {st fr direct next next_fr} _.
+Theorem next_controlled_mono tf before after : step tf before after -> controlled_mono (R.cfg_state before) (R.cfg_state after).
+Proof.
+  destruct before as [st ctrl]; unfold step, R.next_config; cbn [R.cfg_state R.cfg_control]; intro Hstep.
+  destruct ctrl; cbn [R.cfg_control] in Hstep;
+    unfold R.continue_side, R.continue_dead in Hstep; split_program Hstep.
+  all: repeat match goal with
+  | Hget : R.complete_get _ _ _ = (_,_,_) |- _ =>
+      let Hm := fresh "get_controlled" in pose proof (controlled_get Hget) as Hm; clear Hget
+  | Hwrite : R.write_side_contribution _ _ _ _ = (_,_) |- _ =>
+      let Hm := fresh "write_controlled" in pose proof (controlled_write Hwrite) as Hm; clear Hwrite
+  | Hset : R.set_value _ _ _ = (_,_) |- _ =>
+      let Hm := fresh "commit_controlled" in pose proof (controlled_commit Hset) as Hm; clear Hset
+  end.
+  all: intros owner Hmem; cbn [R.cfg_state R.with_queue R.controlled R.enqueue R.publish_targets R.requeue_changed_controlled_owner] in *;
+    try exact Hmem; try solve [match goal with Hm : controlled_mono _ _ |- _ => apply Hm; exact Hmem end].
+  all: unfold R.observe, R.materialize, R.reset_registered_cells;
+    repeat match goal with
+    | |- context [match Ranks.observe ?order ?target with _ => _ end] => destruct (Ranks.observe order target)
+    | |- context [match M.lookup ?table ?target with _ => _ end] => destruct (M.lookup table target)
+    | |- context [if ?b then _ else _] => destruct b
+    end; cbn; try exact Hmem.
+  all: match goal with Hm : controlled_mono _ _ |- _ => apply Hm end;
+    unfold R.observe; destruct (Ranks.observe (R.ranking st) _) as [order rank];
+    repeat match goal with |- context [if ?b then _ else _] => destruct b end; exact Hmem.
+Qed.
+Lemma steps_controlled_mono tf before after : steps tf before after -> controlled_mono (R.cfg_state before) (R.cfg_state after).
+Proof. intro H; induction H; intros owner Hmem; auto; apply IHsteps; eapply next_controlled_mono; eauto. Qed.
+
+(** An uncontrolled value is read only by lower owners. Consequently its
+    direct assignment cannot create work at or above its own rank. *)
+Definition forward_readers st := forall target reader,
+  S.mem reader (R.lookup_set (R.readers st) target) = true ->
+  S.mem target (R.controlled st) = true \/ R.rank_lt st reader target = true.
+Lemma forward_readers_layout before after :
+  R.readers after = R.readers before -> controlled_mono before after ->
+  extends (R.ranking before) (R.ranking after) -> forward_readers before -> forward_readers after.
+Proof.
+  intros Hr Hc He H target reader Hmem; rewrite Hr in Hmem;
+    destruct (H target reader Hmem); [left; apply Hc; assumption |right; eapply lt_extends; eauto].
+Qed.
+Lemma forward_readers_get st fr target next next_fr value :
+  R.complete_get st fr target = (next,next_fr,value) -> forward_readers st -> forward_readers next.
+Proof.
+  intros Hget Hreaders; unfold R.complete_get in Hget.
+  destruct (R.rank_lt st (R.frame_owner fr) target) eqn:Hhigher;
+    inversion Hget; subst next next_fr value; clear Hget;
+    unfold R.materialize; destruct (M.lookup _ target); intros observed reader Hmem;
+    cbn [R.with_sigma R.with_readers R.with_controlled R.promote_controlled R.readers R.controlled R.ranking R.rank_lt] in *;
+    unfold R.lookup_set in Hmem; destruct (V.eq_dec observed target) as [-> |Hneq].
+  all: try rewrite ML.lookup_update_same in Hmem;
+    try rewrite ML.lookup_update_other in Hmem by assumption.
+  all: cbn [R.rank_lt R.ranking R.with_readers R.with_sigma R.promote_controlled R.with_controlled].
+  all: try solve [apply SL.add_spec in Hmem; destruct Hmem as [-> |Hmem];
+    [right; exact Hhigher |exact (Hreaders target reader Hmem)]].
+  all: try solve [left; apply SL.add_spec; auto].
+  all: change (S.mem reader (R.lookup_set (R.readers st) observed) = true) in Hmem;
+    destruct (Hreaders observed reader Hmem) as [Hcontrolled |Hlt];
+    [left; try exact Hcontrolled; apply SL.add_spec; auto |right; exact Hlt].
+Qed.
+Lemma forward_readers_write st fr target input next changed :
+  R.write_side_contribution st fr target input = (next,changed) -> forward_readers st -> forward_readers next.
+Proof.
+  intros Hwrite H; destruct (write_layout Hwrite) as [Hr [_ [_ [Hreaders _]]]].
+  eapply forward_readers_layout with (before := st);
+    [exact Hreaders |eapply controlled_write; exact Hwrite |rewrite Hr; apply extends_refl |exact H].
+Qed.
+Lemma forward_readers_commit st fr direct next next_fr :
+  R.set_value st fr direct = (next,next_fr) -> forward_readers st -> forward_readers next.
+Proof.
+  intros Hset H; unfold R.set_value in Hset; split_program Hset; try exact H.
+  all: intros target reader Hmem; cbn [R.with_readers R.with_queue R.with_sigma R.readers R.controlled R.ranking R.rank_lt] in *;
+    unfold R.lookup_set in Hmem; destruct (V.eq_dec target (R.frame_owner fr)) as [-> |Hneq].
+  all: try solve [rewrite ML.lookup_update_same in Hmem; rewrite SL.empty_spec in Hmem; discriminate].
+  all: rewrite ML.lookup_update_other in Hmem by assumption;
+    apply H; exact Hmem.
+Qed.
+Arguments forward_readers_commit {st fr direct next next_fr} _ _.
+Lemma forward_readers_observe st target : forward_readers st -> forward_readers (R.observe st target).
+Proof.
+  intro H; eapply forward_readers_layout with (before := st);
+    [unfold R.observe; destruct (Ranks.observe (R.ranking st) target); reflexivity
+    |apply controlled_layout; unfold R.observe; destruct (Ranks.observe (R.ranking st) target); reflexivity
+    |apply observe_extends |exact H].
+Qed.
+Theorem next_forward_readers tf before after : forward_readers (R.cfg_state before) ->
+  step tf before after -> forward_readers (R.cfg_state after).
+Proof.
+  intros Hreaders Hstep; destruct before as [st ctrl]; unfold step, R.next_config in Hstep;
+    cbn [R.cfg_state R.cfg_control] in Hstep, Hreaders.
+  destruct ctrl; cbn [R.cfg_control] in Hstep;
+    unfold R.continue_side, R.continue_dead in Hstep; split_program Hstep.
+  all: repeat match goal with
+  | Hget : R.complete_get _ _ _ = (_,_,_) |- _ =>
+      let Hf := fresh "get_forward" in pose proof (forward_readers_get Hget) as Hf; clear Hget
+  | Hwrite : R.write_side_contribution _ _ _ _ = (_,_) |- _ =>
+      let Hf := fresh "write_forward" in pose proof (forward_readers_write Hwrite) as Hf; clear Hwrite
+  | Hset : R.set_value _ _ _ = (_,_) |- _ =>
+      let Hf := fresh "commit_forward" in pose proof (forward_readers_commit Hset) as Hf; clear Hset
+  end.
+  all: cbn [R.cfg_state] in *;
+    try solve [eapply forward_readers_layout with (before := st); [reflexivity |apply controlled_layout; reflexivity |apply extends_refl |exact Hreaders]].
+  all: try solve [match goal with Hf : forward_readers _ -> forward_readers _ |- _ => apply Hf end;
+    repeat match goal with |- context [if ?b then _ else _] => destruct b end;
+    try exact Hreaders; apply forward_readers_observe; exact Hreaders].
+  all: unfold R.materialize, R.reset_registered_cells;
+    repeat match goal with
+    | |- context [match M.lookup ?table ?target with _ => _ end] => destruct (M.lookup table target)
+    | |- context [if ?b then _ else _] => destruct b
+    end.
+  all: eapply forward_readers_layout with (before := st);
+      [unfold R.observe; try destruct (Ranks.observe (R.ranking st) _); reflexivity
+      |apply controlled_layout; unfold R.observe; try destruct (Ranks.observe (R.ranking st) _); reflexivity
+      |try apply observe_extends; try apply extends_refl
+      |exact Hreaders].
+Qed.
+Theorem reachable_forward_readers tf roots c : steps tf (R.initial_config roots) c -> forward_readers (R.cfg_state c).
+Proof.
+  intro Hpath; assert (Hinitial : forward_readers (R.cfg_state (R.initial_config roots))).
+  { intros target reader Hmem; unfold R.lookup_set in Hmem; cbn in Hmem;
+    rewrite ML.lookup_empty, SL.empty_spec in Hmem; discriminate. }
+  revert Hinitial; induction Hpath; auto; intro Hfirst; apply IHHpath; eapply next_forward_readers; eauto.
+Qed.
+
+Definition configuration st ctrl : R.config := {| R.cfg_state := st; R.cfg_control := ctrl |}.
+Definition reachable tf roots c := steps tf (R.initial_config roots) c.
+Definition queue_below st owner := Forall (fun x => R.rank_lt st x owner = true) (R.queue st).
+Definition episode_complete tf start owner k := exists final,
+  steps tf start (configuration final (R.Return k)) /\ queue_below final owner.
+Lemma reachable_advance tf roots before after : reachable tf roots before -> step tf before after -> reachable tf roots after.
+Proof. intros Hpath Hstep; eapply steps_snoc; eauto. Qed.
+Lemma reachable_follow tf roots before after : reachable tf roots before -> steps tf before after -> reachable tf roots after.
+Proof. intros Hpath Htail; eapply steps_append; eauto. Qed.
+
+Section Evaluation.
+Variable tf : Syntax.system.
+Variable roots : list V.t.
+Variable owner : V.t.
+Hypothesis higher_episodes : forall st child k,
+  reachable tf roots (configuration st (R.StartEpisode child k)) -> R.rank_lt st owner child = true ->
+  episode_complete tf (configuration st (R.StartEpisode child k)) child k.
+
+(** The structural induction visits each residual constraint once. A recursive
+    call invokes only the hypothesis for a strictly higher owner. *)
+Lemma dead_reaches_commit pending st fr direct k : R.frame_owner fr = owner ->
+  reachable tf roots (configuration st (R.RunDead fr direct pending k)) ->
+  exists final, steps tf (configuration st (R.RunDead fr direct pending k))
+    (configuration final (R.RunCommit fr direct k)).
+Proof.
+  revert st; induction pending as [|target pending IH]; intros st Howner Hreachable.
+  - exists (R.publish_targets st fr); apply steps_cons with (next := configuration (R.publish_targets st fr) (R.RunCommit fr direct k));
+      [reflexivity |constructor].
+  - destruct (S.mem target (R.frame_current_targets fr)) eqn:Hmem.
+    + assert (Hstep : step tf (configuration st (R.RunDead fr direct (target :: pending) k))
+        (configuration st (R.RunDead fr direct pending k))) by (unfold step, configuration; cbn; rewrite Hmem; reflexivity).
+      destruct (IH st Howner (reachable_advance Hreachable Hstep)) as [final Htail].
+      exists final; eapply steps_cons; eauto.
+    + destruct (R.write_side_contribution st fr target D.bottom) as [next changed] eqn:Hwrite.
+      assert (Hstep : step tf (configuration st (R.RunDead fr direct (target :: pending) k))
+        (R.continue_dead next fr direct target pending k changed)).
+      { unfold step, configuration; cbn -[R.write_side_contribution]; rewrite Hmem, Hwrite; reflexivity. }
+      pose proof (reachable_advance Hreachable Hstep) as Hnext.
+      unfold R.continue_dead in Hstep, Hnext.
+      destruct changed; [destruct (R.rank_lt next (R.frame_owner fr) target && negb (R.is_materialized next target)) eqn:Hchild |].
+      * apply andb_true_iff in Hchild; destruct Hchild as [Hhigher _]; rewrite Howner in Hhigher.
+        destruct (higher_episodes Hnext Hhigher) as [returned [Hepisode Hbelow]].
+        assert (Hresume : step tf (configuration returned (R.Return (R.KDead fr direct pending k)))
+          (configuration returned (R.RunDead fr direct pending k))) by reflexivity.
+        destruct (IH returned Howner (reachable_advance (reachable_follow Hnext Hepisode) Hresume)) as [final Htail].
+        exists final; eapply steps_cons; [exact Hstep |].
+        eapply steps_append; [exact Hepisode |eapply steps_cons; eauto].
+      * destruct (IH (R.enqueue next target) Howner Hnext) as [final Htail]; exists final; eapply steps_cons; eauto.
+      * destruct (IH next Howner Hnext) as [final Htail]; exists final; eapply steps_cons; eauto.
+Qed.
+
+Lemma rhs_reaches_commit body st fr k : R.frame_owner fr = owner ->
+  reachable tf roots (configuration st (R.RunRhs fr body k)) ->
+  exists final final_fr direct, R.frame_owner final_fr = owner /\
+    steps tf (configuration st (R.RunRhs fr body k)) (configuration final (R.RunCommit final_fr direct k)).
+Proof.
+  revert st fr k; induction body as [direct|target tail IH|target raw tail IH|target tail IH]; intros st fr k Howner Hreachable.
+  - set (pending := if Features.eliminate_dead_sides then S.elements (R.frame_previous_targets fr) else []).
+    assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Ret direct) k))
+      (configuration st (R.RunDead fr direct pending k))) by reflexivity.
+    destruct (dead_reaches_commit Howner (reachable_advance Hreachable Hstep)) as [final Htail].
+    exists final, fr, direct; split; [exact Howner |eapply steps_cons; eauto].
+  - set (observed := R.observe st target).
+    destruct (negb (R.is_materialized observed target) && R.rank_lt observed (R.frame_owner fr) target) eqn:Hchild.
+    + assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Get target tail) k))
+        (configuration observed (R.StartEpisode target (R.KAfterGet fr target tail k)))).
+      { unfold step, configuration; cbn -[R.observe R.complete_get]; fold observed; rewrite Hchild; reflexivity. }
+      pose proof (reachable_advance Hreachable Hstep) as Hnext.
+      apply andb_true_iff in Hchild; destruct Hchild as [_ Hhigher]; rewrite Howner in Hhigher.
+      destruct (higher_episodes Hnext Hhigher) as [returned [Hepisode Hbelow]].
+      destruct (R.complete_get returned fr target) as [[next next_fr] value] eqn:Hget.
+      assert (Hresume : step tf (configuration returned (R.Return (R.KAfterGet fr target tail k)))
+        (configuration next (R.RunRhs next_fr (tail value) k))).
+      { unfold step, configuration; cbn -[R.complete_get]; rewrite Hget; reflexivity. }
+      assert (Hnext_owner : R.frame_owner next_fr = owner) by (rewrite (get_owner Hget); exact Howner).
+      destruct (IH value next next_fr k Hnext_owner (reachable_advance (reachable_follow Hnext Hepisode) Hresume))
+        as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; [exact Hstep |]].
+      eapply steps_append; [exact Hepisode |eapply steps_cons; eauto].
+    + set (base := if R.is_materialized observed target then observed else R.enqueue observed target).
+      destruct (R.complete_get base fr target) as [[next next_fr] value] eqn:Hget.
+      assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Get target tail) k))
+        (configuration next (R.RunRhs next_fr (tail value) k))).
+      { unfold step, configuration; cbn -[R.observe R.complete_get]; fold observed; rewrite Hchild; fold base; rewrite Hget; reflexivity. }
+      assert (Hnext_owner : R.frame_owner next_fr = owner) by (rewrite (get_owner Hget); exact Howner).
+      destruct (IH value next next_fr k Hnext_owner (reachable_advance Hreachable Hstep))
+        as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; eauto].
+  - set (input := R.accumulated_side_input fr target raw).
+    set (next_fr := R.with_frame_side fr target input).
+    destruct (R.write_side_contribution (R.observe st target) next_fr target input) as [next changed] eqn:Hwrite.
+    assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Side target raw tail) k))
+      (R.continue_side next next_fr target tail k changed)).
+    { unfold step, configuration; cbn -[R.observe R.write_side_contribution]; fold input; fold next_fr; rewrite Hwrite; reflexivity. }
+    assert (Hnext_owner : R.frame_owner next_fr = owner) by (exact Howner).
+    pose proof (reachable_advance Hreachable Hstep) as Hnext.
+    unfold R.continue_side in Hstep, Hnext.
+    destruct changed; [destruct (R.rank_lt next (R.frame_owner next_fr) target && negb (R.is_materialized next target)) eqn:Hchild |].
+    + apply andb_true_iff in Hchild; destruct Hchild as [Hhigher _]; rewrite Hnext_owner in Hhigher.
+      destruct (higher_episodes Hnext Hhigher) as [returned [Hepisode Hbelow]].
+      assert (Hresume : step tf (configuration returned (R.Return (R.KAfterSide next_fr tail k)))
+        (configuration returned (R.RunRhs next_fr tail k))) by reflexivity.
+      destruct (IH returned next_fr k Hnext_owner (reachable_advance (reachable_follow Hnext Hepisode) Hresume))
+        as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; [exact Hstep |]].
+      eapply steps_append; [exact Hepisode |eapply steps_cons; eauto].
+    + destruct (IH (R.enqueue next target) next_fr k Hnext_owner Hnext) as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; eauto].
+    + destruct (IH next next_fr k Hnext_owner Hnext) as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; eauto].
+  - set (observed := R.observe st target).
+    destruct (R.is_materialized observed target) eqn:Hmat.
+    + assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k))
+        (configuration observed (R.RunRhs fr tail k))).
+      { unfold step, configuration; cbn -[R.observe]; fold observed; rewrite Hmat; reflexivity. }
+      destruct (IH observed fr k Howner (reachable_advance Hreachable Hstep)) as [final [final_fr [direct [Hfinal Htail]]]].
+      exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; eauto].
+    + destruct (R.rank_lt observed (R.frame_owner fr) target) eqn:Hhigher.
+      * assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k))
+          (configuration observed (R.StartEpisode target (R.KAfterSpawn fr tail k)))).
+        { unfold step, configuration; cbn -[R.observe]; fold observed; rewrite Hmat, Hhigher; reflexivity. }
+        pose proof (reachable_advance Hreachable Hstep) as Hnext; rewrite Howner in Hhigher.
+        destruct (higher_episodes Hnext Hhigher) as [returned [Hepisode Hbelow]].
+        assert (Hresume : step tf (configuration returned (R.Return (R.KAfterSpawn fr tail k)))
+          (configuration returned (R.RunRhs fr tail k))) by reflexivity.
+        destruct (IH returned fr k Howner (reachable_advance (reachable_follow Hnext Hepisode) Hresume))
+          as [final [final_fr [direct [Hfinal Htail]]]].
+        exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; [exact Hstep |]].
+        eapply steps_append; [exact Hepisode |eapply steps_cons; eauto].
+      * assert (Hstep : step tf (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k))
+          (configuration (R.materialize (R.enqueue observed target) target) (R.RunRhs fr tail k))).
+        { unfold step, configuration; cbn -[R.observe]; fold observed; rewrite Hmat, Hhigher; reflexivity. }
+        destruct (IH (R.materialize (R.enqueue observed target) target) fr k Howner (reachable_advance Hreachable Hstep))
+          as [final [final_fr [direct [Hfinal Htail]]]].
+        exists final, final_fr, direct; split; [exact Hfinal |eapply steps_cons; eauto].
+Qed.
+End Evaluation.
+
+Lemma steps_ranking_extends tf before after : steps tf before after ->
+  extends (R.ranking (R.cfg_state before)) (R.ranking (R.cfg_state after)).
+Proof. intro H; induction H; [apply extends_refl |eapply extends_trans; [eapply next_ranking_extends; exact H |exact IHsteps]]. Qed.
+Definition queue_ceiling st ceiling := forall x, In x (R.queue st) ->
+  exists rank, Ranks.lookup (R.ranking st) x = Some rank /\ rank < ceiling.
+Definition drain_boundary tf owner phase k c :=
+  queue_below (R.cfg_state c) owner /\
+  (R.cfg_control c = R.Return k \/ exists fr,
+    R.cfg_control c = R.RunRhs fr (tf owner) k /\ R.frame_owner fr = owner /\ R.frame_phase fr = phase).
+Lemma queue_below_close st child owner : queue_below st owner -> queue_below (R.reset_registered_cells st child) owner.
+Proof.
+  unfold queue_below; rewrite close_queue; unfold R.rank_lt; rewrite close_rank; auto.
+Qed.
+Lemma queue_below_ceiling st owner rank : queue_below st owner ->
+  Ranks.lookup (R.ranking st) owner = Some rank -> queue_ceiling st rank.
+Proof.
+  intros Hbelow Hrank x Hin; unfold queue_below in Hbelow; rewrite Forall_forall in Hbelow;
+    destruct (@lt_ranks (R.ranking st) x owner (Hbelow x Hin)) as [rx [ry [Hx [Hy Hlt]]]];
+    rewrite Hrank in Hy; inversion Hy; subst; eauto.
+Qed.
+
+Section Draining.
+Variable tf : Syntax.system.
+Variable roots : list V.t.
+Variable owner : V.t.
+Hypothesis higher_episodes : forall st child k,
+  reachable tf roots (configuration st (R.StartEpisode child k)) -> R.rank_lt st owner child = true ->
+  episode_complete tf (configuration st (R.StartEpisode child k)) child k.
+Lemma drain_reaches_boundary ceiling st fr k : R.frame_owner fr = owner ->
+  reachable tf roots (configuration st (R.RunDrain fr k)) -> queue_ceiling st ceiling ->
+  exists final, steps tf (configuration st (R.RunDrain fr k)) final /\
+    drain_boundary tf owner (R.frame_phase fr) k final.
+Proof.
+  revert st fr k; induction ceiling using lt_wf_ind; intros st fr k Howner Hreachable Hceiling.
+  pose proof (@reachable_rank_configuration tf roots (configuration st (R.RunDrain fr k)) Hreachable) as [Hstore Hrefs].
+  cbn [configuration R.cfg_state R.cfg_control control_refs] in Hstore, Hrefs; destruct Hrefs as [Hfr Hk].
+  assert (Howner_ranked : ranked (R.ranking st) owner) by (rewrite <- Howner; exact (proj2 (ref_owner Hfr))).
+  destruct (R.queue st) as [|head rest] eqn:Hqueue.
+  - exists (configuration (R.reset_registered_cells st owner) (R.Return k)); split.
+    + apply steps_cons with (next := configuration (R.reset_registered_cells st owner) (R.Return k)); [|constructor].
+      unfold step, configuration; cbn -[R.reset_registered_cells]; rewrite Hqueue; cbn; now rewrite Howner.
+    + split; [apply queue_below_close; unfold queue_below; rewrite Hqueue; constructor |left; reflexivity].
+  - destruct (V.eq_dec head owner) as [-> |Hneq].
+    + exists (configuration (R.with_queue st rest)
+        (R.RunRhs (R.fresh_frame (R.with_queue st rest) owner (R.frame_phase fr)) (tf owner) k)); split.
+      * apply steps_cons with (next := configuration (R.with_queue st rest)
+          (R.RunRhs (R.fresh_frame (R.with_queue st rest) owner (R.frame_phase fr)) (tf owner) k)); [|constructor].
+        unfold step, configuration; cbn -[R.fresh_frame]; rewrite Hqueue, Howner; cbn;
+          destruct (V.eq_dec owner owner); [reflexivity |contradiction].
+      * split.
+        -- unfold queue_below; cbn [R.with_queue R.queue R.rank_lt R.ranking];
+             pose proof (proj2 (@ordered_tail (R.ranking st) owner rest ltac:(rewrite <- Hqueue; exact (store_ordered Hstore)))) as Hbelow;
+             exact Hbelow.
+        -- right; eexists; repeat split; reflexivity.
+    + destruct (R.rank_lt st owner head) eqn:Hhigher.
+      * assert (Hstep : step tf (configuration st (R.RunDrain fr k))
+          (configuration (R.with_queue st rest) (R.StartEpisode head (R.KDrain fr k)))).
+        { unfold step, configuration; cbn -[R.rank_lt]; rewrite Hqueue, Howner; cbn;
+            destruct (V.eq_dec head owner); [contradiction |rewrite Hhigher; reflexivity]. }
+        pose proof (reachable_advance Hreachable Hstep) as Hnext.
+        destruct (higher_episodes Hnext Hhigher) as [returned [Hepisode Hbelow]].
+        destruct (Hceiling head ltac:(rewrite Hqueue; left; reflexivity)) as [rank [Hrank Hbound]].
+        assert (Hreturned_rank : Ranks.lookup (R.ranking returned) head = Some rank).
+        { exact (steps_ranking_extends Hepisode Hrank). }
+        assert (Hresume : step tf (configuration returned (R.Return (R.KDrain fr k)))
+          (configuration returned (R.RunDrain fr k))) by reflexivity.
+        destruct (H rank Hbound returned fr k Howner
+          (reachable_advance (reachable_follow Hnext Hepisode) Hresume)
+          (queue_below_ceiling Hbelow Hreturned_rank)) as [final [Htail Hboundary]].
+        exists final; split; [eapply steps_cons; [exact Hstep |eapply steps_append; [exact Hepisode |eapply steps_cons; eauto]] |exact Hboundary].
+      * assert (Hlower : R.rank_lt st head owner = true).
+        { assert (Hhead : ranked (R.ranking st) head).
+          { pose proof (known_ranked_queue Hstore) as Hq; rewrite Hqueue in Hq; inversion Hq; assumption. }
+          destruct (@lt_compare (R.ranking st) head owner (store_valid Hstore) Hhead
+            Howner_ranked Hneq) as [Hlt |Hlt]; [exact Hlt |unfold R.rank_lt in Hhigher; congruence]. }
+        assert (Hbelow : queue_below st owner).
+        { unfold queue_below; rewrite Hqueue; constructor; [exact Hlower |].
+          destruct (@ordered_tail (R.ranking st) head rest ltac:(rewrite <- Hqueue; exact (store_ordered Hstore))) as [_ Htail].
+          rewrite Forall_forall in *; intros x Hin; eapply lt_trans; [apply Htail; exact Hin |exact Hlower]. }
+        exists (configuration (R.reset_registered_cells st owner) (R.Return k)); split.
+        -- apply steps_cons with (next := configuration (R.reset_registered_cells st owner) (R.Return k)); [|constructor].
+           unfold step, configuration; cbn -[R.reset_registered_cells R.rank_lt]; rewrite Hqueue, Howner; cbn;
+             destruct (V.eq_dec head owner); [contradiction |rewrite Hhigher; reflexivity].
+        -- split; [apply queue_below_close; exact Hbelow |left; reflexivity].
+Qed.
+End Draining.
+
+Theorem finite_queue_ceiling tf roots (finite : Sem.finite_system tf roots) st ctrl :
+  reachable tf roots (configuration st ctrl) -> queue_ceiling st (RF.bound (Sem.support finite)).
+Proof.
+  intros Hreachable owner Hin.
+  pose proof (@reachable_configuration_wf tf roots finite (configuration st ctrl) Hreachable) as [Hstore _].
+  cbn [configuration R.cfg_state] in Hstore;
+  pose proof (known_ranked_queue Hstore) as Hranked; rewrite Forall_forall in Hranked;
+    destruct (Hranked owner Hin) as [rank Hrank]; exists rank; split; [exact Hrank |].
+  eapply reachable_rank_bound; [exact Hreachable |exact Hrank].
+Qed.
+
+Lemma materialized_iff_solved st x : R.is_materialized st x = true <-> solved st x.
+Proof.
+  split; [apply materialized_solved |intros [value Hvalue]; unfold Store.sigma in Hvalue; unfold R.is_materialized; rewrite Hvalue; reflexivity].
+Qed.
+Definition missing_count support st := sum_over (fun x => if R.is_materialized st x then 0 else 1) support.
+Lemma missing_count_mono support before after : preserves_live before after -> missing_count support after <= missing_count support before.
+Proof.
+  intro Hlive; apply sum_over_le; intros x Hin.
+  destruct (R.is_materialized before x) eqn:Hbefore; destruct (R.is_materialized after x) eqn:Hafter; try lia.
+  apply materialized_iff_solved in Hbefore; apply Hlive in Hbefore; apply materialized_iff_solved in Hbefore; congruence.
+Qed.
+Lemma missing_count_strict support before after x : preserves_live before after -> In x support ->
+  R.is_materialized before x = false -> solved after x -> missing_count support after < missing_count support before.
+Proof.
+  intros Hlive Hin Hmissing Hsolved; apply materialized_iff_solved in Hsolved.
+  eapply sum_over_lt with (x := x); [exact Hin |rewrite Hmissing, Hsolved; cbn; lia |].
+  intros y Hy; destruct (R.is_materialized before y) eqn:Hbefore; destruct (R.is_materialized after y) eqn:Hafter; try lia.
+  apply materialized_iff_solved in Hbefore; apply Hlive in Hbefore; apply materialized_iff_solved in Hbefore; congruence.
+Qed.
+Definition promotion_reserve st owner := if S.mem owner (R.controlled st) then 0 else 1.
+Definition owner_credit support st owner phase := incident_credit support st owner +
+  if S.mem owner (R.controlled st) then UL.remaining_changes phase (R.sigma_value st owner) else 0.
+Definition round_budget support st owner phase :=
+  (missing_count support st, (promotion_reserve st owner, owner_credit support st owner phase)).
+Definition budget_lt := Relation_Operators.slexprod nat (nat * nat) lt
+  (Relation_Operators.slexprod nat nat lt lt).
+Definition budget_le (next previous : nat * (nat * nat)) := next = previous \/ budget_lt next previous.
+Definition round_order support owner (next previous : nat * (R.state * U.phase)) :=
+  Relation_Operators.slexprod nat (nat * (nat * nat)) lt budget_lt
+    (fst next, round_budget support (fst (snd next)) owner (snd (snd next)))
+    (fst previous, round_budget support (fst (snd previous)) owner (snd (snd previous))).
+Lemma round_order_well_founded support owner : well_founded (round_order support owner).
+Proof.
+  unfold round_order; apply wf_inverse_image; repeat apply wf_slexprod; apply Nat.lt_wf_0.
+Qed.
+Lemma budget_components a b c a' b' c' : a' <= a -> b' <= b -> c' <= c ->
+  budget_le (a',(b',c')) (a,(b,c)).
+Proof.
+  intros Ha Hb Hc; unfold budget_le, budget_lt.
+  destruct (proj1 (Nat.lt_eq_cases _ _) Ha) as [Hlt | ->]; [right; apply Relation_Operators.left_slex; exact Hlt |].
+  destruct (proj1 (Nat.lt_eq_cases _ _) Hb) as [Hlt | ->]; [right; apply Relation_Operators.right_slex, Relation_Operators.left_slex; exact Hlt |].
+  destruct (proj1 (Nat.lt_eq_cases _ _) Hc) as [Hlt | ->]; [right; repeat apply Relation_Operators.right_slex; exact Hlt |left; reflexivity].
+Qed.
+Lemma budget_components_strict a b c a' b' c' : a' <= a -> b' <= b -> c' < c ->
+  budget_lt (a',(b',c')) (a,(b,c)).
+Proof.
+  intros Ha Hb Hc; unfold budget_lt.
+  destruct (proj1 (Nat.lt_eq_cases _ _) Ha) as [Hlt | ->]; [apply Relation_Operators.left_slex; exact Hlt |].
+  destruct (proj1 (Nat.lt_eq_cases _ _) Hb) as [Hlt | ->]; [apply Relation_Operators.right_slex, Relation_Operators.left_slex; exact Hlt |].
+  repeat apply Relation_Operators.right_slex; exact Hc.
+Qed.
+Lemma budget_growth support before after owner phase next_phase :
+  preserves_live before after -> controlled_mono before after ->
+  incident_credit support after owner <= incident_credit support before owner ->
+  (S.mem owner (R.controlled before) = true ->
+    UL.remaining_changes next_phase (R.sigma_value after owner) <= UL.remaining_changes phase (R.sigma_value before owner)) ->
+  budget_le (round_budget support after owner next_phase) (round_budget support before owner phase).
+Proof.
+  intros Hl Hc Hside Hordinary; pose proof (missing_count_mono support Hl) as Hmissing.
+  unfold round_budget, promotion_reserve, owner_credit.
+  destruct (S.mem owner (R.controlled before)) eqn:Hbefore;
+    destruct (S.mem owner (R.controlled after)) eqn:Hafter; cbn.
+  - apply budget_components; try lia; pose proof (Hordinary eq_refl); lia.
+  - pose proof (Hc owner Hbefore); congruence.
+  - unfold budget_le, budget_lt; right.
+    destruct (proj1 (Nat.lt_eq_cases _ _) Hmissing) as [Hlt |Heq]; [apply Relation_Operators.left_slex; exact Hlt |].
+    rewrite Heq; apply Relation_Operators.right_slex, Relation_Operators.left_slex; lia.
+  - apply budget_components; lia.
+Qed.
+Lemma budget_side_strict support before after owner phase next_phase :
+  preserves_live before after -> controlled_mono before after ->
+  incident_credit support after owner < incident_credit support before owner ->
+  (S.mem owner (R.controlled before) = true ->
+    UL.remaining_changes next_phase (R.sigma_value after owner) <= UL.remaining_changes phase (R.sigma_value before owner)) ->
+  budget_lt (round_budget support after owner next_phase) (round_budget support before owner phase).
+Proof.
+  intros Hl Hc Hside Hordinary; pose proof (missing_count_mono support Hl) as Hmissing.
+  unfold round_budget, promotion_reserve, owner_credit.
+  destruct (S.mem owner (R.controlled before)) eqn:Hbefore;
+    destruct (S.mem owner (R.controlled after)) eqn:Hafter; cbn.
+  - apply budget_components_strict; try lia; pose proof (Hordinary eq_refl); lia.
+  - pose proof (Hc owner Hbefore); congruence.
+  - unfold budget_lt; destruct (proj1 (Nat.lt_eq_cases _ _) Hmissing) as [Hlt |Heq];
+      [apply Relation_Operators.left_slex; exact Hlt |rewrite Heq; apply Relation_Operators.right_slex, Relation_Operators.left_slex; lia].
+  - apply budget_components_strict; lia.
+Qed.
+Lemma incident_credit_layout support before after owner : R.side_cells after = R.side_cells before ->
+  R.contributions after = R.contributions before -> incident_credit support after owner = incident_credit support before owner.
+Proof.
+  intros Hcells Hcontrib; unfold incident_credit; f_equal;
+    induction support as [|head rest IH]; cbn; try reflexivity;
+    rewrite (@side_credit_layout before after _ _ Hcells Hcontrib), IH; reflexivity.
+Qed.
+Lemma budget_commit support st fr direct next next_fr : R.set_value st fr direct = (next,next_fr) ->
+  budget_le (round_budget support next (R.frame_owner fr) (R.frame_phase next_fr))
+    (round_budget support st (R.frame_owner fr) (R.frame_phase fr)).
+Proof.
+  intro Hset; pose proof (@commit_footprint st fr direct next next_fr Hset) as Hview.
+  apply budget_growth; [eapply preserves_live_commit; exact Hset |eapply controlled_commit; exact Hset | |].
+  - rewrite (@incident_credit_layout support st next (R.frame_owner fr) (commit_cells Hview) (commit_contributions Hview)); lia.
+  - intro Hcontrolled; eapply commit_credit; eauto.
+Qed.
+Lemma budget_commit_changed support st fr direct next next_fr : S.mem (R.frame_owner fr) (R.controlled st) = true ->
+  R.set_value st fr direct = (next,next_fr) ->
+  R.equivalent (R.sigma_value next (R.frame_owner fr)) (R.sigma_value st (R.frame_owner fr)) = false ->
+  budget_lt (round_budget support next (R.frame_owner fr) (R.frame_phase next_fr))
+    (round_budget support st (R.frame_owner fr) (R.frame_phase fr)).
+Proof.
+  intros Hcontrolled Hset Hchanged; pose proof (@commit_footprint st fr direct next next_fr Hset) as Hview.
+  pose proof (@commit_credit_strict st fr direct next next_fr Hcontrolled Hset Hchanged) as Hcredit.
+  unfold round_budget, promotion_reserve, owner_credit; rewrite (commit_controlled Hview), Hcontrolled;
+    cbn; apply budget_components_strict.
+  - apply missing_count_mono; eapply preserves_live_commit; exact Hset.
+  - lia.
+  - rewrite (@incident_credit_layout support st next (R.frame_owner fr) (commit_cells Hview) (commit_contributions Hview)); lia.
+Qed.
+Lemma budget_write support st fr target input next changed owner phase :
+  R.write_side_contribution st fr target input = (next,changed) ->
+  budget_le (round_budget support next owner phase) (round_budget support st owner phase).
+Proof.
+  intro Hwrite; pose proof (write_layout Hwrite) as [_ [_ [Hsigma _]]].
+  apply budget_growth.
+  - apply preserves_live_layout; exact Hsigma.
+  - eapply controlled_write; exact Hwrite.
+  - eapply incident_credit_write; exact Hwrite.
+  - intro Hcontrolled; unfold R.sigma_value; rewrite Hsigma; lia.
+Qed.
+Lemma budget_write_changed support st fr target input next owner phase :
+  R.write_side_contribution st fr target input = (next,true) -> In (R.frame_owner fr) support -> In target support ->
+  (owner = R.frame_owner fr \/ owner = target) ->
+  budget_lt (round_budget support next owner phase) (round_budget support st owner phase).
+Proof.
+  intros Hwrite Hsource Htarget Hincident; pose proof (write_layout Hwrite) as [_ [_ [Hsigma _]]].
+  apply budget_side_strict.
+  - apply preserves_live_layout; exact Hsigma.
+  - eapply controlled_write; exact Hwrite.
+  - eapply incident_credit_write_strict; eauto.
+  - intro Hcontrolled; unfold R.sigma_value; rewrite Hsigma; lia.
+Qed.
+Lemma budget_higher_close support st owner child phase : reset_scoped st -> R.rank_lt st owner child = true ->
+  round_budget support (R.reset_registered_cells st child) owner phase = round_budget support st owner phase.
+Proof.
+  intros Hreset Hhigher; unfold round_budget, owner_credit;
+    rewrite (@incident_credit_higher_close support st owner child Hreset Hhigher).
+  unfold missing_count, promotion_reserve, R.reset_registered_cells; destruct Features.restart_side_phases; reflexivity.
+Qed.
+
+(** A whole round reaches either episode return or a fresh RHS evaluation.
+    Only the latter still needs the decreasing-round argument. *)
+Theorem round_reaches_boundary tf roots (finite : Sem.finite_system tf roots) owner st fr k :
+  (forall st child k, reachable tf roots (configuration st (R.StartEpisode child k)) ->
+    R.rank_lt st owner child = true -> episode_complete tf (configuration st (R.StartEpisode child k)) child k) ->
+  R.frame_owner fr = owner -> reachable tf roots (configuration st (R.RunRhs fr (tf owner) k)) ->
+  exists final phase, steps tf (configuration st (R.RunRhs fr (tf owner) k)) final /\ drain_boundary tf owner phase k final.
+Proof.
+  intros Hchildren Howner Hreachable.
+  destruct (@rhs_reaches_commit tf roots owner Hchildren (tf owner) st fr k Howner Hreachable)
+    as [committed [commit_fr [direct [Hcommit_owner Heval]]]].
+  pose proof (reachable_follow Hreachable Heval) as Hcommit.
+  destruct (R.set_value committed commit_fr direct) as [drained drain_fr] eqn:Hset.
+  set (next := R.requeue_changed_controlled_owner committed drained (R.frame_owner commit_fr)).
+  assert (Hstep : step tf (configuration committed (R.RunCommit commit_fr direct k)) (configuration next (R.RunDrain drain_fr k))).
+  { unfold step, configuration; cbn -[R.set_value]; rewrite Hset; reflexivity. }
+  pose proof (reachable_advance Hcommit Hstep) as Hdrain.
+  assert (Hframe : R.frame_owner drain_fr = owner).
+  { rewrite (commit_owner (@commit_footprint committed commit_fr direct drained drain_fr Hset)); exact Hcommit_owner. }
+  destruct (@drain_reaches_boundary tf roots owner Hchildren (RF.bound (Sem.support finite)) next drain_fr k
+    Hframe Hdrain (@finite_queue_ceiling tf roots finite next (R.RunDrain drain_fr k) Hdrain))
+    as [final [Hdraining Hboundary]].
+  exists final, (R.frame_phase drain_fr); split; [eapply steps_append; [exact Heval |eapply steps_cons; eauto] |exact Hboundary].
+Qed.
+
+Lemma insert_lower order owner x queue : R.ranking_lt order x owner = true ->
+  Forall (fun y => R.ranking_lt order y owner = true) queue ->
+  Forall (fun y => R.ranking_lt order y owner = true) (R.queue_insert order x queue).
+Proof.
+  intros Hx Hq; rewrite Forall_forall in *; intros y Hin; apply insert_members in Hin;
+    destruct Hin as [-> |Hin]; auto.
+Qed.
+Lemma insert_all_lower order owner xs queue :
+  Forall (fun y => R.ranking_lt order y owner = true) xs ->
+  Forall (fun y => R.ranking_lt order y owner = true) queue ->
+  Forall (fun y => R.ranking_lt order y owner = true) (R.queue_insert_all order xs queue).
+Proof.
+  intro Hxs; revert queue; induction Hxs; cbn; intros queue Hq; auto;
+    apply IHHxs, insert_lower; auto.
+Qed.
+Lemma uncontrolled_readers_lower st owner : forward_readers st -> S.mem owner (R.controlled st) = false ->
+  Forall (fun reader => R.rank_lt st reader owner = true) (S.elements (R.lookup_set (R.readers st) owner)).
+Proof.
+  intros Hforward Howner; apply Forall_forall; intros reader Hin; apply SL.mem_spec in Hin;
+    destruct (Hforward owner reader Hin); congruence.
+Qed.
+Theorem uncontrolled_commit_keeps_lower_queue st fr direct next next_fr :
+  forward_readers st -> S.mem (R.frame_owner fr) (R.controlled st) = false -> queue_below st (R.frame_owner fr) ->
+  R.set_value st fr direct = (next,next_fr) ->
+  queue_below (R.requeue_changed_controlled_owner st next (R.frame_owner fr)) (R.frame_owner fr).
+Proof.
+  intros Hforward Hcontrolled Hbelow Hset.
+  assert (Hreaders := uncontrolled_readers_lower Hforward Hcontrolled).
+  unfold R.requeue_changed_controlled_owner; rewrite Hcontrolled, andb_false_r; cbn.
+  unfold R.set_value in Hset;
+    destruct (R.equivalent (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)));
+    [inversion Hset; subst; exact Hbelow |].
+  rewrite Hcontrolled in Hset; cbn in Hset.
+  destruct (R.equivalent (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)));
+    inversion Hset; subst; try exact Hbelow.
+  unfold queue_below; cbn [R.with_queue R.queue R.with_readers R.ranking R.enqueue_all R.with_sigma R.readers R.rank_lt];
+    apply insert_all_lower; [exact Hreaders |exact Hbelow].
+Qed.
+
+Lemma get_phase st fr target next next_fr value : R.complete_get st fr target = (next,next_fr,value) ->
+  R.frame_phase next_fr = R.frame_phase fr.
+Proof. unfold R.complete_get; intro H; split_program H; reflexivity. Qed.
+Lemma budget_get support st fr target next next_fr value owner phase :
+  R.complete_get st fr target = (next,next_fr,value) ->
+  budget_le (round_budget support next owner phase) (round_budget support st owner phase).
+Proof.
+  intro Hget; pose proof (get_layout Hget) as [_ [_ [Hcontrib [Hcells _]]]].
+  apply budget_growth.
+  - exact (proj1 (preserves_live_get Hget)).
+  - eapply controlled_get; exact Hget.
+  - rewrite (@incident_credit_layout support st next owner Hcells Hcontrib); lia.
+  - intro Hcontrolled; rewrite (get_sigma_value owner Hget); lia.
+Qed.
+Lemma budget_materialize support st target owner phase :
+  budget_le (round_budget support (R.materialize st target) owner phase) (round_budget support st owner phase).
+Proof.
+  apply budget_growth.
+  - apply preserves_live_materialize.
+  - apply controlled_layout; unfold R.materialize; destruct (M.lookup (R.sigma st) target); reflexivity.
+  - rewrite (@incident_credit_layout support st (R.materialize st target) owner
+      ltac:(unfold R.materialize; destruct (M.lookup (R.sigma st) target); reflexivity)
+      ltac:(unfold R.materialize; destruct (M.lookup (R.sigma st) target); reflexivity)); lia.
+  - intro Hcontrolled; rewrite materialize_sigma_value; lia.
+Qed.
+Lemma budget_materialize_new support st target owner phase : In target support -> R.is_materialized st target = false ->
+  budget_lt (round_budget support (R.materialize st target) owner phase) (round_budget support st owner phase).
+Proof.
+  intros Hin Hmissing; unfold round_budget; apply Relation_Operators.left_slex.
+  eapply missing_count_strict; [apply preserves_live_materialize |exact Hin |exact Hmissing |apply materialize_live].
+Qed.
+Lemma budget_observe support st target owner phase : round_budget support (R.observe st target) owner phase = round_budget support st owner phase.
+Proof. unfold R.observe; destruct (Ranks.observe (R.ranking st) target); reflexivity. Qed.
+Lemma budget_queue support st queue owner phase : round_budget support (R.with_queue st queue) owner phase = round_budget support st owner phase.
+Proof. reflexivity. Qed.
+Lemma budget_promote_new support st owner phase : S.mem owner (R.controlled st) = false ->
+  budget_lt (round_budget support (R.promote_controlled st owner) owner phase) (round_budget support st owner phase).
+Proof.
+  intro Hmissing; unfold round_budget, promotion_reserve.
+  assert (Hmem : S.mem owner (S.add owner (R.controlled st)) = true) by (apply SL.add_spec; auto).
+  cbn [R.promote_controlled R.with_controlled R.controlled]; rewrite Hmissing, Hmem.
+  apply Relation_Operators.right_slex, Relation_Operators.left_slex; lia.
 Qed.
 
 End Make.
