@@ -146,6 +146,8 @@ module type FEATURES =
   val restart_side_phases : bool
 
   val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
  end
 
 module ListDiscoveryOrderLaws =
@@ -883,7 +885,9 @@ module FirstDiscovery =
 
       let requeue_changed_controlled_owner before after owner =
         with_queue after
-          (if (&&) (S.mem owner before.controlled)
+          (if (&&)
+                ((&&) Features.recompute_controlled
+                  (S.mem owner before.controlled))
                 (negb
                   (equivalent (sigma_value after owner)
                     (sigma_value before owner)))

@@ -78,16 +78,18 @@ def generate(inlined):
       changed
 
 ''' + source[b:]
-    # Match the frozen generated feature interface without changing its source.
+    # Keep enabled defaults while exposing the same three policies as Restarting.
     a = source.index('module type FEATURES = sig')
     b = source.index('\nend', a) + len('\nend')
     source = source[:a] + '''module Features = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 module type FEATURES = sig
   val side_effect_phase_reset : bool
   val dead_side_elimination : bool
+  val recompute_controlled : bool
 end''' + source[b:]
     # Arbitrary clear_owner uses lazy deletion, with one physical entry per rank.
     once('      mutable queued : bool;', '      mutable queued : bool;\n      mutable resident : bool;')
@@ -147,7 +149,7 @@ end''' + source[b:]
                 evaluate_owner ()
               else begin
                 let changed = set_value state frame direct in
-                if owner_info.controlled && changed then
+                if Features.recompute_controlled && owner_info.controlled && changed then
                   enqueue state owner;
                 drain_episode ()
               end)

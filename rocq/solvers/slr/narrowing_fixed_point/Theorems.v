@@ -50,7 +50,8 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
 End Correctness.
 
 
-(** OneBox fixedness from controlled-owner recomputation; side policies are arbitrary. *)
+(** OneBox owner phases avoid fallback for monotone systems. Controlled-owner
+    recomputation additionally guarantees fixedness with stored side contributions. *)
 Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   Module Fixed := FixedPoint.Make V D WN.
   Module U := Fixed.U.
@@ -69,12 +70,29 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       Definition narrowing_fixed := narrowing_fixed_with WN.narrow
         (fun final owner direct => D.join direct (R.aggregate final owner)).
 
-      Theorem successful_run_fixed : forall fuel tf roots final,
+      (** This invariant covers active and suspended owner frames, not side cells. *)
+      Definition control_avoids_fallback :=
+        Internal.E.control_phases (fun phase => phase <> U.Widen).
+      Definition avoids_fallback
+        (tf : R.ConstraintSystem.system) (roots : list V.t) : Prop :=
+        forall c, N.steps tf (R.initial_config roots) c ->
+          control_avoids_fallback (R.cfg_control c).
+
+      (** Includes side effects and spawns, and holds in both recomputation modes. *)
+      Theorem monotonic_avoids_fallback : forall tf roots,
+        monotonic_system tf -> avoids_fallback tf roots.
+      Proof.
+        intros tf roots Hmono c Hreach.
+        exact (Internal.E.reachable_no_fallback Hreach Hmono).
+      Qed.
+
+      Theorem successful_run_fixed : Features.recompute_controlled = true ->
+        forall fuel tf roots final,
         monotonic_system tf -> N.solve_fuel fuel tf roots = Some final ->
         narrowing_fixed tf final.
       Proof.
-        intros fuel tf roots final Hmono Hrun.
-        exact (@Internal.successful_run_fixedpoint fuel tf roots final Hrun Hmono).
+        intros Henabled fuel tf roots final Hmono Hrun.
+        exact (@Internal.successful_run_fixedpoint Henabled fuel tf roots final Hrun Hmono).
       Qed.
 
     End WithCollections.
@@ -111,6 +129,7 @@ Module Instances.
   Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL.
   Module FixedCells := FixedLaws.WithCollections E.S E.M
     Base.AllEnabledFeatures E.SL E.ML.
+  Definition fixed_run := FixedCells.successful_run_fixedpoint eq_refl.
   Module U := JoinUpdate E.V E.D.
   Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
   Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
@@ -124,5 +143,8 @@ Print Assumptions Instances.FixedCells.total_correct.
 Goal True. idtac "SLR-TC_N leastness proven with assumptions:". Abort.
 Print Assumptions Instances.Least.total_least_solution.
 
+Goal True. idtac "SLR-TC_N owner fallback avoidance proven with assumptions:". Abort.
+Print Assumptions Instances.FixedCells.E.reachable_no_fallback.
+
 Goal True. idtac "SLR-TC_N narrowing fixedness proven with assumptions:". Abort.
-Print Assumptions Instances.FixedCells.successful_run_fixedpoint.
+Print Assumptions Instances.fixed_run.

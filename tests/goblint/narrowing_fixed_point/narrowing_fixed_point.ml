@@ -36,7 +36,11 @@ module U = struct
       else (if phase=N then F else W), WN.widen old input
     | F -> F, WN.widen old input
 end
-module Flags = struct let restart_side_phases = true let eliminate_dead_sides = true end
+module Flags = struct
+  let restart_side_phases = true
+  let eliminate_dead_sides = true
+  let recompute_controlled = true
+end
 module Credit = struct let remaining_changes _ _ = 0 end
 module Empty = struct end
 module Reference = Tc_solvers_extracted_narrowing_fixed_point.NarrowingFixedPointRuntime.Solver

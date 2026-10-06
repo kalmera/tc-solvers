@@ -43,6 +43,34 @@ Example no_self_read_owner_is_fixed :
     After.R.sigma_value After.final 0.
 Proof. vm_compute. split; reflexivity. Qed.
 
+Module ReaderWakeupsOnly.
+  Module N := NarrowingFixedPoint.Make E.V E.D E.U E.S E.M
+    Base.ReaderWakeupsOnlyFeatures E.DL E.UL E.SL E.ML.
+  Module R := N.R.
+  Definition tf (owner : E.V.t) : R.ConstraintSystem.rhs :=
+    if E.V.eq_dec owner 0 then
+      R.ConstraintSystem.Get 1 (fun _ => R.ConstraintSystem.Ret E.D.One)
+    else R.ConstraintSystem.Get 0 (fun _ => R.ConstraintSystem.Ret E.D.Bot).
+  Definition final := R.cfg_state (N.run_fuel 200 tf (R.initial_config [0])).
+  Fixpoint completed_owners fuel (c : R.config) : list E.V.t :=
+    match fuel with
+    | 0 => []
+    | S rest =>
+        let current := match R.cfg_control c with
+          R.RunRhs fr (R.ConstraintSystem.Ret _) _ => [R.frame_owner fr] | _ => [] end in
+        match N.next_config tf c with
+        | Some next => current ++ completed_owners rest next | None => current end
+    end.
+  Example fewer_evaluations :
+    N.solve_fuel 200 tf [0] = Some final /\
+    completed_owners 200 (R.initial_config [0]) = [1;0;1].
+  Proof. vm_compute. split; reflexivity. Qed.
+  Example fixedness_requires_recomputation :
+    R.sigma_value final 0 = E.D.Top /\
+    E.WN.narrow (R.sigma_value final 0) E.D.One <> R.sigma_value final 0.
+  Proof. vm_compute. split; [reflexivity |discriminate]. Qed.
+End ReaderWakeupsOnly.
+
 Module SelfDependency.
   Module U := JoinUpdate E.V E.D.
   Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
@@ -60,6 +88,15 @@ Module SelfDependency.
   Definition final := R.cfg_state (N.run_fuel 200 tf (R.initial_config [0])).
   Example retained_self_wakes : N.solve_fuel 200 tf [0] = Some final /\
     R.sigma_value final 0 = E.D.Top.
+  Proof. vm_compute. split; reflexivity. Qed.
+  Module Off := NarrowingFixedPoint.Make E.V E.D U E.S E.M
+    Base.ReaderWakeupsOnlyFeatures E.DL UL E.SL E.ML.
+  Definition off_tf (_owner : E.V.t) : Off.R.ConstraintSystem.rhs :=
+    Off.R.ConstraintSystem.Get 0 (fun value => Off.R.ConstraintSystem.Ret (successor value)).
+  Definition off_final := Off.R.cfg_state (Off.run_fuel 200 off_tf (Off.R.initial_config [0])).
+  Example retained_self_wakes_without_recomputation :
+    Off.solve_fuel 200 off_tf [0] = Some off_final /\
+    Off.R.sigma_value off_final 0 = E.D.Top.
   Proof. vm_compute. split; reflexivity. Qed.
 End SelfDependency.
 

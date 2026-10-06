@@ -42,7 +42,10 @@ are in `examples/library/`.
 `Slr.Restarting.Make (V) (D) (U) (Features)` accepts three compile-time booleans:
 `side_effect_phase_reset`, `dead_side_elimination`, and `recompute_controlled`.
 All eight combinations are supported. Enable `recompute_controlled` to repeat a
-changed controlled-owner update even when its RHS does not read itself. `Slr.Narrowing_fixed_point.Make (V) (D) (U)` enables both policies.
+changed controlled-owner update even when its RHS does not read itself.
+`Slr.Narrowing_fixed_point.Make_with_features (V) (D) (U) (Features)` accepts
+these same three booleans. `Slr.Narrowing_fixed_point.Make (V) (D) (U)` keeps all
+three enabled by default.
 Hash tables and the bitmap worklist are internal. The first-discovery order
 and maximum-rank-first work processing match the existing callback adapters.
 
@@ -105,14 +108,15 @@ source strictness outside roots. The proved narrowing-fixed-point instance uses
 the zero-copy box, direct-widening upper bounds, and covered-input stability:
 `leq input old` implies that `widen old input` is equivalent to `old`.
 Changed controlled owners are evaluated again with the returned phase because
-the update itself depends on the previous value. Narrowing Fixed Point always
-performs this recomputation. Restarting exposes `recompute_controlled`; its
-ordinary narrowing-fixedness theorem requires this option to be enabled and
-requires no side effects. Selecting the suggested two-copy policy does not
+the update itself depends on the previous value. Both solvers expose
+`recompute_controlled`; their narrowing-fixedness theorems require this option
+to be enabled. Restarting additionally requires no side effects. Narrowing
+Fixed Point's owner fallback-avoidance theorem allows side effects and holds
+with recomputation enabled or disabled. Selecting the suggested two-copy policy does not
 instantiate the OneBox fixedness theorem.
 
 Only callback control is extracted; the mutable runtime has no mechanized
-refinement proof. Differential tests cover all ten configurations and three
+refinement proof. Differential tests cover eleven configurations and three
 policies. Existing differences from extracted references are checked as
 exact baselines in `tests/library/differential.ml`; all tested join and Narrowing
 Fixed Point cases agree with their extracted references.

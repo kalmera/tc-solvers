@@ -3598,6 +3598,9 @@ Definition narrowing_input
   Qed.
 
 
+  Section ControlledRecomputation.
+  Variable recompute_enabled : Features.recompute_controlled = true.
+
   Lemma set_value_narrow_fixed_or_queued :
     forall st fr direct st' fr',
       U.avoids_fallback (R.frame_phase fr) ->
@@ -3625,6 +3628,7 @@ Definition narrowing_input
           eapply safe_update_stutter_is_narrow_stutter; [exact Hsafe |].
           rewrite Hupdate. cbn. now apply equivalent_bool_true.
         * inversion Hset; subst. left. apply Total.requeue_enabled.
+          -- exact recompute_enabled.
           -- exact Hcontrolled.
           -- unfold R.sigma_value. cbn. rewrite ML.lookup_update_same.
              exact Hvalue.
@@ -3843,7 +3847,12 @@ Definition narrowing_input
     - now left.
     - right. now apply fixed_summary_requeue.
   Qed.
+  End ControlledRecomputation.
 End F.
+
+Section ControlledRecomputation.
+Variable recompute_enabled : Features.recompute_controlled = true.
+
 Definition summary := F.fixed_summary.
 Definition guarded tf st ctrl owner :=
  B.queued st owner \/ B.control_active owner ctrl \/ summary tf st owner.
@@ -3950,7 +3959,7 @@ Lemma actual_commit_fixed_or_queued tf roots st fr direct k after next_fr next_k
 Proof.
  intros Hreach Hmono Hstep.
  destruct (@E.commit_step_shape tf st fr direct k after next_fr next_k Hstep) as [next [Hset [-> Hk]]].
- eapply F.committed_fixed_or_queued;[ | |exact Hset].
+ eapply F.committed_fixed_or_queued;[exact recompute_enabled | | |exact Hset].
  - exact (proj1 (E.reachable_no_fallback Hreach Hmono)).
  - eapply Replay.reachable_commit_witness;exact Hreach.
 Qed.
@@ -4068,7 +4077,7 @@ Proof.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
    inversion Hstep;subst.
    destruct (V.eq_dec owner (R.frame_owner f)) as [->|Hneq].
-   + destruct (@F.committed_fixed_or_queued tf st f t next next_fr Hsafe Hcompleted Hs) as [Hq|Hfixed];
+   + destruct (@F.committed_fixed_or_queued recompute_enabled tf st f t next next_fr Hsafe Hcompleted Hs) as [Hq|Hfixed];
      [now left |now right;right].
    + right;right. apply F.fixed_summary_requeue. eapply F.fixed_summary_set_value_other;eassumption.
  - eapply summary_drain; eassumption.
@@ -4191,7 +4200,7 @@ Lemma discharge_fixed tf roots before after owner :
  B.queued (R.cfg_state after) owner \/ summary tf (R.cfg_state after) owner.
 Proof.
  intros Hreach Hmono [st [fr [direct [k [next [next_fr [-> [Hset [-> ->]]]]]]]]].
- eapply F.committed_fixed_or_queued;[ | |exact Hset].
+ eapply F.committed_fixed_or_queued;[exact recompute_enabled | | |exact Hset].
  - exact (proj1 (E.reachable_no_fallback Hreach Hmono)).
  - eapply Replay.reachable_commit_witness;exact Hreach.
 Qed.
@@ -4282,6 +4291,8 @@ Proof.
 Qed.
 (** Infer the finite-support witness from the termination theorem, preserving
     its inductive type through the shared module aliases. *)
+End ControlledRecomputation.
+
 Definition sufficient_fuel := Replay.Termination.sufficient_fuel.
 Definition total_correct :=
  fun tf roots finite =>
@@ -4299,16 +4310,16 @@ Include Spec.
 Definition narrowing_fixed := narrowing_fixed_with WN.narrow
   (fun final owner direct => D.join direct (R.aggregate final owner)).
 
-Theorem total_correct_and_fixed : forall tf roots,
+Theorem total_correct_and_fixed : Features.recompute_controlled = true -> forall tf roots,
   Sem.finite_system tf roots -> monotonic_system tf ->
   exists fuel final, N.solve_fuel fuel tf roots = Some final /\
     correct_final_state tf roots final /\ narrowing_fixed tf final.
 Proof.
- intros tf roots finite Hmono.
+ intros Henabled tf roots finite Hmono.
  destruct (@sufficient_fuel tf roots finite) as [fuel [final Hsolve]].
  exists fuel, final. split; [exact Hsolve |]. split.
  - exact (@Replay.successful_run_spawn_correct fuel tf roots final Hsolve).
- - exact (@successful_run_fixedpoint fuel tf roots final Hsolve Hmono).
+ - exact (@successful_run_fixedpoint Henabled fuel tf roots final Hsolve Hmono).
 Qed.
 End WithCollections.
 End WithLaws.

@@ -9,17 +9,25 @@ From TcSolvers Require Import common.Collections.
 Import ListNotations.
 Set Implicit Arguments.
 
-(** Normal phases always restart at a new owner episode. These two constants
-    select the remaining restarting policies. *)
+(** Normal phases restart at a new owner episode. Controlled-owner
+    recomputation repeats changed updates with their returned phase. *)
 Module Type FEATURES.
   Parameter restart_side_phases : bool.
   Parameter eliminate_dead_sides : bool.
+  Parameter recompute_controlled : bool.
 End FEATURES.
 
 Module AllEnabledFeatures <: FEATURES.
   Definition restart_side_phases := true.
   Definition eliminate_dead_sides := true.
+  Definition recompute_controlled := true.
 End AllEnabledFeatures.
+
+Module ReaderWakeupsOnlyFeatures <: FEATURES.
+  Definition restart_side_phases := true.
+  Definition eliminate_dead_sides := true.
+  Definition recompute_controlled := false.
+End ReaderWakeupsOnlyFeatures.
 
 (** Public monadic presentation. The control flow is shared, while this
     variant supplies eager restarting operations to the callbacks. *)
@@ -546,7 +554,7 @@ Module Make
   Definition requeue_changed_controlled_owner
     (before after : state) (owner : V.t) : state :=
     with_queue after
-      (if S.mem owner (controlled before) &&
+      (if Features.recompute_controlled && S.mem owner (controlled before) &&
           negb (equivalent (sigma_value after owner) (sigma_value before owner))
        then queue_insert (ranking after) owner (queue after)
        else queue after).

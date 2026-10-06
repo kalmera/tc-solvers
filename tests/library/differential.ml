@@ -295,6 +295,25 @@ module CheckPolicy
     match ENfp.solve_fuel 100000 (fun x -> convert (body x)) roots with
     | Some final -> ENfp.R.sigma final
     | None -> failwith "Nfp: extracted reference exhausted fuel"
+  module LNfpOff = Tc_solvers.Slr.Narrowing_fixed_point.Make_with_features (V) (D) (U) (F11Off)
+  module GNfpOff = Slrtc_narrowing_fixed_point.Make (Slrtc_narrowing_fixed_point.Control) (F11Off) (GU) (Arg) (System) (H)
+  module FlagsNfpOff = struct
+    let restart_side_phases = F11Off.side_effect_phase_reset
+    let eliminate_dead_sides = F11Off.dead_side_elimination
+    let recompute_controlled = F11Off.recompute_controlled
+  end
+  module ENfpOff = Tc_solvers_extracted_narrowing_fixed_point.NarrowingFixedPointRuntime.Solver (V) (D) (U) (Set) (Map) (FlagsNfpOff) (Empty) (Credit) (Empty) (Empty)
+  let reference_NfpOff body roots =
+    let module C = ENfpOff.R.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ENfpOff.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ENfpOff.R.sigma final
+    | None -> failwith "NfpOff: extracted reference exhausted fuel"
   let check (module L : SOLVER) goblint reference label starts missing tf roots =
     current := tf; rhsless := missing;
     let actual = L.solve ~initial:starts System.system roots in
@@ -344,7 +363,8 @@ module CheckPolicy
     check (module LR01Off) GR01Off.solve reference_R01Off (name ^ " R01Off") starts missing tf roots;
     check (module LR10Off) GR10Off.solve reference_R10Off (name ^ " R10Off") starts missing tf roots;
     check (module LR11Off) GR11Off.solve reference_R11Off (name ^ " R11Off") starts missing tf roots;
-    check (module LNfp) GNfp.solve reference_Nfp (name ^ " Nfp") starts missing tf roots
+    check (module LNfp) GNfp.solve reference_Nfp (name ^ " Nfp") starts missing tf roots;
+    check (module LNfpOff) GNfpOff.solve reference_NfpOff (name ^ " NfpOff") starts missing tf roots
 
   let run () =
   test "empty" (fun _ -> Ret 0) [];
@@ -356,7 +376,11 @@ module CheckPolicy
     let enabled = LR11.solve System.system [0] in
     let disabled = LR11Off.solve System.system [0] in
     assert (LR11.value enabled 0 = 1);
-    assert (LR11Off.value disabled 0 = 5)
+    assert (LR11Off.value disabled 0 = 5);
+    let nfp_enabled = LNfp.solve System.system [0] in
+    let nfp_disabled = LNfpOff.solve System.system [0] in
+    assert (LNfp.value nfp_enabled 0 = 1);
+    assert (LNfpOff.value nfp_disabled 0 = 5)
   end;
   test "effectful local-repair witness" (function
     | 0 -> Side (3,1,Ret 1)

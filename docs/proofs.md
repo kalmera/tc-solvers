@@ -9,7 +9,7 @@ example systems remain beside it. Shared concrete instances live in
 | --- | --- | --- |
 | `simple` | `Simple.v` | Total correctness; leastness under upper-bound-preserving updates |
 | `restarting` | `Restarting.v` | Total correctness for all eight feature settings; leastness; ordinary-system absence of fallback; narrowing fixedness with controlled-owner recomputation |
-| `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
+| `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness for all eight feature settings; leastness; monotone-system owner fallback avoidance; narrowing fixedness with controlled-owner recomputation |
 
 Each public correctness interface follows the paper's order: `semantic_termination`,
 `sufficient_fuel`, `successful_run_correct`, then `total_correct` as a corollary
@@ -27,8 +27,8 @@ final-state replay of every solved owner, including non-roots.
 Restarting separately requires `no_side_effects`; spawns are allowed. Its
 successful-run fixedness theorem also requires finite support; Narrowing Fixed
 Point needs finite support only for total correctness.
-Both use first-discovery ranking and repeat changed controlled-owner updates.
-Restarting requires `recompute_controlled = true` for ordinary fixedness.
+Both use first-discovery ranking and require `recompute_controlled = true` for
+fixedness. Disabling it retains reader wakeups and side-source repairs.
 Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
 
@@ -42,6 +42,16 @@ and requires neither successful termination nor `recompute_controlled = true`.
 All eight feature settings satisfy this property with first-discovery ranking;
 ordinary systems may still spawn unknowns. Initial `BoxW` widening and restarts
 into `BoxW` are allowed; the theorem excludes the permanent fallback `Widen`.
+
+Narrowing Fixed Point's `Make.WithLaws.WithCollections` exposes
+`monotonic_avoids_fallback`: `monotonic_system tf` implies
+`avoids_fallback tf roots` for all eight feature settings. This covers active
+and suspended owner frames throughout every reachable prefix, including
+systems with side effects and spawns. It requires neither finite support nor
+controlled-owner recomputation. Side-cell phases are outside this invariant.
+Its `successful_run_fixed` additionally requires `recompute_controlled = true`;
+the fixedness equation joins each owner's replayed direct result with the
+stored incoming side contributions.
 
 The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
 `correct_final_state` requires every root to be materialized and every
@@ -70,9 +80,9 @@ direct-widening upper bounds, narrowing bounds, and `WIDEN_STABILITY`: if
 `input` is below `old`, then `widen old input` is equivalent to `old`.
 
 A controlled owner's update reads its previous value even when its RHS does not
-read the owner. When this update changes the value, Narrowing Fixed Point queues
-the owner for another evaluation with the returned phase. Restarting exposes the
-same behavior through `recompute_controlled`, enabled in `AllEnabledFeatures`.
+read the owner. With `recompute_controlled = true`, both solvers queue a changed
+controlled owner for another evaluation with the returned phase. The option is
+enabled in `AllEnabledFeatures`. `ReaderWakeupsOnlyFeatures` disables it.
 Fixedness follows from the eventual stable commit. Generic correctness,
 termination, and join leastness hold with either setting. Recorded reader
 wakeups and side-source repairs remain active.

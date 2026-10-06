@@ -61,8 +61,8 @@ module Restarting = struct
 end
 
 module Narrowing_fixed_point = struct
-  module Make (V : VAR) (D : DOMAIN)
-    (U : UPDATE with type variable = V.t and type value = D.t) = struct
+  module Make_with_features (V : VAR) (D : DOMAIN)
+    (U : UPDATE with type variable = V.t and type value = D.t) (Features : FEATURES) = struct
     type variable = V.t
     type value = D.t
     type rhs = (variable -> value) -> (variable -> value -> unit) ->
@@ -85,8 +85,10 @@ module Narrowing_fixed_point = struct
         end
         let system = system
       end in
-      let module Engine = Core_narrowing_fixed_point.Make (Core_narrowing_fixed_point.Control) (Core_narrowing_fixed_point.Features) (S) (U) (H) in
+      let module Engine = Core_narrowing_fixed_point.Make (Core_narrowing_fixed_point.Control) (Features) (S) (U) (H) in
       Engine.solve initial roots
   end
+  module Make (V : VAR) (D : DOMAIN)
+    (U : UPDATE with type variable = V.t and type value = D.t) =
+    Make_with_features (V) (D) (U) (Core_narrowing_fixed_point.Features)
 end
-

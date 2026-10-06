@@ -2099,7 +2099,7 @@ Module Make
     P (R.requeue_changed_controlled_owner before after owner).
   Proof.
     intros Hsame Hqueue. unfold R.requeue_changed_controlled_owner.
-    destruct (S.mem owner (R.controlled before) &&
+    destruct (Features.recompute_controlled && S.mem owner (R.controlled before) &&
       negb (R.equivalent (R.sigma_value after owner)
         (R.sigma_value before owner))).
     - exact Hqueue.
@@ -2120,7 +2120,15 @@ Module Make
     R.requeue_changed_controlled_owner before after owner = after.
   Proof.
     intro Hcontrol. unfold R.requeue_changed_controlled_owner.
-    rewrite Hcontrol. destruct after; reflexivity.
+    rewrite Hcontrol, Bool.andb_false_r. destruct after; reflexivity.
+  Qed.
+
+  Lemma requeue_disabled before after owner :
+    Features.recompute_controlled = false ->
+    R.requeue_changed_controlled_owner before after owner = after.
+  Proof.
+    intro Hdisabled. unfold R.requeue_changed_controlled_owner.
+    rewrite Hdisabled. destruct after; reflexivity.
   Qed.
 
   Lemma requeue_members before after owner x :
@@ -2128,7 +2136,7 @@ Module Make
     x = owner \/ List.In x (R.queue after).
   Proof.
     unfold R.requeue_changed_controlled_owner. cbn.
-    destruct (S.mem owner (R.controlled before) &&
+    destruct (Features.recompute_controlled && S.mem owner (R.controlled before) &&
       negb (R.equivalent (R.sigma_value after owner)
         (R.sigma_value before owner))).
     - intro H. apply queue_insert_members in H. intuition congruence.
@@ -2136,14 +2144,15 @@ Module Make
   Qed.
 
   Lemma requeue_enabled before after owner :
+    Features.recompute_controlled = true ->
     S.mem owner (R.controlled before) = true ->
     R.equivalent (R.sigma_value after owner)
       (R.sigma_value before owner) = false ->
     List.In owner
       (R.queue (R.requeue_changed_controlled_owner before after owner)).
   Proof.
-    intros Hcontrol Hchanged. unfold R.requeue_changed_controlled_owner.
-    rewrite Hcontrol, Hchanged. cbn.
+    intros Henabled Hcontrol Hchanged. unfold R.requeue_changed_controlled_owner.
+    rewrite Henabled, Hcontrol, Hchanged. cbn.
     apply queue_insert_members. now left.
   Qed.
 

@@ -34,7 +34,11 @@ module U = struct
       else (if phase=N then F else W), WN.widen old (D.join old input)
     | F -> F, WN.widen old (D.join old input)
 end
-module Flags = struct let restart_side_phases = true let eliminate_dead_sides = true end
+module Flags = struct
+  let restart_side_phases = true
+  let eliminate_dead_sides = true
+  let recompute_controlled = true
+end
 (* For the six-element chain: at most five increasing changes, five
    narrowing changes, and a final widening to Top after a fallback. *)
 module Credit = struct

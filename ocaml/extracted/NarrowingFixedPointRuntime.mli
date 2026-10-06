@@ -68,6 +68,8 @@ module type FEATURES =
   val restart_side_phases : bool
 
   val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
  end
 
 module ListDiscoveryOrderLaws :
