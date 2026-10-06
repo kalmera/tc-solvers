@@ -66,10 +66,29 @@ currently add no value and risk duplicating module contents.
   carries RHS evaluation and dead-side cleanup to a commit. A separate
   induction on the queue's rank ceiling carries draining to either episode
   return or a fresh evaluation of the same owner. `round_reaches_boundary`
-  combines these results. Its higher-episode premise is still explicit.
+  combines these results.
+- Episode traces stop at their first return, before the caller resumes.
+  A higher episode preserves its suspended parent's phase and cannot
+  increase the parent's budget. The budget also cannot increase along a
+  whole owner episode when compared using the actual returned phases.
+- `round_rerun_paid` proves that every rerun starting with only lower owners
+  queued consumes the budget. If no budget were spent, reads could not
+  discover another owner, side aggregates could not change, and the commit
+  would preserve that queue boundary; draining would then return instead
+  of rerunning. This also covers uncontrolled owners and both recomputation
+  settings.
+- Well-founded induction on the round budget finishes repeated rounds;
+  discovery-rank induction discharges the higher-episode premise. Root
+  seeding and outer draining then prove `solver_terminates`,
+  `sufficient_fuel`, and `total_correct` for every finite system.
+- `total_least_solution` combines sufficient fuel and successful-run
+  leastness, retaining the same source-strictness, monotonicity, and
+  upper-bound update assumptions.
 
 All new proofs end with `Qed`; there are no admitted goals or new axioms.
-The fourteen assumption audits report `Closed under the global context`.
+The four public-result assumption audits report `Closed under the global
+context`. Auditing total correctness and total leastness covers their
+intermediate invariants without repeatedly traversing the same proof terms.
 The concrete regression also checks two accumulated side effects, a controlling
 back read, and spawn closure, then derives correctness from the new theorem.
 Budget regressions check an incoming side change without owner promotion,
@@ -77,25 +96,15 @@ new materialization, and an already materialized owner.
 
 ## Remaining obligations before replacement or merge as a finished solver
 
-1. Finish finite-system termination. Preserve the budget across whole
-   recursive episode segments and prove that a fresh same-owner evaluation
-   after the first round pays for its queue entry. Then combine the checked
-   round order with owner rank induction, discharge the higher-episode
-   premise, and finish root seeding and outer draining. Derive sufficient
-   fuel and total correctness.
-2. Prove ordinary monotone fallback avoidance for both recomputation settings.
-3. Prove ordinary narrowing fixedness when controlled-owner recomputation is
+1. Prove ordinary monotone fallback avoidance for both recomputation settings.
+2. Prove ordinary narrowing fixedness when controlled-owner recomputation is
    enabled. Do not introduce an idempotency assumption.
-4. Restate the remaining public guarantees and audit their concrete instances.
+3. Restate the remaining public guarantees and audit their concrete instances.
    Then compare proof size and time at matching theorem coverage.
 
-The existing results do not imply these remaining guarantees. In particular,
-`termination_iff_fuel` proves equivalence, not that either side always exists.
-The correctness and leastness theorems concern successful runs; they do not
-establish that every finite system has a successful run.
-Likewise, the local budget laws and `round_reaches_boundary` do not yet prove
-that every same-owner rerun decreases the budget or that higher episodes
-always finish.
+The existing results do not imply these remaining ordinary-system guarantees.
+Termination, total correctness, and total leastness are now complete; the
+ordinary narrowing result remains local to a quiet commit.
 
 ## Build and measurement
 
@@ -114,8 +123,8 @@ mistaken for measurements of an equivalent finished proof stack.
 On Rocq 9.1.1 / OCaml 5.4.0, one reference measurement took 24.54 seconds and
 produced 51,323,366 bytes of compiled objects across six targets. Its public
 theorem unit alone produced 23,968,527 bytes. The current compact subset has
-4,565 proof lines; across three runs the median was 3.25 seconds for `Proofs.v`
-and 4.68 seconds including the algorithm and audit. Its three compiled objects
-total 2,778,180 bytes. The proof unit itself is 2,297,198 bytes. These numbers
+5,519 proof lines; across three runs the median was 3.78 seconds for `Proofs.v`
+and 4.64 seconds including the algorithm and audit. Its three compiled objects
+total 3,367,859 bytes. The proof unit itself is 2,870,235 bytes. These numbers
 show the current development baseline; they do **not** establish a speedup
 for a completed replacement.

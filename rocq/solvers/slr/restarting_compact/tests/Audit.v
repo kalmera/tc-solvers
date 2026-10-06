@@ -16,25 +16,15 @@ Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
 Module P := Proofs.Make E.V E.D U E.S E.M Ranks Restarting.AllEnabledFeatures
   RL RF E.DL UL E.SL E.ML.
 
-Definition successful_run_below := P.successful_run_below UBL.update_preserves_upper_bound.
-
+(** Auditing total correctness and total leastness covers their intermediate
+    invariants too, without repeatedly traversing the same proof terms. *)
 Print Assumptions P.ordinary_aggregate.
-Print Assumptions P.termination_iff_fuel.
 Print Assumptions P.quiet_commit_narrowing_fixed.
 
-Definition successful_run_least fuel tf roots (finite : P.Sem.finite_system tf roots) final :=
-  @P.successful_run_least fuel tf roots finite final UBL.update_preserves_upper_bound.
-Print Assumptions P.reachable_rank_bound.
-Print Assumptions P.successful_run_correct.
-Print Assumptions successful_run_least.
-Print Assumptions P.reachable_scoped_config.
-Print Assumptions P.reachable_forward_readers.
-Print Assumptions P.budget_commit_changed.
-Print Assumptions P.budget_write_changed.
-Print Assumptions P.budget_higher_close.
-Print Assumptions P.round_order_well_founded.
-Print Assumptions P.uncontrolled_commit_keeps_lower_queue.
-Print Assumptions P.round_reaches_boundary.
+Print Assumptions P.total_correct.
+Definition total_least_solution tf roots (finite : P.Sem.finite_system tf roots) :=
+  @P.total_least_solution tf roots finite UBL.update_preserves_upper_bound.
+Print Assumptions total_least_solution.
 
 (** A back read controls owner 0. Its two effects on owner 2 accumulate,
     and the spawned owner 3 must be included in the final post-solution. *)
