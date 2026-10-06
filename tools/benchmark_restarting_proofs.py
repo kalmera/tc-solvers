@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Recompile restarting proof targets serially and report time/source/vo sizes.
 
-The compact targets currently prove a subset of the reference guarantees.
-This is a development measurement, not a comparison of complete replacements.
+Both stacks cover the public termination, correctness, leastness, ordinary
+fallback-avoidance, and narrowing-fixedness guarantees. Internal helper
+statements differ; the algorithm must remain byte-identical.
 Dependencies should already be built with `make proof-tests`.
 """
 
@@ -77,8 +78,8 @@ def main():
         parser.error("the compact algorithm differs from its reference")
     version = subprocess.run(["rocq", "--version"], check=True, capture_output=True, text=True).stdout.strip()
     report = {
-        "status": "partial_regeneration",
-        "scope_warning": "The compact proofs do not yet replace all reference guarantees.",
+        "status": "matching_public_guarantees",
+        "scope": "Termination, correctness, leastness, ordinary fallback avoidance, and narrowing fixedness; internal helper statements differ.",
         "method": "Fresh serial compiler processes; existing dependencies and filesystem cache.",
         "rocq_version": version,
         "repetitions": args.repeat,

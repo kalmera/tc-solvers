@@ -2420,8 +2420,8 @@ Variable update_is_narrow : forall owner phase old input, safe_phase phase -> D.
 Variable narrow_lower : forall old input, D.leq input old = true -> D.leq input (narrow old input) = true.
 Variable narrow_upper : forall old input, D.leq input old = true -> D.leq (narrow old input) old = true.
 
-(** This is a local commit lemma, not yet final-state fixedness. The semantic
-    invariant must still retain this commit observation until the final store. *)
+(** A quiet commit supplies the local equation. The ordinary precision
+    invariant below retains its observation until the final store. *)
 Theorem quiet_commit_narrowing_fixed st fr direct next next_fr : Features.recompute_controlled = true ->
   safe_phase (R.frame_phase fr) -> S.mem (R.frame_owner fr) (R.controlled st) = true ->
   R.set_value st fr direct = (next,next_fr) ->
@@ -5515,5 +5515,1191 @@ Proof.
   exists fuel, final; split; [exact Hrun |].
   exact (@successful_run_least fuel tf roots finite final Hbounded Hstrict Hmono Hrun).
 Qed.
+
+
+(** The ordinary scheduling argument needs first-discovery policy in addition
+    to stable ranks. Keep it optional: termination and correctness also apply
+    to stateless ranks. *)
+Record first_discovery_laws := {
+  discovery_only_target : forall order target next rank variable,
+    Ranks.observe order target = (next,rank) -> ranked next variable ->
+    variable = target \/ ranked order variable;
+  discovery_fresh_above : forall order target next rank owner old_rank,
+    RL.valid order -> Ranks.lookup order target = None ->
+    Ranks.lookup order owner = Some old_rank ->
+    Ranks.observe order target = (next,rank) -> old_rank < rank
+}.
+Definition all_discovered_live st := forall variable,
+  ranked (R.ranking st) variable -> solved st variable.
+Definition discovery_ready c := forall variable,
+  ranked (R.ranking (R.cfg_state c)) variable ->
+  match R.cfg_control c with
+  | R.StartEpisode owner _ => variable = owner \/ solved (R.cfg_state c) variable
+  | _ => solved (R.cfg_state c) variable
+  end.
+Section OrdinaryDiscovery.
+Variable discovery : first_discovery_laws.
+
+Lemma discovered_observe st target variable : ranked (R.ranking (R.observe st target)) variable ->
+  variable = target \/ ranked (R.ranking st) variable.
+Proof.
+  unfold R.observe; destruct (Ranks.observe (R.ranking st) target) as [order rank] eqn:H;
+    cbn; apply (discovery_only_target discovery H).
+Qed.
+Lemma unseen_higher st owner target : RL.valid (R.ranking st) -> ranked (R.ranking st) owner ->
+  all_discovered_live st -> R.is_materialized (R.observe st target) target = false ->
+  R.rank_lt (R.observe st target) owner target = true.
+Proof.
+  intros Hvalid [old_rank Howner] Hlive Hmissing.
+  rewrite observe_materialized in Hmissing.
+  assert (Hfresh : Ranks.lookup (R.ranking st) target = None).
+  { destruct (Ranks.lookup (R.ranking st) target) as [rank|] eqn:Hlookup; auto.
+    assert (R.is_materialized st target = true) by
+      (apply materialized_iff_solved; apply Hlive; exists rank; exact Hlookup).
+    congruence. }
+  unfold R.observe, R.rank_lt; destruct (Ranks.observe (R.ranking st) target) as [order rank] eqn:Hobserve; cbn.
+  unfold R.ranking_lt; rewrite (@RL.observe_preserves _ _ _ _ _ _ Hobserve Howner),
+    (@RL.observe_lookup _ _ _ _ Hobserve); apply Nat.ltb_lt.
+  exact (@discovery_fresh_above discovery _ _ _ _ _ _ Hvalid Hfresh Howner Hobserve).
+Qed.
+Lemma live_same_ranking before after : preserves_live before after ->
+  R.ranking after = R.ranking before -> all_discovered_live before -> all_discovered_live after.
+Proof. intros Hlive Hr Hall x Hx; apply Hlive, Hall; now rewrite <- Hr. Qed.
+Lemma live_observed before after target : preserves_live before after ->
+  R.ranking after = R.ranking (R.observe before target) -> all_discovered_live before ->
+  solved after target -> all_discovered_live after.
+Proof.
+  intros Hlive Hr Hall Htarget x Hx; rewrite Hr in Hx;
+    destruct (discovered_observe before target Hx) as [->|Hknown]; auto.
+Qed.
+Lemma next_discovery_ready tf before after : config_wf (fun _ => True) before ->
+  ordinary_config before -> discovery_ready before -> step tf before after -> discovery_ready after.
+Proof.
+  intros [Hstore Hrefs] [_ Hordinary] Hready Hstep.
+  pose proof (next_preserves_live Hstep) as Hlive; pose proof Hstep as Hnext.
+  unfold discovery_ready in Hready |- *.
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *.
+  unfold step, R.next_config in Hnext; cbn [R.cfg_state R.cfg_control] in Hnext.
+  destruct ctrl as [|roots|roots|owner k|fr body k|fr direct pending k|fr direct k|fr k|k];
+    cbn [discovery_ready R.cfg_state R.cfg_control control_refs ordinary_control] in Hready, Hrefs, Hordinary.
+  - split_program Hnext; intros x Hx; right; apply Hlive, Hready; exact Hx.
+  - destruct roots as [|root roots].
+    + inversion Hnext; subst; exact Hready.
+    + destruct (R.is_materialized (R.observe st root) root) eqn:Hmat; inversion Hnext; subst after.
+      * eapply live_observed; [exact Hlive |reflexivity |exact Hready |apply materialized_iff_solved; exact Hmat].
+      * intros x Hx; destruct (discovered_observe st root Hx) as [->|Hknown]; [left; reflexivity |right; apply Hlive, Hready; exact Hknown].
+  - destruct (R.queue_pop (R.queue st)) as [[owner rest]|]; inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *;
+      try exact Hready; intros x Hx; right; apply Hlive, Hready; exact Hx.
+  - inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; intros x Hx; rewrite materialize_rank in Hx.
+    destruct (Hready x Hx) as [->|Hknown]; [apply materialize_live |apply Hlive; exact Hknown].
+  - destruct Hrefs as [Hfr [_ Hk]]; destruct Hordinary as [_ [Hpure _]].
+    assert (Howner : ranked (R.ranking st) (R.frame_owner fr)) by (exact (proj2 (ref_owner Hfr))).
+    destruct body as [direct|target tail|target raw tail|target tail].
+    + inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; exact Hready.
+    + destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * cbn -[R.complete_get] in Hnext; destruct (R.complete_get (R.observe st target) fr target) as [[done next_fr] value] eqn:Hget.
+        inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; eapply live_observed; [exact Hlive |exact (get_rank Hget) |exact Hready |].
+        exact (proj2 (preserves_live_get Hget)).
+      * rewrite (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Howner Hready Hmat) in Hnext; cbn in Hnext.
+        inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; intros x Hx; destruct (discovered_observe st target Hx) as [->|Hknown];
+          [left; reflexivity |right; apply Hlive, Hready; exact Hknown].
+    + exfalso; exact (pure_no_side Hpure).
+    + destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; eapply live_observed; [exact Hlive |reflexivity |exact Hready |].
+        apply materialized_iff_solved; exact Hmat.
+      * rewrite (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Howner Hready Hmat) in Hnext.
+        inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; intros x Hx; destruct (discovered_observe st target Hx) as [->|Hknown];
+          [left; reflexivity |right; apply Hlive, Hready; exact Hknown].
+  - destruct Hordinary as [_ [-> _]]; inversion Hnext; subst after; cbn [discovery_ready R.cfg_state R.cfg_control] in *; exact Hready.
+  - destruct (R.set_value st fr direct) as [done next_fr] eqn:Hset; inversion Hnext; subst after.
+    eapply live_same_ranking; [exact Hlive |cbn; apply commit_ranking with (fr := fr) (next_fr := next_fr); apply commit_footprint with (direct := direct); exact Hset |exact Hready].
+  - split_program Hnext; cbn [R.cfg_control R.cfg_state] in *; try exact Hready.
+    all: try solve [intros x Hx; right; apply Hlive, Hready; exact Hx].
+    all: eapply live_same_ranking; [exact Hlive |apply close_rank |exact Hready].
+  - destruct k; cbn [ordinary_stack] in Hordinary; try contradiction; split_program Hnext; cbn [R.cfg_control R.cfg_state] in *; try exact Hready.
+    eapply live_same_ranking; [exact Hlive |eapply get_rank; eassumption |exact Hready].
+Qed.
+Theorem ordinary_discovery_ready tf roots c : no_side_effects tf -> reachable tf roots c -> discovery_ready c.
+Proof.
+  intros Hpure Hpath; assert (Hinitial : discovery_ready (R.initial_config roots)).
+  { intros x [rank Hrank]; rewrite RL.empty_lookup in Hrank; discriminate. }
+  assert (Hready : forall a b, steps tf a b -> reachable tf roots a -> discovery_ready a -> discovery_ready b).
+  { intros a b Hsteps; induction Hsteps; intros Hreachable Hfirst; auto.
+    apply IHHsteps; [eapply reachable_advance; eauto |].
+    eapply next_discovery_ready; [eapply reachable_rank_configuration; exact Hreachable |
+      eapply ordinary_reachable; eauto |exact Hfirst |exact H]. }
+  exact (Hready _ _ Hpath (@steps_refl tf (R.initial_config roots)) Hinitial).
+Qed.
+
+(** While a newly discovered episode is active, lower owners are suspended.
+    Their readers may only watch lower values. Thus changes in this fresh
+    region cannot add lower work to the queue. *)
+Definition region_readers child st := forall target reader,
+  S.mem reader (R.lookup_set (R.readers st) target) = true ->
+  R.rank_lt st reader child = true -> R.rank_lt st target child = true.
+Definition lower_queue_inclusion child before after := forall variable,
+  R.rank_lt after variable child = true -> In variable (R.queue after) -> In variable (R.queue before).
+Lemma lower_reflect_observe st child target variable : RL.valid (R.ranking st) ->
+  ranked (R.ranking st) child -> R.rank_lt (R.observe st target) variable child = true -> R.rank_lt st variable child = true.
+Proof.
+  intros Hvalid [child_rank Hchild] Hlower.
+  destruct (@lt_ranks (R.ranking (R.observe st target)) variable child Hlower)
+    as [rank [rank' [Hv [Hc Hlt]]]].
+  pose proof (@observe_extends st target child child_rank Hchild) as Hc'; rewrite Hc' in Hc; inversion Hc; subst rank'.
+  destruct (discovered_observe st target (ex_intro _ rank Hv)) as [Heq |[old Hbefore]].
+  - subst variable; destruct (Ranks.lookup (R.ranking st) target) as [old|] eqn:Hbefore.
+    + pose proof (@observe_extends st target target old Hbefore) as Hafter; rewrite Hafter in Hv; inversion Hv; subst old.
+      unfold R.rank_lt, R.ranking_lt; rewrite Hbefore, Hchild; apply Nat.ltb_lt; exact Hlt.
+    + unfold R.observe in Hv; destruct (Ranks.observe (R.ranking st) target) as [order fresh] eqn:Hobserve; cbn in Hv.
+      pose proof (@RL.observe_lookup _ _ _ _ Hobserve) as Htarget; rewrite Htarget in Hv; inversion Hv; subst fresh.
+      pose proof (@discovery_fresh_above discovery _ _ _ _ _ _ Hvalid Hbefore Hchild Hobserve); lia.
+  - pose proof (@observe_extends st target variable old Hbefore) as Hafter; rewrite Hafter in Hv; inversion Hv; subst old.
+    unfold R.rank_lt, R.ranking_lt; rewrite Hbefore, Hchild; apply Nat.ltb_lt; exact Hlt.
+Qed.
+Lemma region_layout child before after : R.ranking after = R.ranking before ->
+  R.readers after = R.readers before -> region_readers child before -> region_readers child after.
+Proof. intros Hr Hread H target reader Hmem Hlt; unfold R.rank_lt in *; rewrite Hr in *; rewrite Hread in Hmem; eauto. Qed.
+Lemma region_observe child st target : RL.valid (R.ranking st) -> ranked (R.ranking st) child ->
+  region_readers child st -> region_readers child (R.observe st target).
+Proof.
+  intros Hvalid Hchild H observed reader Hmem Hlt.
+  assert (Hread : R.readers (R.observe st target) = R.readers st) by (unfold R.observe; destruct (Ranks.observe _ _); reflexivity).
+  rewrite Hread in Hmem; apply lt_extends with (before := R.ranking st); [apply observe_extends |].
+  apply H with (reader := reader); [exact Hmem |eapply lower_reflect_observe; eauto].
+Qed.
+Lemma region_get child st fr target next next_fr value :
+  ~ R.rank_lt st (R.frame_owner fr) child = true -> region_readers child st ->
+  R.complete_get st fr target = (next,next_fr,value) -> region_readers child next.
+Proof.
+  intros Howner Hread Hget; unfold R.complete_get in Hget; destruct (R.rank_lt st (R.frame_owner fr) target);
+    inversion Hget; subst next next_fr value; intros observed reader Hmem Hlt;
+    rewrite materialize_readers in Hmem;
+    unfold R.rank_lt in Hlt |- *; rewrite materialize_rank in Hlt |- *;
+    cbn [R.rank_lt R.ranking R.with_readers R.promote_controlled R.with_controlled] in Hlt |- *;
+    unfold R.lookup_set in Hmem; cbn [R.readers R.with_readers R.promote_controlled R.with_controlled] in Hmem;
+    destruct (V.eq_dec observed target) as [->|Hneq].
+  all: try solve [rewrite ML.lookup_update_same in Hmem; apply SL.add_spec in Hmem; destruct Hmem as [->|Hmem];
+    [exfalso; apply Howner; exact Hlt |apply Hread with (reader := reader); assumption]].
+  all: rewrite ML.lookup_update_other in Hmem by assumption;
+    apply Hread with (reader := reader); assumption.
+Qed.
+Lemma region_commit child st fr direct next next_fr : R.set_value st fr direct = (next,next_fr) ->
+  region_readers child st -> region_readers child next.
+Proof.
+  intros Hset Hread; unfold R.set_value in Hset; split_program Hset; try exact Hread.
+  all: intros target reader Hmem Hlt;
+    cbn [R.with_readers R.with_queue R.with_sigma R.readers R.ranking R.rank_lt] in *;
+    unfold R.lookup_set in Hmem; destruct (V.eq_dec target (R.frame_owner fr)) as [->|Hneq].
+  all: try solve [rewrite ML.lookup_update_same, SL.empty_spec in Hmem; discriminate].
+  all: rewrite ML.lookup_update_other in Hmem by assumption; apply Hread with (reader := reader); assumption.
+Qed.
+Lemma lower_queue_layout child before after : R.ranking after = R.ranking before ->
+  (forall x, In x (R.queue after) -> In x (R.queue before)) -> lower_queue_inclusion child before after.
+Proof. intros _ H x _; apply H. Qed.
+Lemma lower_queue_commit child st fr direct next next_fr :
+  ~ R.rank_lt st (R.frame_owner fr) child = true -> region_readers child st ->
+  R.set_value st fr direct = (next,next_fr) -> lower_queue_inclusion child st next.
+Proof.
+  intros Howner Hread Hset; unfold R.set_value in Hset; split_program Hset; intros x Hlower Hin; try exact Hin.
+  all: cbn [R.with_readers R.with_queue R.with_sigma R.queue R.ranking R.rank_lt R.enqueue_all] in *;
+    apply insert_all_members in Hin; destruct Hin as [Hnew|Hin]; [|exact Hin].
+  all: exfalso; apply Howner; apply Hread with (reader := x); [apply SL.mem_spec; exact Hnew |exact Hlower].
+Qed.
+Lemma lower_queue_requeue child before after owner : R.ranking after = R.ranking before ->
+  ~ R.rank_lt before owner child = true -> lower_queue_inclusion child before after ->
+  lower_queue_inclusion child before (R.requeue_changed_controlled_owner before after owner).
+Proof.
+  intros Hr Howner Hq; unfold R.requeue_changed_controlled_owner.
+  destruct (Features.recompute_controlled && S.mem owner (R.controlled before) &&
+    negb (R.equivalent (R.sigma_value after owner) (R.sigma_value before owner)))%bool; [|exact Hq].
+  intros x Hlower Hin; unfold R.enqueue in Hin; cbn [R.with_queue R.queue] in Hin.
+  apply insert_members in Hin; destruct Hin as [->|Hin]; [|apply Hq; assumption].
+  exfalso; apply Howner; unfold R.rank_lt in *; cbn [R.ranking R.with_queue] in Hlower; now rewrite Hr in Hlower.
+Qed.
+Lemma ordered_head_not_lower order head rest child : ordered order (head :: rest) ->
+  In child (head :: rest) -> ~ R.ranking_lt order head child = true.
+Proof.
+  intros Hordered Hin Hlower; destruct (V.eq_dec child head) as [->|Hneq].
+  - rewrite lt_irrefl in Hlower; discriminate.
+  - pose proof (@ordered_member_lower
+      (R.with_ranking R.empty_state order) head rest child Hordered Hin Hneq) as Hhigher.
+    pose proof (@lt_trans order head child head Hlower Hhigher) as Hcycle; rewrite lt_irrefl in Hcycle; discriminate.
+Qed.
+
+Definition region_transition child before after :=
+  region_readers child after /\ lower_queue_inclusion child before after /\
+  forall x, R.rank_lt after x child = true -> R.rank_lt before x child = true.
+Lemma region_static child before after : R.ranking after = R.ranking before ->
+  R.readers after = R.readers before -> (forall x, In x (R.queue after) -> In x (R.queue before)) ->
+  region_readers child before -> region_transition child before after.
+Proof.
+  intros Hr Hread Hq H; split; [eapply region_layout; eauto |]; split.
+  - apply lower_queue_layout; auto.
+  - intros x Hlt; unfold R.rank_lt in *; now rewrite Hr in Hlt.
+Qed.
+Lemma region_observed child st target : RL.valid (R.ranking st) -> ranked (R.ranking st) child ->
+  region_readers child st -> region_transition child st (R.observe st target).
+Proof.
+  intros Hvalid Hchild H; split; [apply region_observe; auto |]; split.
+  - intros x _ Hin; unfold R.observe in Hin; destruct (Ranks.observe _ _); exact Hin.
+  - intros x Hlt; eapply lower_reflect_observe; eauto.
+Qed.
+Lemma region_trans child a b c : region_transition child a b -> region_transition child b c -> region_transition child a c.
+Proof.
+  intros [_ [Hab Hba]] [Hread [Hbc Hcb]]; split; [exact Hread |]; split.
+  - intros x Hlt Hin; apply Hab; [apply Hcb; exact Hlt |apply Hbc; assumption].
+  - intros x Hlt; apply Hba, Hcb; exact Hlt.
+Qed.
+Lemma region_get_transition child st fr target next next_fr value :
+  ~ R.rank_lt st (R.frame_owner fr) child = true -> region_readers child st ->
+  R.complete_get st fr target = (next,next_fr,value) -> region_transition child st next.
+Proof.
+  intros Howner Hread Hget; split; [eapply region_get; eauto |]; split.
+  - intros x _ Hin; rewrite (proj1 (proj2 (get_layout Hget))) in Hin; exact Hin.
+  - intros x Hlt; unfold R.rank_lt in *; now rewrite (get_rank Hget) in Hlt.
+Qed.
+Lemma pop_subset q head rest : R.queue_pop q = Some (head,rest) -> forall x, In x rest -> In x q.
+Proof. destruct q as [|first tail]; cbn; intro H; [discriminate |inversion H; subst; auto]. Qed.
+
+Lemma next_region tf before after child : config_wf (fun _ => True) before ->
+  ordinary_config before -> discovery_ready before -> active_ordered before ->
+  In child (active_owners (R.cfg_control before)) -> region_readers child (R.cfg_state before) ->
+  step tf before after -> region_transition child (R.cfg_state before) (R.cfg_state after).
+Proof.
+  intros [Hstore Hrefs] [_ Hordinary] Hready Hordered Hactive Hread Hstep.
+  assert (Hchild : ranked (R.ranking (R.cfg_state before)) child).
+  { pose proof (@active_references (known (fun _ => True) (R.cfg_state before)) (fun _ => True) (R.cfg_control before) Hrefs) as Hknown; rewrite Forall_forall in Hknown.
+    exact (proj2 (Hknown child Hactive)). }
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *;
+    unfold active_ordered in Hordered; cbn [R.cfg_state R.cfg_control] in Hordered.
+  unfold discovery_ready in Hready; cbn [R.cfg_state R.cfg_control] in Hready.
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct ctrl as [|roots|roots|owner k|fr body k|fr direct pending k|fr direct k|fr k|k];
+    cbn [R.cfg_control active_owners ordinary_control control_refs] in Hordered, Hactive, Hordinary, Hrefs; try contradiction.
+  all: try assert (Howner : ~ R.rank_lt st (R.frame_owner fr) child = true)
+    by (apply (ordered_head_not_lower Hordered Hactive)).
+  - inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_static with (before := st);
+      [apply materialize_rank |apply materialize_readers |intros x Hin; rewrite materialize_queue in Hin; exact Hin |exact Hread].
+  - destruct Hordinary as [_ [Hpure _]]; destruct Hrefs as [Hfr [_ Hk]].
+    assert (Hrank : ranked (R.ranking st) (R.frame_owner fr)) by (exact (proj2 (ref_owner Hfr))).
+    destruct body as [direct|target tail|target raw tail|target tail].
+    + inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_static; eauto.
+    + pose proof (@region_observed child st target (store_valid Hstore) Hchild Hread) as Hobserved.
+      destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * cbn -[R.complete_get] in Hstep; destruct (R.complete_get (R.observe st target) fr target) as [[done next_fr] value] eqn:Hget.
+        inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_trans; [exact Hobserved |].
+        eapply region_get_transition; [|exact (proj1 Hobserved) |exact Hget].
+        intro Hlower; apply Howner; exact (@lower_reflect_observe st child target (R.frame_owner fr) (store_valid Hstore) Hchild Hlower).
+      * rewrite (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Hrank Hready Hmat) in Hstep; cbn in Hstep.
+        inversion Hstep; subst after; cbn [R.cfg_state]; exact Hobserved.
+    + exfalso; exact (pure_no_side Hpure).
+    + pose proof (@region_observed child st target (store_valid Hstore) Hchild Hread) as Hobserved.
+      destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * inversion Hstep; subst after; cbn [R.cfg_state]; exact Hobserved.
+      * rewrite (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Hrank Hready Hmat) in Hstep.
+        inversion Hstep; subst after; cbn [R.cfg_state]; exact Hobserved.
+  - destruct Hordinary as [_ [-> _]]; inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_static with (before := st); eauto.
+  - destruct (R.set_value st fr direct) as [done next_fr] eqn:Hset; inversion Hstep; subst after.
+    pose proof (@commit_footprint st fr direct done next_fr Hset) as Hview.
+    split; [eapply region_layout with (before := done); [reflexivity |reflexivity |eapply region_commit; eauto] |]; split.
+    + eapply lower_queue_requeue; [exact (commit_ranking Hview) |exact Howner |eapply lower_queue_commit; eauto].
+    + intros x Hlt; unfold R.rank_lt in *; cbn [R.cfg_state R.requeue_changed_controlled_owner R.with_queue R.ranking] in Hlt.
+      now rewrite (commit_ranking Hview) in Hlt.
+  - split_program Hstep; cbn [R.cfg_state];
+      try solve [eapply region_static with (before := st); [reflexivity |reflexivity |eapply pop_subset; eassumption |exact Hread]].
+    all: eapply region_static with (before := st); [apply close_rank | |intros x Hin; rewrite close_queue in Hin; exact Hin |exact Hread].
+    all: unfold R.reset_registered_cells; destruct Features.restart_side_phases; reflexivity.
+  - destruct k; cbn [suspended_owners ordinary_stack] in Hactive, Hordinary, Hordered; try contradiction.
+    all: try assert (Howner : ~ R.rank_lt st (R.frame_owner f) child = true)
+      by (apply (ordered_head_not_lower Hordered Hactive)).
+    + destruct (R.complete_get st f t) as [[done next_fr] value] eqn:Hget.
+      inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_get_transition; eauto.
+    + inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_static with (before := st); eauto.
+    + inversion Hstep; subst after; cbn [R.cfg_state]; eapply region_static with (before := st); eauto.
+Qed.
+Lemma fresh_above_known st child variable : RL.valid (R.ranking st) ->
+  Ranks.lookup (R.ranking st) child = None -> ranked (R.ranking st) variable ->
+  R.rank_lt (R.observe st child) variable child = true.
+Proof.
+  intros Hvalid Hfresh [rank Hknown]; unfold R.observe, R.rank_lt;
+    destruct (Ranks.observe (R.ranking st) child) as [order child_rank] eqn:Hobserve; cbn.
+  unfold R.ranking_lt; rewrite (@RL.observe_preserves _ _ _ _ _ _ Hobserve Hknown),
+    (@RL.observe_lookup _ _ _ _ Hobserve); apply Nat.ltb_lt.
+  exact (@discovery_fresh_above discovery _ _ _ _ _ _ Hvalid Hfresh Hknown Hobserve).
+Qed.
+Lemma region_at_discovery st child : store_wf (fun _ => True) st ->
+  Ranks.lookup (R.ranking st) child = None -> region_readers child (R.observe st child).
+Proof.
+  intros Hstore Hfresh target reader Hmem _.
+  assert (Hread : R.readers (R.observe st child) = R.readers st) by (unfold R.observe; destruct (Ranks.observe _ _); reflexivity).
+  rewrite Hread in Hmem; unfold R.lookup_set in Hmem; destruct (M.lookup (R.readers st) target) as [watchers|] eqn:Hlookup.
+  - apply fresh_above_known; [exact (store_valid Hstore) |exact Hfresh |].
+    exact (proj2 (proj1 (refs_readers (store_references Hstore) Hlookup))).
+  - rewrite SL.empty_spec in Hmem; discriminate.
+Qed.
+Definition queue_gap st parent child := forall x, In x (R.queue st) ->
+  R.rank_lt st x child = true -> R.rank_lt st x parent = true.
+Inductive pending_frontier parent k c : Prop :=
+| Build_pending_frontier child :
+  region_readers child (R.cfg_state c) ->
+  queue_gap (R.cfg_state c) parent child ->
+  (episode_scope child k (R.cfg_control c) \/ R.cfg_control c = R.Return k) ->
+  (R.cfg_control c = R.Return k -> queue_below (R.cfg_state c) child) ->
+  pending_frontier parent k c.
+Lemma pending_returns parent k st : pending_frontier parent k (configuration st (R.Return k)) -> queue_below st parent.
+Proof.
+  intros [child Hread Hgap Hscope Hboundary]; unfold queue_below; rewrite Forall_forall; intros x Hin.
+  apply Hgap; [exact Hin |]; specialize (Hboundary eq_refl); unfold queue_below in Hboundary;
+    rewrite Forall_forall in Hboundary; apply Hboundary; exact Hin.
+Qed.
+Lemma next_pending_frontier tf roots parent k before after : no_side_effects tf -> reachable tf roots before ->
+  pending_frontier parent k before -> R.cfg_control before <> R.Return k -> step tf before after ->
+  pending_frontier parent k after.
+Proof.
+  intros Hpure Hreachable [child Hread Hgap [Hscope|Hreturned] Hboundary] Hnot Hstep; [|contradiction].
+  pose proof (@next_region tf before after child
+    (@reachable_rank_configuration tf roots before Hreachable)
+    (@ordinary_reachable tf roots before Hpure Hreachable)
+    (@ordinary_discovery_ready tf roots before Hpure Hreachable)
+    (@reachable_active_ordered tf roots before Hreachable)
+    (@episode_scope_active child k (R.cfg_control before) Hscope) Hread Hstep) as [Hread' [Hq Hreflect]].
+  destruct (@next_episode_scope tf before after child k Hscope Hstep) as [Hscope'|[fr [Hbefore [Howner Hreturn]]]].
+  - refine (@Build_pending_frontier parent k after child Hread' _ (or_introl Hscope') _).
+    + intros x Hin Hlt; apply lt_extends with (before := R.ranking (R.cfg_state before)); [eapply next_ranking_extends; exact Hstep |].
+      apply Hgap; [apply Hq; assumption |apply Hreflect; exact Hlt].
+    + intro Hreturn; rewrite Hreturn in Hscope'; exfalso; exact (@episode_return_outside child k Hscope').
+  - refine (@Build_pending_frontier parent k after child Hread' _ (or_intror Hreturn) _).
+    + intros x Hin Hlt; apply lt_extends with (before := R.ranking (R.cfg_state before)); [eapply next_ranking_extends; exact Hstep |].
+      apply Hgap; [apply Hq; assumption |apply Hreflect; exact Hlt].
+    + intros _; apply (closing_queue_below Hreachable Hstep); exists fr, k; repeat split; auto.
+Qed.
+Fixpoint stack_frontiers c k : Prop :=
+  match k with
+  | R.KLoop | R.KSeedLoop _ => True
+  | R.KAfterGet fr _ _ rest | R.KAfterSpawn fr _ rest =>
+      inhabited (pending_frontier (R.frame_owner fr) k c) /\ stack_frontiers c rest
+  | R.KDrain _ rest => stack_frontiers c rest
+  | R.KAfterSide _ _ _ | R.KDead _ _ _ _ => False
+  end.
+Definition frontier_stack c :=
+  match R.cfg_control c with
+  | R.RunLoop | R.RunSeeds _ | R.RunSeedLoop _ => True
+  | R.StartEpisode _ k | R.RunRhs _ _ k | R.RunDead _ _ _ k | R.RunCommit _ _ k
+  | R.RunDrain _ k | R.Return k => stack_frontiers c k
+  end.
+Lemma next_stack_frontiers tf roots before after k : no_side_effects tf -> reachable tf roots before ->
+  step tf before after -> stack_frontiers before k ->
+  (match R.cfg_control before with R.Return returned => stack_depth k < stack_depth returned | _ => True end) ->
+  stack_frontiers after k.
+Proof.
+  intros Hpure Hreachable Hstep; induction k; cbn [stack_frontiers stack_depth]; intros Hfront Hdepth; try contradiction; auto.
+  all: try solve [apply IHk; [exact Hfront |destruct (R.cfg_control before); cbn in *; auto; lia]].
+  all: destruct Hfront as [[Hpending] Hrest]; split.
+  all: try solve [apply IHk; [exact Hrest |destruct (R.cfg_control before); cbn in *; auto; lia]].
+  all: constructor; eapply next_pending_frontier; [exact Hpure |exact Hreachable |exact Hpending | |exact Hstep].
+  all: intro Hreturn; rewrite Hreturn in Hdepth; cbn [stack_depth] in Hdepth; lia.
+Qed.
+Definition current_frontier c :=
+  match R.cfg_control c with
+  | R.RunSeeds _ => quiescent (R.cfg_state c)
+  | R.StartEpisode owner _ => queue_below (R.cfg_state c) owner
+  | R.RunRhs fr _ _ | R.RunDead fr _ _ _ | R.RunCommit fr _ _ => queue_below (R.cfg_state c) (R.frame_owner fr)
+  | _ => True
+  end.
+Definition ordinary_frontier c := current_frontier c /\ frontier_stack c.
+Lemma unmaterialized_unseen st target : all_discovered_live st ->
+  R.is_materialized (R.observe st target) target = false -> Ranks.lookup (R.ranking st) target = None.
+Proof.
+  intros Hlive Hmat; rewrite observe_materialized in Hmat; destruct (Ranks.lookup (R.ranking st) target) as [rank|] eqn:Hlookup; auto.
+  assert (R.is_materialized st target = true) by (apply materialized_iff_solved, Hlive; exists rank; exact Hlookup); congruence.
+Qed.
+Lemma pending_fresh st parent child k : store_wf (fun _ => True) st -> Ranks.lookup (R.ranking st) child = None ->
+  queue_below st parent -> pending_frontier parent k (configuration (R.observe st child) (R.StartEpisode child k)).
+Proof.
+  intros Hstore Hfresh Hbelow; refine (@Build_pending_frontier parent k (configuration (R.observe st child) (R.StartEpisode child k)) child (region_at_discovery Hstore Hfresh) _ _ _).
+  - intros x Hin _; cbn [configuration R.cfg_state] in Hin |- *; rewrite observe_queue in Hin; eapply lt_extends; [apply observe_extends |].
+    unfold queue_below in Hbelow; rewrite Forall_forall in Hbelow; apply Hbelow; exact Hin.
+  - left; left; auto.
+  - discriminate.
+Qed.
+Lemma popped_queue_below st head rest : ordered (R.ranking st) (R.queue st) ->
+  R.queue_pop (R.queue st) = Some (head,rest) -> queue_below (R.with_queue st rest) head.
+Proof.
+  intros Hordered Hpop; destruct (R.queue st) as [|first tail] eqn:Hq; cbn [R.queue_pop] in Hpop; [discriminate |].
+  inversion Hpop; subst first tail; exact (proj2 (ordered_tail Hordered)).
+Qed.
+
+Theorem next_ordinary_frontier tf roots before after : no_side_effects tf -> reachable tf roots before ->
+  ordinary_frontier before -> step tf before after -> ordinary_frontier after.
+Proof.
+  intros Hpure Hreachable [Hcurrent Hstack] Hstep.
+  pose proof (@reachable_rank_configuration tf roots before Hreachable) as [Hstore Hrefs].
+  pose proof (@ordinary_reachable tf roots before Hpure Hreachable) as [_ Hordinary].
+  pose proof (@ordinary_discovery_ready tf roots before Hpure Hreachable) as Hready.
+  assert (Hkeep : forall k, stack_frontiers before k ->
+    (match R.cfg_control before with R.Return returned => stack_depth k < stack_depth returned | _ => True end) ->
+    stack_frontiers after k) by (intros; eapply next_stack_frontiers; eauto).
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *.
+  unfold current_frontier in Hcurrent; unfold frontier_stack in Hstack;
+    unfold discovery_ready in Hready; cbn [R.cfg_state R.cfg_control] in Hcurrent, Hstack, Hready, Hkeep.
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  unfold ordinary_frontier, current_frontier, frontier_stack.
+  destruct ctrl as [|seeds|seeds|owner k|fr body k|fr direct pending k|fr direct k|fr k|k];
+    cbn [R.cfg_control control_refs ordinary_control] in Hrefs, Hordinary, Hcurrent, Hstack, Hready, Hkeep.
+  - destruct (R.queue_pop (R.queue st)) as [[owner rest]|] eqn:Hpop; [|discriminate].
+    inversion Hstep; subst after; split; [eapply popped_queue_below; [exact (store_ordered Hstore) |exact Hpop] |exact I].
+  - destruct seeds as [|root seeds].
+    + inversion Hstep; subst after; auto.
+    + destruct (R.is_materialized (R.observe st root) root); inversion Hstep; subst after; split; try exact I.
+      all: unfold queue_below, quiescent; cbn [R.cfg_state R.cfg_control]; rewrite observe_queue, Hcurrent; constructor.
+  - destruct (R.queue_pop (R.queue st)) as [[owner rest]|] eqn:Hpop; inversion Hstep; subst after; split; try exact I.
+    + eapply popped_queue_below; [exact (store_ordered Hstore) |exact Hpop].
+    + unfold quiescent; cbn [R.cfg_state]; destruct (R.queue st); cbn [R.queue_pop] in Hpop; [reflexivity |discriminate].
+  - inversion Hstep; subst after; split.
+    + eapply (@queue_below_layout st (R.materialize st owner) owner); [apply materialize_queue |rewrite materialize_rank; apply extends_refl |exact Hcurrent].
+    + apply Hkeep; [exact Hstack |exact I].
+  - destruct Hrefs as [Hfr [_ Hk]]; destruct Hordinary as [_ [Hcode _]].
+    assert (Howner : ranked (R.ranking st) (R.frame_owner fr)) by (exact (proj2 (ref_owner Hfr))).
+    destruct body as [direct|target tail|target raw tail|target tail].
+    + inversion Hstep; subst after; split; [exact Hcurrent |apply Hkeep; [exact Hstack |exact I]].
+    + destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * cbn -[R.complete_get] in Hstep; destruct (R.complete_get (R.observe st target) fr target) as [[done next_fr] value] eqn:Hget.
+        inversion Hstep; subst after; split.
+        -- cbn [R.cfg_state R.cfg_control]; rewrite (get_owner Hget); eapply queue_below_get; [apply queue_below_observe; exact Hcurrent |exact Hget].
+        -- apply Hkeep; [exact Hstack |exact I].
+      * pose proof (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Howner Hready Hmat) as Hhigher.
+        rewrite Hhigher in Hstep; cbn in Hstep; inversion Hstep; subst after; split.
+        -- cbn [R.cfg_state R.cfg_control]; unfold queue_below; rewrite observe_queue;
+            eapply Forall_impl; [intros x Hx; eapply lt_trans; [eapply lt_extends; [apply observe_extends |exact Hx] |exact Hhigher] |exact Hcurrent].
+        -- cbn [R.cfg_control stack_frontiers]; split; [constructor; apply pending_fresh; [exact Hstore |eapply unmaterialized_unseen; eauto |exact Hcurrent] |apply Hkeep; [exact Hstack |exact I]].
+    + exfalso; exact (pure_no_side Hcode).
+    + destruct (R.is_materialized (R.observe st target) target) eqn:Hmat.
+      * inversion Hstep; subst after; split; [apply queue_below_observe; exact Hcurrent |apply Hkeep; [exact Hstack |exact I]].
+      * pose proof (@unseen_higher st (R.frame_owner fr) target (store_valid Hstore) Howner Hready Hmat) as Hhigher.
+        rewrite Hhigher in Hstep; inversion Hstep; subst after; split.
+        -- cbn [R.cfg_state R.cfg_control]; unfold queue_below; rewrite observe_queue;
+            eapply Forall_impl; [intros x Hx; eapply lt_trans; [eapply lt_extends; [apply observe_extends |exact Hx] |exact Hhigher] |exact Hcurrent].
+        -- cbn [R.cfg_control stack_frontiers]; split; [constructor; apply pending_fresh; [exact Hstore |eapply unmaterialized_unseen; eauto |exact Hcurrent] |apply Hkeep; [exact Hstack |exact I]].
+  - destruct Hordinary as [_ [-> _]]; inversion Hstep; subst after; split; [exact Hcurrent |apply Hkeep; [exact Hstack |exact I]].
+  - destruct (R.set_value st fr direct) as [done next_fr]; inversion Hstep; subst after; split; [exact I |apply Hkeep; [exact Hstack |exact I]].
+  - split_program Hstep.
+    all: repeat match goal with Hp : R.queue_pop ?q = Some (?head,?rest), Hpeek : R.queue_peek ?q = Some ?next |- _ =>
+      let Hsame := fresh "peek_pop" in pose proof (@peek_popped q head rest Hp) as Hsame;
+      rewrite Hpeek in Hsame; inversion Hsame; subst head; clear Hpeek Hsame end.
+    all: cbn [R.cfg_state R.cfg_control R.frame_owner R.fresh_frame stack_frontiers]; split.
+    all: try exact I.
+    all: try solve [apply Hkeep; [exact Hstack |exact I]].
+    all: eapply popped_queue_below; [exact (store_ordered Hstore) |eassumption].
+  - destruct k; cbn [stack_frontiers] in Hstack.
+    + inversion Hstep; subst after; auto.
+    + inversion Hstep; subst after; auto.
+    + destruct Hstack as [[Hpending] Hrest]; destruct (R.complete_get st f t) as [[done next_fr] value] eqn:Hget.
+      inversion Hstep; subst after; split.
+      * cbn [R.cfg_state R.cfg_control]; rewrite (get_owner Hget); eapply queue_below_get; [eapply pending_returns; exact Hpending |exact Hget].
+      * apply Hkeep; [exact Hrest |cbn [stack_depth]; lia].
+    + contradiction.
+    + destruct Hstack as [[Hpending] Hrest]; inversion Hstep; subst after; split.
+      * eapply pending_returns; exact Hpending.
+      * apply Hkeep; [exact Hrest |cbn [stack_depth]; lia].
+    + contradiction.
+    + inversion Hstep; subst after; split; [exact I |apply Hkeep; [exact Hstack |cbn [stack_depth]; lia]].
+Qed.
+Theorem ordinary_frontiers tf roots c : no_side_effects tf -> reachable tf roots c -> ordinary_frontier c.
+Proof.
+  intros Hpure Hpath; assert (Hinitial : ordinary_frontier (R.initial_config roots)) by (split; [reflexivity |exact I]).
+  assert (Hpreserve : forall a b, steps tf a b -> reachable tf roots a -> ordinary_frontier a -> ordinary_frontier b).
+  { intros a b Hsteps; induction Hsteps; intros Hreachable Hfirst; auto.
+    apply IHHsteps; [eapply reachable_advance; eauto |eapply next_ordinary_frontier; eauto]. }
+  exact (Hpreserve _ _ Hpath (@steps_refl tf (R.initial_config roots)) Hinitial).
+Qed.
+Corollary ordinary_evaluation_queue_below tf roots st fr body k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunRhs fr body k)) -> queue_below st (R.frame_owner fr).
+Proof. intros Hpure Hreachable; exact (proj1 (@ordinary_frontiers tf roots _ Hpure Hreachable)). Qed.
+Corollary ordinary_commit_queue_below tf roots st fr direct k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) -> queue_below st (R.frame_owner fr).
+Proof. intros Hpure Hreachable; exact (proj1 (@ordinary_frontiers tf roots _ Hpure Hreachable)). Qed.
+
+Record closed_observation body st result : Prop := {
+  closed_at : Sem.observes_at (R.sigma_value st) body result;
+  closed_reads : forall target value, In (target,value) (Sem.observed_reads result) -> solved st target;
+  closed_spawns : forall target, In target (Sem.observed_spawns result) -> solved st target
+}.
+Lemma closed_replay body st result : closed_observation body st result ->
+  replay st body (Sem.observed_direct result) (Sem.observed_reads result) (Sem.observed_sides result).
+Proof.
+  intros [[Htrace Hvalues] Hreads Hspawns]; apply observation_replay; [exact Htrace |].
+  intros target value Hin; destruct (Hreads target value Hin) as [actual Hlookup].
+  rewrite (Hvalues target value Hin), (@read_value st target actual Hlookup); exact Hlookup.
+Qed.
+Lemma closed_post tf st owner result : no_side_effects tf -> closed_observation (tf owner) st result ->
+  D.leq (Sem.observed_direct result) (R.sigma_value st owner) = true -> owner_post_solution tf st owner.
+Proof.
+  intros Hpure Hclosed Hdirect; pose proof (closed_replay Hclosed) as Hreplay; split.
+  - eexists _, _, _; exact Hreplay.
+  - split.
+    + intros direct reads effects Hother; destruct (replay_observation Hother) as [other [Hat [Hd [Hr He]]]].
+      assert (Heq : result = other) by (eapply observation_unique; [exact (closed_at Hclosed) |exact Hat]); subst other.
+      rewrite <- Hd, <- He; split; [exact Hdirect |].
+      intros target raw Hin; assert (Hempty : Sem.observed_sides result = []) by (exact (Hpure owner result (proj1 (closed_at Hclosed)))).
+      rewrite Hempty in Hin; contradiction.
+    + intros other Hat target Hin.
+      assert (Heq : result = other) by (eapply observation_unique; [exact (closed_at Hclosed) |exact Hat]); subst other.
+      exact (closed_spawns Hclosed target Hin).
+Qed.
+Lemma post_closed tf st owner : owner_post_solution tf st owner ->
+  exists result, closed_observation (tf owner) st result /\ D.leq (Sem.observed_direct result) (R.sigma_value st owner) = true.
+Proof.
+  intros [[direct [reads [effects Hreplay]]] [Hvalues Hspawns]].
+  destruct (replay_observation Hreplay) as [result [Hat [Hd [Hr He]]]]; exists result; split.
+  - constructor; [exact Hat | |exact (Hspawns result Hat)].
+    intros target value Hin; exists value; eapply Sem.rhs_eval_reads_lookup; [exact Hreplay |now rewrite <- Hr].
+  - rewrite Hd; exact (proj1 (Hvalues _ _ _ Hreplay)).
+Qed.
+Lemma below_owner_absent st owner : queue_below st owner -> ~ In owner (R.queue st).
+Proof.
+  unfold queue_below; rewrite Forall_forall; intros H Hin; specialize (H owner Hin);
+    unfold R.rank_lt in H; rewrite lt_irrefl in H; discriminate.
+Qed.
+Theorem ordinary_commit_observed tf roots st fr direct k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) ->
+  exists result, closed_observation (tf (R.frame_owner fr)) st result /\ Sem.observed_direct result = direct.
+Proof.
+  intros Hpure Hreachable.
+  pose proof (@reachable_semantic_invariant tf roots _ Hreachable) as Hsem.
+  destruct (invariant_observing Hsem) as [[Hcursor Hstack]].
+  destruct Hcursor as [reads sides spawns Hprefix Hwatches Hraw Hledger Hspawns].
+  set (result := {| Sem.Observation.observed_direct := direct; Sem.Observation.observed_reads := reads;
+    Sem.Observation.observed_sides := sides; Sem.Observation.observed_spawns := spawns |}).
+  assert (Hquiet : ~ In (R.frame_owner fr) (R.queue st)) by (apply below_owner_absent; eapply ordinary_commit_queue_below; eauto).
+  exists result; split; [constructor |reflexivity].
+  - split; [apply prefix_return; exact Hprefix |].
+    intros target value Hin; symmetry; apply read_value; exact (proj1 (Hwatches Hquiet target value Hin)).
+  - intros target value Hin; exists value; exact (proj1 (Hwatches Hquiet target value Hin)).
+  - intros target Hin; exact (@live_reference_solved (configuration st (R.RunCommit fr direct k))
+    (invariant_frames Hsem) eq_refl target (Hspawns target Hin)).
+Qed.
+Theorem ordinary_commit_higher_post tf roots st fr direct k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) -> forall owner,
+  solved st owner -> R.rank_lt st (R.frame_owner fr) owner = true -> owner_post_solution tf st owner.
+Proof.
+  intros Hpure Hreachable owner Hsolved Hhigher.
+  pose proof (@reachable_semantic_invariant tf roots _ Hreachable) as Hsem.
+  assert (Hquiet : ~ In owner (R.queue st)).
+  { intro Hin; pose proof (@ordinary_commit_queue_below tf roots st fr direct k Hpure Hreachable) as Hbelow.
+    unfold queue_below in Hbelow; rewrite Forall_forall in Hbelow; specialize (Hbelow owner Hin).
+    pose proof (@lt_trans (R.ranking st) owner (R.frame_owner fr) owner Hbelow Hhigher) as Hcycle;
+      rewrite lt_irrefl in Hcycle; discriminate. }
+  assert (Hidle : idle (configuration st (R.RunCommit fr direct k)) owner).
+  { split; [exact Hquiet |intro Hin].
+    pose proof (@reachable_active_ordered tf roots _ Hreachable) as Horder.
+    exact (@ordered_head_not_lower (R.ranking st) (R.frame_owner fr) (suspended_owners k) owner Horder Hin Hhigher). }
+  destruct (invariant_settled Hsem Hsolved Hidle) as [Hdone].
+  apply completed_is_post_solution with (done := Hdone); intros target raw Hin.
+  assert (Hempty : Sem.observed_sides (completed_result Hdone) = []) by (exact (Hpure owner _ (completed_trace Hdone))).
+  rewrite Hempty in Hin; contradiction.
+Qed.
+
+(** Monotonicity transfers a closed observation to a lower store. Dependency
+    monotonicity supplies read coverage; effect monotonicity supplies spawn
+    coverage and the direct-value bound. *)
+Lemma observations_descend body lower upper lower_values upper_values :
+  Sem.rhs_dependencies_monotone body -> Sem.rhs_effects_monotone body ->
+  (forall x, D.leq (lower_values x) (upper_values x) = true) ->
+  Sem.observes_at lower_values body lower -> Sem.observes_at upper_values body upper ->
+  Sem.list_included (map fst (Sem.observed_reads lower)) (map fst (Sem.observed_reads upper)) /\ Sem.effects_le lower upper.
+Proof.
+  intros Hdeps Heffects Hvalues [Hlower Hlow_reads] [Hupper Hupper_reads].
+  assert (Hcommon : Sem.common_read_values_le lower upper).
+  { intros target low high Hlow Hhigh; rewrite (Hlow_reads target low Hlow), (Hupper_reads target high Hhigh); apply Hvalues. }
+  pose proof (Hdeps lower upper Hlower Hupper Hcommon) as Hreads; split; [exact Hreads |].
+  apply Heffects; [exact Hlower |exact Hupper |]; intros target value Hin.
+  assert (Htarget : In target (map fst (Sem.observed_reads lower))) by (apply in_map_iff; exists (target,value); auto).
+  specialize (Hreads target Htarget); apply in_map_iff in Hreads; destruct Hreads as [[x high] [Hx Hhigh]]; cbn in Hx; subst x.
+  exists high; split; [exact Hhigh |eapply Hcommon; eauto].
+Qed.
+Lemma closed_descend body before after upper lower :
+  Sem.rhs_dependencies_monotone body -> Sem.rhs_effects_monotone body ->
+  preserves_live before after -> (forall x, D.leq (R.sigma_value after x) (R.sigma_value before x) = true) ->
+  closed_observation body before upper -> Sem.observes_at (R.sigma_value after) body lower ->
+  closed_observation body after lower /\ D.leq (Sem.observed_direct lower) (Sem.observed_direct upper) = true.
+Proof.
+  intros Hdeps Heffects Hlive Hvalues Hclosed Hlower.
+  destruct (@observations_descend body lower upper (R.sigma_value after) (R.sigma_value before)
+    Hdeps Heffects Hvalues Hlower (closed_at Hclosed)) as [Hreads Heffect]; split.
+  - constructor; [exact Hlower | |].
+    + intros target value Hin; apply Hlive.
+      assert (Htarget : In target (map fst (Sem.observed_reads lower))) by (apply in_map_iff; exists (target,value); auto).
+      specialize (Hreads target Htarget); apply in_map_iff in Hreads; destruct Hreads as [[x high] [Hx Hhigh]]; cbn in Hx; subst x.
+      exact (closed_reads Hclosed target high Hhigh).
+    + intros target Hin; apply Hlive; apply (closed_spawns Hclosed); eapply Sem.Observation.spawn_effects_le; eauto.
+  - exact (Sem.Observation.direct_effect_le Heffect).
+Qed.
+Lemma ordinary_descending_post tf before after owner upper : monotonic_system tf -> no_side_effects tf ->
+  preserves_live before after -> (forall x, D.leq (R.sigma_value after x) (R.sigma_value before x) = true) ->
+  closed_observation (tf owner) before upper ->
+  D.leq (Sem.observed_direct upper) (R.sigma_value after owner) = true -> owner_post_solution tf after owner.
+Proof.
+  intros Hmono Hpure Hlive Hvalues Hclosed Hbound.
+  destruct (observation_total (R.sigma_value after) (tf owner)) as [lower Hlower].
+  destruct (@closed_descend (tf owner) before after upper lower (proj1 (Hmono owner)) (proj2 (Hmono owner))
+    Hlive Hvalues Hclosed Hlower) as [Hclosed' Hdirect].
+  eapply closed_post; [exact Hpure |exact Hclosed' |eapply DL.leq_trans; eauto].
+Qed.
+Lemma ordinary_post_preserved_below tf before after owner : monotonic_system tf -> no_side_effects tf ->
+  preserves_live before after -> (forall x, D.leq (R.sigma_value after x) (R.sigma_value before x) = true) ->
+  R.sigma_value after owner = R.sigma_value before owner -> owner_post_solution tf before owner -> owner_post_solution tf after owner.
+Proof.
+  intros Hmono Hpure Hlive Hvalues Hsame Hpost; destruct (post_closed Hpost) as [upper [Hclosed Hbound]].
+  eapply ordinary_descending_post; [exact Hmono |exact Hpure |exact Hlive |exact Hvalues |exact Hclosed |now rewrite Hsame].
+Qed.
+
+Lemma cursor_residual_closed tf live st fr body (current : cursor tf live st fr body) :
+  ~ In (R.frame_owner fr) (R.queue st) -> owner_post_solution tf st (R.frame_owner fr) ->
+  forall result, Sem.observes_at (R.sigma_value st) body result -> closed_observation body st result.
+Proof.
+  intros Hquiet Hpost result [Htrace Hvalues].
+  destruct (post_closed Hpost) as [upper [Hclosed Hbound]].
+  destruct current as [reads sides spawns Hprefix Hwatches Hraw Hledger Hspawns].
+  set (whole := {| Sem.Observation.observed_direct := Sem.observed_direct result;
+    Sem.Observation.observed_reads := reads ++ Sem.observed_reads result;
+    Sem.Observation.observed_sides := sides ++ Sem.observed_sides result;
+    Sem.Observation.observed_spawns := spawns ++ Sem.observed_spawns result |}).
+  assert (Hat : Sem.observes_at (R.sigma_value st) (tf (R.frame_owner fr)) whole).
+  { split; [exact (Hprefix result Htrace) |].
+    intros target value Hin; apply in_app_or in Hin; destruct Hin as [Hin|Hin].
+    - symmetry; apply read_value; exact (proj1 (Hwatches Hquiet target value Hin)).
+    - apply Hvalues; exact Hin. }
+  assert (Heq : whole = upper) by (eapply observation_unique; [exact Hat |exact (closed_at Hclosed)]).
+  constructor; [split; assumption | |].
+  - intros target value Hin; apply (closed_reads Hclosed target value); rewrite <- Heq; apply in_or_app; right; exact Hin.
+  - intros target Hin; apply (closed_spawns Hclosed target); rewrite <- Heq; apply in_or_app; right; exact Hin.
+Qed.
+Definition semantic_frontier tf st owner := forall target,
+  target = owner \/ R.rank_lt st owner target = true -> solved st target /\ owner_post_solution tf st target.
+Lemma ordinary_commit_frontier tf roots st fr direct k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) ->
+  D.leq direct (R.sigma_value st (R.frame_owner fr)) = true -> semantic_frontier tf st (R.frame_owner fr).
+Proof.
+  intros Hpure Hreachable Hdescending target [->|Hhigher].
+  - split.
+    + pose proof (@reachable_frames_live tf roots _ Hreachable) as Hframes; inversion Hframes; assumption.
+    + destruct (@ordinary_commit_observed tf roots st fr direct k Hpure Hreachable) as [result [Hclosed Hd]].
+      eapply closed_post; [exact Hpure |exact Hclosed |now rewrite Hd].
+  - assert (Hlive : solved st target).
+    { pose proof (@ordinary_discovery_ready tf roots _ Hpure Hreachable) as Hready.
+      apply Hready; destruct (@lt_ranks (R.ranking st) (R.frame_owner fr) target Hhigher) as [rx [ry [_ [Hy _]]]]; exists ry; exact Hy. }
+    split; [exact Hlive |eapply ordinary_commit_higher_post; eauto].
+Qed.
+Lemma commit_value_other st fr direct next next_fr target : R.set_value st fr direct = (next,next_fr) ->
+  target <> R.frame_owner fr -> R.sigma_value next target = R.sigma_value st target.
+Proof.
+  intros Hset Hneq; unfold R.sigma_value; rewrite (commit_other (@commit_footprint st fr direct next next_fr Hset) Hneq); reflexivity.
+Qed.
+Lemma commit_descending st fr direct next next_fr :
+  D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true ->
+  D.leq (snd (U.update false (R.frame_owner fr) (R.frame_phase fr) (R.sigma_value st (R.frame_owner fr))
+    (D.join direct (R.aggregate st (R.frame_owner fr))))) (R.sigma_value st (R.frame_owner fr)) = true ->
+  R.set_value st fr direct = (next,next_fr) -> forall target,
+  D.leq (R.sigma_value next target) (R.sigma_value st target) = true.
+Proof.
+  intros Hinput Hupdate Hset target; destruct (V.eq_dec target (R.frame_owner fr)) as [->|Hneq].
+  - unfold R.set_value in Hset; split_program Hset; try apply DL.leq_refl.
+    all: unfold R.sigma_value; cbn [R.enqueue_all R.with_readers R.with_queue R.with_sigma R.sigma]; rewrite ML.lookup_update_same.
+    all: try exact Hinput.
+    all: exact Hupdate.
+  - rewrite (@commit_value_other st fr direct next next_fr target Hset Hneq); apply DL.leq_refl.
+Qed.
+Lemma frontier_descending_commit tf roots st fr direct k next next_fr parent : monotonic_system tf -> no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) ->
+  semantic_frontier tf st parent ->
+  (forall target, D.leq (R.sigma_value next target) (R.sigma_value st target) = true) ->
+  R.set_value st fr direct = (next,next_fr) -> semantic_frontier tf next parent.
+Proof.
+  intros Hmono Hpure Hreachable Hfront Hdescending Hset target Htarget.
+  pose proof (@commit_footprint st fr direct next next_fr Hset) as Hview.
+  assert (Hbefore : target = parent \/ R.rank_lt st parent target = true).
+  { unfold R.rank_lt in Htarget; rewrite (commit_ranking Hview) in Htarget; exact Htarget. }
+  destruct (Hfront target Hbefore) as [Hlive Hpost]; split; [apply (preserves_live_commit Hset); exact Hlive |].
+  destruct (V.eq_dec target (R.frame_owner fr)) as [->|Hneq].
+  - destruct (@ordinary_commit_observed tf roots st fr direct k Hpure Hreachable) as [upper [Hclosed Hd]].
+    eapply ordinary_descending_post; [exact Hmono |exact Hpure |exact (@preserves_live_commit st fr direct next next_fr Hset) |exact Hdescending |exact Hclosed |].
+    rewrite Hd; eapply DL.leq_trans; [apply DL.join_upper_left |eapply commit_sound; exact Hset].
+  - eapply ordinary_post_preserved_below; [exact Hmono |exact Hpure |exact (@preserves_live_commit st fr direct next next_fr Hset) |
+      exact Hdescending |eapply commit_value_other; eauto |exact Hpost].
+Qed.
+Lemma ordinary_new_narrowing_frontier tf roots st fr direct k next next_fr : monotonic_system tf -> no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) ->
+  (forall target, D.leq (R.sigma_value next target) (R.sigma_value st target) = true) ->
+  R.set_value st fr direct = (next,next_fr) -> semantic_frontier tf next (R.frame_owner fr).
+Proof.
+  intros Hmono Hpure Hreachable Hdescending Hset.
+  assert (Hdirect : D.leq direct (R.sigma_value st (R.frame_owner fr)) = true).
+  { eapply DL.leq_trans; [eapply DL.leq_trans; [apply DL.join_upper_left |eapply commit_sound; exact Hset] |apply Hdescending]. }
+  eapply frontier_descending_commit; [exact Hmono |exact Hpure |exact Hreachable |
+    eapply ordinary_commit_frontier; eauto |exact Hdescending |exact Hset].
+Qed.
+
+Definition outside_commit ctrl := match ctrl with R.RunCommit _ _ _ => False | _ => True end.
+Lemma noncommit_phase_origin tf before after owner phase : NoDup (active_owners (R.cfg_control before)) -> outside_commit (R.cfg_control before) ->
+  step tf before after -> owner_phase (R.cfg_control after) owner = Some phase ->
+  phase = U.initial_phase false owner \/ owner_phase (R.cfg_control before) owner = Some phase.
+Proof.
+  intros Hunique Hnot Hstep Hphase; destruct before as [st ctrl]; cbn [R.cfg_control] in Hunique, Hnot |- *.
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct ctrl; cbn [outside_commit] in Hnot; cbn [active_owners] in Hunique; try contradiction;
+    unfold R.continue_side, R.continue_dead, R.record_side_input in Hstep; split_program Hstep.
+  all: repeat match goal with Hget : R.complete_get _ _ _ = (_,_,_) |- _ =>
+    let Ho := fresh "get_owner" in let Hp := fresh "get_phase" in
+    pose proof (get_owner Hget) as Ho; pose proof (get_phase Hget) as Hp; clear Hget end.
+  all: cbn [R.cfg_control owner_phase stack_phase R.frame_owner R.frame_phase R.with_frame_side R.fresh_frame] in Hphase |- *;
+    repeat match goal with Ho : R.frame_owner _ = _ |- _ => rewrite Ho in Hphase; clear Ho end;
+    repeat match goal with Hp : R.frame_phase _ = _ |- _ => rewrite Hp in Hphase; clear Hp end.
+  all: repeat match goal with H : context [if V.eq_dec ?x ?y then _ else _] |- _ =>
+    destruct (V.eq_dec x y); [subst |]; cbn in Hphase |- * end.
+  all: try solve [right; exact Hphase].
+  all: try solve [discriminate].
+  all: try solve [injection Hphase as Hphase; left; symmetry; exact Hphase].
+  all: match goal with |- _ \/ (if V.eq_dec ?owner ?current then _ else _) = _ =>
+    destruct (V.eq_dec owner current) as [Heq|Hneq]; [subst owner |right; exact Hphase] end.
+  all: inversion Hunique; subst; exfalso; apply H1; eapply stack_phase_present; exact Hphase.
+Qed.
+Lemma observe_known_identity st target : ranked (R.ranking st) target -> R.observe st target = st.
+Proof.
+  intros [rank Hrank]; unfold R.observe; rewrite (@RL.observe_existing _ _ _ Hrank);
+    destruct st; reflexivity.
+Qed.
+Lemma solved_known st target : store_wf (fun _ => True) st -> solved st target -> ranked (R.ranking st) target.
+Proof. intros Hstore [value Hlookup]; exact (proj2 (proj1 (refs_sigma (store_references Hstore) Hlookup))). Qed.
+Lemma closed_get_target st target tail result : closed_observation (Syntax.Get target tail) st result -> solved st target.
+Proof. intros [[Htrace _] Hreads _]; inversion Htrace; subst result; eapply Hreads; left; reflexivity. Qed.
+Lemma closed_spawn_target st target tail result : closed_observation (Syntax.Spawn target tail) st result -> solved st target.
+Proof. intros [[Htrace _] _ Hspawns]; inversion Htrace; subst result; apply Hspawns; left; reflexivity. Qed.
+
+Record ordinary_phase_laws := {
+  phase_safe : U.phase -> Prop;
+  phase_narrowing : U.phase -> Prop;
+  initial_phase_safe : forall owner, phase_safe (U.initial_phase false owner);
+  initial_phase_not_narrowing : forall owner, ~ phase_narrowing (U.initial_phase false owner);
+  ordinary_update_safe : forall owner phase old input, phase_safe phase ->
+    (phase_narrowing phase -> D.leq input old = true) -> phase_safe (fst (U.update false owner phase old input));
+  ordinary_update_narrowing : forall owner phase old input, phase_safe phase ->
+    phase_narrowing (fst (U.update false owner phase old input)) -> D.leq input old = true;
+  ordinary_update_descends : forall owner phase old input, phase_safe phase -> D.leq input old = true ->
+    D.leq (snd (U.update false owner phase old input)) old = true
+}.
+Section OrdinaryPhases.
+Variable phases : ordinary_phase_laws.
+Definition phase_frontiers tf c := forall owner phase, owner_phase (R.cfg_control c) owner = Some phase ->
+  phase_safe phases phase /\ (phase_narrowing phases phase -> semantic_frontier tf (R.cfg_state c) owner).
+Definition some_narrowing c := exists owner phase, owner_phase (R.cfg_control c) owner = Some phase /\ phase_narrowing phases phase.
+Lemma narrowing_current_post tf roots st fr body k : reachable tf roots (configuration st (R.RunRhs fr body k)) ->
+  phase_frontiers tf (configuration st (R.RunRhs fr body k)) -> some_narrowing (configuration st (R.RunRhs fr body k)) ->
+  owner_post_solution tf st (R.frame_owner fr).
+Proof.
+  intros Hreachable Hfront [owner [phase [Hphase Hnarrow]]].
+  destruct (Hfront owner phase Hphase) as [_ Hfrontier]; specialize (Hfrontier Hnarrow).
+  assert (Habove : R.frame_owner fr = owner \/ R.rank_lt st owner (R.frame_owner fr) = true).
+  { destruct (V.eq_dec (R.frame_owner fr) owner) as [Heq|Hneq]; [left; exact Heq |right].
+    pose proof (@reachable_active_ordered tf roots _ Hreachable) as Hordered.
+    pose proof (@owner_phase_present (R.RunRhs fr body k) owner phase Hphase) as Hin.
+    exact (@ordered_member_lower st (R.frame_owner fr) (suspended_owners k) owner Hordered Hin ltac:(congruence)). }
+  exact (proj2 (Hfrontier (R.frame_owner fr) Habove)).
+Qed.
+Lemma narrowing_get_materialized tf roots st fr target tail k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunRhs fr (Syntax.Get target tail) k)) ->
+  phase_frontiers tf (configuration st (R.RunRhs fr (Syntax.Get target tail) k)) ->
+  some_narrowing (configuration st (R.RunRhs fr (Syntax.Get target tail) k)) -> solved st target.
+Proof.
+  intros Hpure Hreachable Hfront Hnarrow.
+  pose proof (@reachable_semantic_invariant tf roots _ Hreachable) as Hsem.
+  destruct (invariant_observing Hsem) as [[Hcursor Hstack]].
+  destruct (observation_total (R.sigma_value st) (Syntax.Get target tail)) as [result Hat].
+  eapply closed_get_target; eapply cursor_residual_closed.
+  - exact Hcursor.
+  - apply below_owner_absent; eapply ordinary_evaluation_queue_below; eauto.
+  - eapply narrowing_current_post; eauto.
+  - exact Hat.
+Qed.
+Lemma narrowing_spawn_materialized tf roots st fr target tail k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k)) ->
+  phase_frontiers tf (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k)) ->
+  some_narrowing (configuration st (R.RunRhs fr (Syntax.Spawn target tail) k)) -> solved st target.
+Proof.
+  intros Hpure Hreachable Hfront Hnarrow.
+  pose proof (@reachable_semantic_invariant tf roots _ Hreachable) as Hsem.
+  destruct (invariant_observing Hsem) as [[Hcursor Hstack]].
+  destruct (observation_total (R.sigma_value st) (Syntax.Spawn target tail)) as [result Hat].
+  eapply closed_spawn_target; eapply cursor_residual_closed.
+  - exact Hcursor.
+  - apply below_owner_absent; eapply ordinary_evaluation_queue_below; eauto.
+  - eapply narrowing_current_post; eauto.
+  - exact Hat.
+Qed.
+
+Lemma ordinary_noncommit_values tf before after : ordinary_config before -> outside_commit (R.cfg_control before) ->
+  step tf before after -> forall target, R.sigma_value (R.cfg_state after) target = R.sigma_value (R.cfg_state before) target.
+Proof.
+  intros [_ Hordinary] Hnot Hstep target; destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *.
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct ctrl; cbn [outside_commit ordinary_control] in Hnot, Hordinary; try contradiction.
+  all: try match goal with H : _ /\ pure_rhs ?body /\ _ |- _ =>
+    destruct body; [| |exfalso; eapply pure_no_side; exact (proj1 (proj2 H)) |] end.
+  all: try match goal with H : _ /\ ?pending = [] /\ _ |- _ => destruct H as [_ [-> _]] end.
+  all: split_program Hstep; cbn [R.cfg_state].
+  all: try match goal with Hget : R.complete_get _ _ _ = (_,_,_) |- _ => rewrite (get_sigma_value target Hget) end.
+  all: repeat rewrite materialize_sigma_value.
+  all: unfold R.sigma_value; cbn [R.with_queue R.enqueue R.sigma R.publish_targets]; try rewrite observe_sigma; try reflexivity.
+  all: try solve [match goal with |- context [if R.is_materialized ?base ?x then _ else _] => destruct (R.is_materialized base x) end;
+    cbn [R.enqueue R.with_queue R.sigma]; rewrite observe_sigma; reflexivity].
+  all: unfold R.reset_registered_cells; destruct Features.restart_side_phases; reflexivity.
+Qed.
+Lemma narrowing_noncommit_rank tf roots before after : no_side_effects tf -> reachable tf roots before ->
+  phase_frontiers tf before -> some_narrowing before -> outside_commit (R.cfg_control before) -> step tf before after ->
+  R.ranking (R.cfg_state after) = R.ranking (R.cfg_state before).
+Proof.
+  intros Hpure Hreachable Hfront Hnarrow Hnot Hstep.
+  pose proof (@reachable_rank_configuration tf roots before Hreachable) as [Hstore Hrefs].
+  pose proof (@ordinary_reachable tf roots before Hpure Hreachable) as [_ Hordinary].
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *.
+  pose proof Hstep as Hnext; unfold step, R.next_config in Hnext; cbn [R.cfg_state R.cfg_control] in Hnext.
+  destruct ctrl; cbn [outside_commit ordinary_control] in Hnot, Hordinary; try contradiction.
+  all: try solve [destruct Hnarrow as [owner [phase [Hphase _]]]; discriminate Hphase].
+  - inversion Hnext; subst after; cbn [R.cfg_state]; apply materialize_rank.
+  - destruct Hordinary as [_ [Hcode _]]; destruct r as [direct|target tail|target raw tail|target tail].
+    + inversion Hnext; reflexivity.
+    + assert (Hknown : R.observe st target = st).
+      { apply observe_known_identity, (solved_known Hstore).
+        eapply narrowing_get_materialized; eauto. }
+      rewrite Hknown in Hnext; split_program Hnext; cbn [R.cfg_state]; try reflexivity.
+      match goal with Hget : R.complete_get _ _ _ = (_,_,_) |- _ =>
+        pose proof (get_rank Hget) as Hrank; destruct (R.is_materialized st target); exact Hrank end.
+    + exfalso; exact (pure_no_side Hcode).
+    + assert (Hknown : R.observe st target = st).
+      { apply observe_known_identity, (solved_known Hstore).
+        eapply narrowing_spawn_materialized; eauto. }
+      rewrite Hknown in Hnext; split_program Hnext; cbn [R.cfg_state]; try reflexivity; rewrite materialize_rank; reflexivity.
+  - destruct Hordinary as [_ [-> _]]; inversion Hnext; reflexivity.
+  - split_program Hnext; cbn [R.cfg_state]; try reflexivity; apply close_rank.
+  - destruct c; split_program Hnext; cbn [R.cfg_state]; try reflexivity; eapply get_rank; eassumption.
+Qed.
+Lemma frontier_static tf before after parent : monotonic_system tf -> no_side_effects tf -> preserves_live before after ->
+  R.ranking after = R.ranking before -> (forall target, R.sigma_value after target = R.sigma_value before target) ->
+  semantic_frontier tf before parent -> semantic_frontier tf after parent.
+Proof.
+  intros Hmono Hpure Hlive Hr Hv Hfront target Htarget; unfold R.rank_lt in Htarget; rewrite Hr in Htarget.
+  destruct (Hfront target Htarget) as [Hsolved Hpost]; split; [apply Hlive; exact Hsolved |].
+  eapply ordinary_post_preserved_below; [exact Hmono |exact Hpure |exact Hlive | |apply Hv |exact Hpost].
+  intro x; rewrite Hv; apply DL.leq_refl.
+Qed.
+Lemma phase_frontier_noncommit tf roots before after : monotonic_system tf -> no_side_effects tf -> reachable tf roots before ->
+  phase_frontiers tf before -> outside_commit (R.cfg_control before) -> step tf before after -> phase_frontiers tf after.
+Proof.
+  intros Hmono Hpure Hreachable Hfront Hnot Hstep owner phase Hphase.
+  destruct (@noncommit_phase_origin tf before after owner phase
+    (@reachable_owners_unique tf roots before Hreachable) Hnot Hstep Hphase) as [Hinitial|Hold].
+  - subst phase; split; [apply initial_phase_safe |intro Hnarrow; exfalso; exact (initial_phase_not_narrowing phases owner Hnarrow)].
+  - destruct (Hfront owner phase Hold) as [Hsafe Hpost]; split; [exact Hsafe |intro Hnarrow].
+    eapply frontier_static; [exact Hmono |exact Hpure |eapply next_preserves_live; exact Hstep | | |apply Hpost; exact Hnarrow].
+    + eapply narrowing_noncommit_rank; [exact Hpure |exact Hreachable |exact Hfront |exists owner, phase; auto |exact Hnot |exact Hstep].
+    + eapply ordinary_noncommit_values; [eapply ordinary_reachable; eauto |exact Hnot |exact Hstep].
+Qed.
+Lemma commit_input_below tf roots st fr direct k : no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) -> owner_post_solution tf st (R.frame_owner fr) ->
+  D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true.
+Proof.
+  intros Hpure Hreachable Hpost; destruct (@ordinary_commit_observed tf roots st fr direct k Hpure Hreachable) as [result [Hclosed Hd]].
+  pose proof (@ordinary_aggregate tf roots _ (R.frame_owner fr) Hpure Hreachable) as Haggregate.
+  change (R.aggregate st (R.frame_owner fr) = D.bottom) in Haggregate; rewrite Haggregate; apply DL.join_least; [|apply DL.bottom_least].
+  rewrite <- Hd; exact (proj1 (owner_post_observation Hpost (closed_at Hclosed))).
+Qed.
+Lemma safe_commit_phase st fr direct next next_fr : phase_safe phases (R.frame_phase fr) ->
+  (phase_narrowing phases (R.frame_phase fr) ->
+    D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true) ->
+  R.set_value st fr direct = (next,next_fr) -> phase_safe phases (R.frame_phase next_fr) /\
+  (phase_narrowing phases (R.frame_phase next_fr) ->
+    D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true).
+Proof.
+  intros Hsafe Hinput Hset; unfold R.set_value in Hset; split_program Hset;
+    cbn [R.frame_phase R.with_frame_phase]; try solve [split; assumption].
+  all: split; [eapply ordinary_update_safe; eauto |intro Hnarrow; eapply ordinary_update_narrowing; eauto].
+Qed.
+Lemma frontier_queue tf st parent queue : semantic_frontier tf st parent -> semantic_frontier tf (R.with_queue st queue) parent.
+Proof. intros H target Htarget; apply H; exact Htarget. Qed.
+
+Lemma phase_frontier_commit tf roots st fr direct k next next_fr : monotonic_system tf -> no_side_effects tf ->
+  reachable tf roots (configuration st (R.RunCommit fr direct k)) ->
+  phase_frontiers tf (configuration st (R.RunCommit fr direct k)) -> R.set_value st fr direct = (next,next_fr) ->
+  phase_frontiers tf (configuration (R.requeue_changed_controlled_owner st next (R.frame_owner fr)) (R.RunDrain next_fr k)).
+Proof.
+  intros Hmono Hpure Hreachable Hfront Hset.
+  destruct (Hfront (R.frame_owner fr) (R.frame_phase fr) (@phase_commit fr direct k)) as [Hsafe Hown_front].
+  assert (Hinput : phase_narrowing phases (R.frame_phase fr) ->
+    D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true).
+  { intro Hnarrow; eapply commit_input_below; [exact Hpure |exact Hreachable |].
+    exact (proj2 (Hown_front Hnarrow (R.frame_owner fr) (or_introl eq_refl))). }
+  destruct (@safe_commit_phase st fr direct next next_fr Hsafe Hinput Hset) as [Hnext_safe Hnext_input].
+  pose proof (@commit_footprint st fr direct next next_fr Hset) as Hview.
+  intros owner phase Hphase; cbn [configuration R.cfg_control owner_phase] in Hphase; rewrite (commit_owner Hview) in Hphase.
+  destruct (V.eq_dec owner (R.frame_owner fr)) as [Heq|Hneq].
+  - subst owner; injection Hphase as Hphase; subst phase; split; [exact Hnext_safe |intro Hnarrow].
+    assert (Hdescending : forall target, D.leq (R.sigma_value next target) (R.sigma_value st target) = true).
+    { eapply commit_descending; [apply Hnext_input; exact Hnarrow | |exact Hset].
+      eapply ordinary_update_descends; [exact Hsafe |apply Hnext_input; exact Hnarrow]. }
+    apply frontier_queue; eapply ordinary_new_narrowing_frontier; eauto.
+  - assert (Hold : owner_phase (R.RunCommit fr direct k) owner = Some phase).
+    { cbn [owner_phase]; destruct (V.eq_dec owner (R.frame_owner fr)); [contradiction |exact Hphase]. }
+    destruct (Hfront owner phase Hold) as [Howner_safe Howner_front]; split; [exact Howner_safe |intro Hnarrow].
+    specialize (Howner_front Hnarrow).
+    assert (Hhigher : R.rank_lt st owner (R.frame_owner fr) = true).
+    { pose proof (@reachable_active_ordered tf roots _ Hreachable) as Horder.
+      pose proof (@owner_phase_present (R.RunCommit fr direct k) owner phase Hold) as Hin.
+      exact (@ordered_member_lower st (R.frame_owner fr) (suspended_owners k) owner Horder Hin Hneq). }
+    assert (Hbelow : D.leq (D.join direct (R.aggregate st (R.frame_owner fr))) (R.sigma_value st (R.frame_owner fr)) = true).
+    { eapply commit_input_below; [exact Hpure |exact Hreachable |exact (proj2 (Howner_front (R.frame_owner fr) (or_intror Hhigher)))]. }
+    assert (Hdescending : forall target, D.leq (R.sigma_value next target) (R.sigma_value st target) = true).
+    { eapply commit_descending; [exact Hbelow | |exact Hset].
+      eapply ordinary_update_descends; [exact Hsafe |exact Hbelow]. }
+    apply frontier_queue; eapply frontier_descending_commit; [exact Hmono |exact Hpure |exact Hreachable |
+      exact Howner_front |exact Hdescending |exact Hset].
+Qed.
+Theorem next_phase_frontiers tf roots before after : monotonic_system tf -> no_side_effects tf -> reachable tf roots before ->
+  phase_frontiers tf before -> step tf before after -> phase_frontiers tf after.
+Proof.
+  intros Hmono Hpure Hreachable Hfront Hstep; destruct before as [st ctrl]; destruct ctrl.
+  all: try solve [eapply phase_frontier_noncommit; [exact Hmono |exact Hpure |exact Hreachable |exact Hfront |exact I |exact Hstep]].
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct (R.set_value st f t) as [next next_fr] eqn:Hset; inversion Hstep; subst after;
+    eapply phase_frontier_commit; eauto.
+Qed.
+Theorem ordinary_phase_frontiers tf roots c : monotonic_system tf -> no_side_effects tf -> reachable tf roots c -> phase_frontiers tf c.
+Proof.
+  intros Hmono Hpure Hpath.
+  assert (Hinitial : phase_frontiers tf (R.initial_config roots)) by (intros owner phase Hphase; discriminate Hphase).
+  assert (Hpreserve : forall a b, steps tf a b -> reachable tf roots a -> phase_frontiers tf a -> phase_frontiers tf b).
+  { intros a b Hsteps; induction Hsteps; intros Hreachable Hfirst; auto.
+    apply IHHsteps; [eapply reachable_advance; eauto |eapply next_phase_frontiers; eauto]. }
+  exact (Hpreserve _ _ Hpath (@steps_refl tf (R.initial_config roots)) Hinitial).
+Qed.
+Fixpoint continuation_avoids_fallback k : Prop :=
+  match k with
+  | R.KLoop | R.KSeedLoop _ => True
+  | R.KAfterGet fr _ _ rest | R.KAfterSide fr _ rest | R.KAfterSpawn fr _ rest
+  | R.KDead fr _ _ rest | R.KDrain fr rest => phase_safe phases (R.frame_phase fr) /\ continuation_avoids_fallback rest
+  end.
+Definition control_avoids_fallback ctrl :=
+  match ctrl with
+  | R.RunLoop | R.RunSeeds _ | R.RunSeedLoop _ => True
+  | R.StartEpisode _ k | R.Return k => continuation_avoids_fallback k
+  | R.RunRhs fr _ k | R.RunDead fr _ _ k | R.RunCommit fr _ k | R.RunDrain fr k =>
+      phase_safe phases (R.frame_phase fr) /\ continuation_avoids_fallback k
+  end.
+Lemma stack_phases_safe k : NoDup (suspended_owners k) ->
+  (forall owner phase, stack_phase k owner = Some phase -> phase_safe phases phase) -> continuation_avoids_fallback k.
+Proof.
+  induction k; cbn [suspended_owners continuation_avoids_fallback]; intros Hunique Hsafe; try exact I.
+  all: inversion Hunique; subst; split.
+  all: try solve [apply (Hsafe (R.frame_owner f) (R.frame_phase f)); cbn [stack_phase]; destruct (V.eq_dec (R.frame_owner f) (R.frame_owner f)); [reflexivity |contradiction]].
+  all: apply IHk; [assumption |]; intros owner phase Hphase.
+  all: assert (Hneq : owner <> R.frame_owner f) by (intro Heq; subst owner; apply H1; eapply stack_phase_present; exact Hphase).
+  all: apply (Hsafe owner phase); cbn [stack_phase]; destruct (V.eq_dec owner (R.frame_owner f)); [contradiction |exact Hphase].
+Qed.
+Lemma control_phases_safe ctrl : NoDup (active_owners ctrl) ->
+  (forall owner phase, owner_phase ctrl owner = Some phase -> phase_safe phases phase) -> control_avoids_fallback ctrl.
+Proof.
+  destruct ctrl; cbn [active_owners control_avoids_fallback]; intros Hunique Hsafe; try exact I.
+  - inversion Hunique; subst; eapply stack_phases_safe; eauto.
+  - exact (@stack_phases_safe (R.KDrain f c) Hunique Hsafe).
+  - exact (@stack_phases_safe (R.KDrain f c) Hunique Hsafe).
+  - exact (@stack_phases_safe (R.KDrain f c) Hunique Hsafe).
+  - exact (@stack_phases_safe (R.KDrain f c) Hunique Hsafe).
+  - eapply stack_phases_safe; eauto.
+Qed.
+Definition avoids_fallback tf roots := forall c, reachable tf roots c -> control_avoids_fallback (R.cfg_control c).
+Theorem ordinary_avoids_fallback tf roots : monotonic_system tf -> no_side_effects tf -> avoids_fallback tf roots.
+Proof.
+  intros Hmono Hpure c Hreachable; apply control_phases_safe; [eapply reachable_owners_unique; exact Hreachable |].
+  intros owner phase Hphase; exact (proj1 (@ordinary_phase_frontiers tf roots c Hmono Hpure Hreachable owner phase Hphase)).
+Qed.
+
+Lemma drained_framed ctrl : forall owner, In owner (drained_owners ctrl) -> In owner (framed_owners ctrl).
+Proof.
+  assert (Hstack : forall k owner, In owner (drained_stack k) -> In owner (suspended_owners k)).
+  { intros k owner Hin; exact (@drained_parent k owner Hin). }
+  destruct ctrl; cbn [drained_owners framed_owners]; cbn [active_owners]; intros owner Hin; cbn in Hin |- *; try contradiction; intuition eauto.
+Qed.
+Lemma ready_solved_before tf before after owner : frames_live before -> waiting_control before ->
+  ~ committing before owner -> step tf before after -> incoming_ready after owner ->
+  solved (R.cfg_state after) owner -> solved (R.cfg_state before) owner.
+Proof.
+  intros Hframes Hwaiting Hnot Hstep [Hquiet [Hidle|Hdrained]] Hsolved.
+  - destruct (@next_solved_origin tf before after Hframes Hwaiting Hstep owner Hsolved) as [Hold|[Hq|Ha]]; auto; contradiction.
+  - destruct (@next_drained_origin tf before after Hstep owner Hdrained) as [Hold|Hcommit]; [|contradiction].
+    unfold frames_live in Hframes; rewrite Forall_forall in Hframes; apply Hframes; apply drained_framed; exact Hold.
+Qed.
+Lemma ordinary_ready_snapshot tf roots before after owner : no_side_effects tf -> reachable tf roots before ->
+  ~ In owner (R.queue (R.cfg_state before)) -> ~ committing before owner -> step tf before after ->
+  frame_snapshot (R.cfg_state before) (R.cfg_state after) [owner].
+Proof.
+  intros Hpure Hreachable Hquiet Hnot Hstep.
+  pose proof (@ordinary_reachable tf roots before Hpure Hreachable) as [_ Hordinary].
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *.
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct ctrl; cbn [ordinary_control] in Hordinary.
+  all: try match goal with H : _ /\ pure_rhs ?body /\ _ |- _ =>
+    destruct body; [| |exfalso; eapply pure_no_side; exact (proj1 (proj2 H)) |] end.
+  all: try match goal with H : _ /\ ?pending = [] /\ _ |- _ => destruct H as [_ [-> _]] end.
+  all: split_program Hstep; cbn [R.cfg_state].
+  all: try solve [apply snapshot_identity |apply snapshot_observe |apply snapshot_publish |apply snapshot_close |apply snapshot_materialize].
+  all: try solve [apply snapshot_static; try reflexivity; intros x [<-|Hfalse] Hin; [exfalso; apply Hquiet; exact Hin |contradiction]].
+  all: try match goal with Hget : R.complete_get ?base ?fr ?target = (?next,?next_fr,?value) |- _ =>
+    eapply snapshot_compose; [|exact (snapshot_get [owner] Hget)];
+      try solve [apply snapshot_identity |apply snapshot_observe];
+      destruct (R.is_materialized (R.observe st target) target); [apply snapshot_observe |];
+      eapply snapshot_compose; [apply snapshot_observe |apply snapshot_enqueue] end.
+  all: try solve [match goal with Hget : R.complete_get _ _ _ = (_,_,_) |- _ => exact (snapshot_get [owner] Hget) end].
+  all: try solve [eapply snapshot_compose; [apply snapshot_observe |]; eapply snapshot_compose; [apply snapshot_enqueue |apply snapshot_materialize]].
+  all: match goal with Hset : R.set_value ?base ?fr ?direct = (?next,?next_fr) |- _ =>
+    eapply snapshot_compose; [eapply snapshot_commit; [exact Hset |] |apply snapshot_requeue];
+    intros x [<-|Hfalse] Heq; [apply Hnot; exists fr, direct, c; split; [reflexivity |exact Heq] |contradiction] end.
+Qed.
+
+Section OrdinaryFixedness.
+Variable narrow : D.t -> D.t -> D.t.
+Variable narrow_lower : forall old input, D.leq input old = true -> D.leq input (narrow old input) = true.
+Variable narrow_upper : forall old input, D.leq input old = true -> D.leq (narrow old input) old = true.
+Variable update_narrow : forall owner phase old input, phase_safe phases phase -> D.leq input old = true ->
+  snd (U.update false owner phase old input) = narrow old input.
+
+Lemma narrow_equiv (owner : V.t) phase old old' input input' : phase_safe phases phase ->
+  D.leq input old = true -> D.leq input' old' = true -> eqv old old' -> eqv input input' ->
+  eqv (narrow old input) (narrow old' input').
+Proof.
+  intros Hsafe Hbelow Hbelow' Hold Hinput.
+  rewrite <- (@update_narrow owner phase old input Hsafe Hbelow), <- (@update_narrow owner phase old' input' Hsafe Hbelow').
+  exact (@UL.update_extensional false owner phase old old' input input' Hold Hinput).
+Qed.
+Lemma uncontrolled_commit_value st fr direct next next_fr : S.mem (R.frame_owner fr) (R.controlled st) = false ->
+  R.set_value st fr direct = (next,next_fr) -> eqv (R.sigma_value next (R.frame_owner fr)) (D.join direct (R.aggregate st (R.frame_owner fr))).
+Proof.
+  intros Hcontrolled Hset; unfold R.set_value in Hset; rewrite Hcontrolled in Hset; split_program Hset.
+  all: try solve [apply eqv_sym, eqv_bool; assumption].
+  all: unfold R.sigma_value; cbn [R.enqueue_all R.with_readers R.with_queue R.with_sigma R.sigma]; rewrite ML.lookup_update_same; apply eqv_refl.
+Qed.
+Lemma ordinary_quiet_commit_fixed tf roots st fr direct k next next_fr : Features.recompute_controlled = true ->
+  no_side_effects tf -> reachable tf roots (configuration st (R.RunCommit fr direct k)) -> phase_safe phases (R.frame_phase fr) ->
+  R.set_value st fr direct = (next,next_fr) ->
+  ~ In (R.frame_owner fr) (R.queue (R.requeue_changed_controlled_owner st next (R.frame_owner fr))) ->
+  eqv (narrow (R.sigma_value next (R.frame_owner fr)) direct) (R.sigma_value next (R.frame_owner fr)).
+Proof.
+  intros Hon Hpure Hreachable Hsafe Hset Hquiet.
+  set (input := D.join direct (R.aggregate st (R.frame_owner fr))).
+  assert (Hinput : eqv input direct).
+  { unfold input; pose proof (@ordinary_aggregate tf roots _ (R.frame_owner fr) Hpure Hreachable) as Haggregate.
+    change (R.aggregate st (R.frame_owner fr) = D.bottom) in Haggregate; rewrite Haggregate.
+    split; [apply DL.join_least; [apply DL.leq_refl |apply DL.bottom_least] |apply DL.join_upper_left]. }
+  destruct (S.mem (R.frame_owner fr) (R.controlled st)) eqn:Hcontrolled.
+  - pose proof (@quiet_controlled_commit st next (R.frame_owner fr) Hon Hcontrolled Hquiet) as Hsame.
+    pose proof (@quiet_commit_narrowing_fixed narrow (phase_safe phases) update_narrow narrow_lower narrow_upper
+      st fr direct next next_fr Hon Hsafe Hcontrolled Hset Hquiet) as Hfixed.
+    assert (Hbelow : D.leq input (R.sigma_value st (R.frame_owner fr)) = true).
+    { eapply DL.leq_trans; [exact (@commit_sound st fr direct next next_fr Hset) |exact (proj1 Hsame)]. }
+    assert (Hdirect : D.leq direct (R.sigma_value next (R.frame_owner fr)) = true).
+    { eapply DL.leq_trans; [exact (proj2 Hinput) |exact (@commit_sound st fr direct next next_fr Hset)]. }
+    eapply eqv_trans; [|eapply eqv_trans; [exact Hfixed |apply eqv_sym; exact Hsame]].
+    eapply (narrow_equiv (R.frame_owner fr)); [exact Hsafe |exact Hdirect |exact Hbelow |exact Hsame |apply eqv_sym; exact Hinput].
+  - pose proof (@uncontrolled_commit_value st fr direct next next_fr Hcontrolled Hset) as Hvalue.
+    assert (Heq : eqv (R.sigma_value next (R.frame_owner fr)) direct) by (eapply eqv_trans; eauto).
+    split; [apply narrow_upper; exact (proj2 Heq) |].
+    eapply DL.leq_trans; [exact (proj1 Heq) |apply narrow_lower; exact (proj2 Heq)].
+Qed.
+Definition precision_result tf st owner := exists result, Sem.rhs_observes (tf owner) result /\
+  watched_reads st owner (Sem.observed_reads result) /\ eqv (narrow (R.sigma_value st owner) (Sem.observed_direct result)) (R.sigma_value st owner).
+Definition precision_invariant tf c := forall owner, solved (R.cfg_state c) owner -> incoming_ready c owner -> precision_result tf (R.cfg_state c) owner.
+Lemma precision_moved tf before after owner : frame_snapshot before after [owner] ->
+  ~ In owner (R.queue after) -> precision_result tf before owner -> precision_result tf after owner.
+Proof.
+  intros Hview Hquiet [result [Htrace [Hreads Hfixed]]]; exists result; split; [exact Htrace |]; split.
+  - exact (snapshot_reads Hview (or_introl eq_refl) _ ltac:(intros _; exact Hreads) Hquiet).
+  - rewrite (snapshot_values Hview (or_introl eq_refl)); exact Hfixed.
+Qed.
+Lemma committing_precision tf roots before after owner : Features.recompute_controlled = true ->
+  monotonic_system tf -> no_side_effects tf -> reachable tf roots before -> step tf before after ->
+  committing before owner -> incoming_ready after owner -> precision_result tf (R.cfg_state after) owner.
+Proof.
+  intros Hon Hmono Hpure Hreachable Hstep [fr [direct [k [Hcontrol Howner]]]] [Hquiet _]; subst owner.
+  destruct before as [st ctrl]; cbn [R.cfg_state R.cfg_control] in *; subst ctrl.
+  pose proof (@reachable_semantic_invariant tf roots _ Hreachable) as Hsem.
+  destruct (invariant_observing Hsem) as [[Hcursor Hstack]].
+  destruct Hcursor as [reads sides spawns Hprefix Hwatches Hraw Hledger Hspawns].
+  pose proof (@ordinary_phase_frontiers tf roots _ Hmono Hpure Hreachable (R.frame_owner fr) (R.frame_phase fr) (@phase_commit fr direct k)) as [Hsafe _].
+  unfold step, R.next_config in Hstep; cbn [R.cfg_state R.cfg_control] in Hstep.
+  destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset; inversion Hstep; subst after.
+  exists {| Sem.Observation.observed_direct := direct; Sem.Observation.observed_reads := reads;
+    Sem.Observation.observed_sides := sides; Sem.Observation.observed_spawns := spawns |}; split; [apply prefix_return; exact Hprefix |]; split.
+  - eapply quiet_layout with (before := next); [reflexivity |reflexivity |apply requeue_keeps_queue | |exact Hquiet].
+    exact (@quiet_set st fr direct next next_fr Hset (R.frame_owner fr) reads Hwatches).
+  - exact (@ordinary_quiet_commit_fixed tf roots st fr direct k next next_fr Hon Hpure Hreachable Hsafe Hset Hquiet).
+Qed.
+Lemma committing_dec c owner : {committing c owner} + {~ committing c owner}.
+Proof.
+  destruct (R.cfg_control c) as [|seeds|seeds|child k|fr body k|fr direct pending k|fr direct k|fr k|k] eqn:Hcontrol.
+  all: try solve [right; intros [frame [value [rest [Hbefore _]]]]; rewrite Hcontrol in Hbefore; discriminate].
+  destruct (V.eq_dec owner (R.frame_owner fr)) as [Heq|Hneq].
+  - left; exists fr, direct, k; auto.
+  - right; intros [frame [value [rest [Hbefore Heq]]]]; rewrite Hcontrol in Hbefore; inversion Hbefore; subst; contradiction.
+Qed.
+Theorem next_precision_invariant tf roots before after : Features.recompute_controlled = true ->
+  monotonic_system tf -> no_side_effects tf -> reachable tf roots before -> precision_invariant tf before ->
+  step tf before after -> precision_invariant tf after.
+Proof.
+  intros Hon Hmono Hpure Hreachable Hprecision Hstep owner Hsolved Hready.
+  destruct (committing_dec before owner) as [Hcommit|Hnot].
+  - eapply committing_precision; eauto.
+  - pose proof (@reachable_semantic_invariant tf roots before Hreachable) as Hsem.
+    assert (Hold_solved : solved (R.cfg_state before) owner) by (eapply ready_solved_before; eauto using invariant_frames, invariant_waiting).
+    pose proof (@next_incoming_origin tf before after (@reachable_owners_unique tf roots after (reachable_advance Hreachable Hstep)) Hstep owner Hready)
+      as [Hbefore|Hcommit]; [|contradiction].
+    eapply precision_moved; [eapply ordinary_ready_snapshot; eauto; exact (proj1 Hbefore) |exact (proj1 Hready) |apply Hprecision; assumption].
+Qed.
+
+Theorem ordinary_precision tf roots c : Features.recompute_controlled = true -> monotonic_system tf -> no_side_effects tf ->
+  reachable tf roots c -> precision_invariant tf c.
+Proof.
+  intros Hon Hmono Hpure Hpath.
+  assert (Hinitial : precision_invariant tf (R.initial_config roots)).
+  { intros owner [value Hlookup] _; change (M.lookup (M.empty D.t) owner = Some value) in Hlookup; rewrite ML.lookup_empty in Hlookup; discriminate. }
+  assert (Hpreserve : forall a b, steps tf a b -> reachable tf roots a -> precision_invariant tf a -> precision_invariant tf b).
+  { intros a b Hsteps; induction Hsteps; intros Hreachable Hfirst; auto.
+    apply IHHsteps; [eapply reachable_advance; eauto |eapply next_precision_invariant; eauto]. }
+  exact (Hpreserve _ _ Hpath (@steps_refl tf (R.initial_config roots)) Hinitial).
+Qed.
+Definition narrowing_fixed := narrowing_fixed_with narrow (fun _ _ direct => direct).
+Theorem successful_run_fixed fuel tf roots final : Features.recompute_controlled = true ->
+  monotonic_system tf -> no_side_effects tf -> R.solve_fuel fuel tf roots = Some final -> narrowing_fixed tf final.
+Proof.
+  intros Hon Hmono Hpure Hrun; destruct (@successful_path fuel tf roots final Hrun) as [Hpath Hqueue].
+  pose proof (@ordinary_precision tf roots (terminal final) Hon Hmono Hpure Hpath) as Hprecision.
+  intros owner Hsolved; assert (Hready : incoming_ready (terminal final) owner).
+  { split; [change (~ In owner (R.queue final)); rewrite Hqueue; tauto |left; cbn [terminal R.cfg_control active_owners]; tauto]. }
+  destruct (Hprecision owner Hsolved Hready) as [result [Htrace [Hreads Hfixed]]].
+  assert (Hat : Sem.observes_at (R.sigma_value final) (tf owner) result).
+  { split; [exact Htrace |intros target value Hin; symmetry; apply read_value; exact (proj1 (Hreads target value Hin))]. }
+  split.
+  - exists (Sem.observed_direct result), (Sem.observed_reads result), (Sem.observed_sides result).
+    apply observation_replay; [exact Htrace |intros target value Hin; exact (proj1 (Hreads target value Hin))].
+  - intros direct reads effects Hreplay; destruct (replay_observation Hreplay) as [other [Hother [Hd [Hr He]]]].
+    assert (Heq : result = other) by (eapply observation_unique; eauto); subst other.
+    cbn; rewrite <- Hd; exact Hfixed.
+Qed.
+Theorem total_fixed tf roots : Features.recompute_controlled = true ->
+  Sem.finite_system tf roots -> monotonic_system tf -> no_side_effects tf ->
+  exists fuel final, R.solve_fuel fuel tf roots = Some final /\ correct_final_state tf roots final /\ narrowing_fixed tf final.
+Proof.
+  intros Hon Hfinite Hmono Hpure; destruct (total_correct Hfinite) as [fuel [final [Hrun Hcorrect]]].
+  exists fuel, final; split; [exact Hrun |]; split; [exact Hcorrect |eapply successful_run_fixed; eauto].
+Qed.
+End OrdinaryFixedness.
+End OrdinaryPhases.
+End OrdinaryDiscovery.
 
 End Make.

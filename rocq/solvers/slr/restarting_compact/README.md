@@ -1,112 +1,93 @@
 # Independent restarting proof regeneration
 
-This is an **unfinished proof regeneration**, not yet a replacement for
-`../restarting`. The reference solver and its public theorems remain unchanged.
+The independent copy now proves the reference solver's public termination,
+correctness, leastness, ordinary fallback-avoidance, and narrowing-fixedness
+results. It is ready for integration review; the reference solver remains in
+place.
 
 `Restarting.v` is a byte-for-byte copy of the reference algorithm. `Proofs.v`
 contains newly written proofs and imports only shared contracts/semantics and
-this copy of the algorithm. It does not import reference restarting proofs or
-proofs of the narrowing-fixpoint variant. Looking at the reference informed the
-choice of obligations; its proof files were not copied.
+this copy of the algorithm. It imports no reference restarting proofs or
+narrowing-fixpoint proofs. Reading the reference informed the obligations;
+its proof files were not copied.
 
 There are two production files and one concrete audit file. All generic
-reasoning shares one `Proofs.Make` instance. Optional upper-bound update laws
-are section parameters rather than a second instantiation of the entire proof
-functor. Concrete instantiation and `Print Assumptions` live in
-`tests/Audit.v`, outside the generic unit. A separate theorem facade would
-currently add no value and risk duplicating module contents.
+reasoning shares one `Proofs.Make` instance. Optional upper-bound, discovery,
+phase, and narrowing laws are theorem/section parameters. Ordinary proofs do
+not instantiate the whole proof functor again. Public results are available
+from `Proofs.Make` directly; a separate theorem facade would duplicate module
+contents without adding a useful abstraction. Concrete instantiation and
+assumption audits live in `tests/Audit.v`.
 
-## Checked results
+## Public results
 
-- Fuelled execution and finite paths describe the same successful runs.
-- Every step preserves discovery validity, store references, queue ordering,
-  and queue uniqueness. This invariant is parameterized by a support
-  predicate; taking it to be `True` removes the need for finite support.
-- Active recursive owners are strictly ordered and distinct, even without a
-  finite-system assumption. Finite generation and rank bounds are proved
-  separately for use in termination.
-- Materialization persists; every root is materialized on success.
-- Structurally ordinary systems keep empty incoming contribution tables.
-- Monotone finite systems stay below any post-solution when the update
-  preserves upper bounds. The proof uses a predicate on residual code, without
-  a full history of earlier observations.
-- Structural observations at a valuation are unique and correspond to
-  partial-store replay. Completed observations yield post-solutions, including
-  spawn closure, when the incoming aggregate bounds hold.
-- Reader registration survives reads; a value change invalidates its watched
-  observations by queueing their owners. A frame cursor retains a prefix of
-  its original constraint, with a ledger connecting raw effects to accumulated
-  side inputs. The machine preserves these observations through recursion,
-  dead-side cleanup, commit, draining, and episode close.
-- `successful_run_correct` has the same statement as the reference theorem:
-  every successful run produces a correct final state, including all spawned
-  owners. It requires no finite-system assumption.
-- With controlled-owner recomputation enabled, a quiet controlled commit must
-  stutter. When its phase implements narrowing on descending inputs, it is a
-  narrowing fixpoint at that commit. This uses no idempotency assumption; it
-  is a local result and still needs to be retained to the final store.
-- Correct final states extend to the finite support under source strictness.
-  Combining this fact with the independent upper-bound proof gives
-  `successful_run_least`, which assumes source strictness, monotonicity, finite
-  support, and an upper-bound update law. It has no correctness premise.
-- Every reachable reset registration has its scope at or below its source
-  and strictly below its target. Closing a higher recursive owner preserves
-  the parent owner's incoming and outgoing cell credit.
-- Controlled status persists. Every reader of an uncontrolled owner is
-  strictly below that owner, so its direct assignment preserves a queue that
-  is already below the owner. This covers both recomputation settings.
-- Changed side aggregates consume credit in the updated cell. Incoming and
-  outgoing credit are combined in one sum. The round budget is lexicographic:
-  missing materializations, promotion reserve, and combined side/ordinary
-  credit, with a separate allowance for the first round. Its order is well
-  founded. Reads, side writes, and commits cannot increase the local budget;
-  new materializations, promotions, incident side changes, and controlled
-  value changes decrease it. Higher-owner closes preserve it.
-- Assuming completion of strictly higher episodes, structural induction
-  carries RHS evaluation and dead-side cleanup to a commit. A separate
-  induction on the queue's rank ceiling carries draining to either episode
-  return or a fresh evaluation of the same owner. `round_reaches_boundary`
-  combines these results.
-- Episode traces stop at their first return, before the caller resumes.
-  A higher episode preserves its suspended parent's phase and cannot
-  increase the parent's budget. The budget also cannot increase along a
-  whole owner episode when compared using the actual returned phases.
-- `round_rerun_paid` proves that every rerun starting with only lower owners
-  queued consumes the budget. If no budget were spent, reads could not
-  discover another owner, side aggregates could not change, and the commit
-  would preserve that queue boundary; draining would then return instead
-  of rerunning. This also covers uncontrolled owners and both recomputation
-  settings.
-- Well-founded induction on the round budget finishes repeated rounds;
-  discovery-rank induction discharges the higher-episode premise. Root
-  seeding and outer draining then prove `solver_terminates`,
-  `sufficient_fuel`, and `total_correct` for every finite system.
-- `total_least_solution` combines sufficient fuel and successful-run
-  leastness, retaining the same source-strictness, monotonicity, and
-  upper-bound update assumptions.
+| Result | Scope |
+| --- | --- |
+| `semantic_termination`, `sufficient_fuel` | Finite systems, stable discovery ranks, constructive update credit |
+| `successful_run_correct` | Every successful run; no finite-system premise |
+| `total_correct` | Finite systems |
+| `successful_run_least`, `total_least_solution` | Finite monotone systems, source strictness, upper-bound update law |
+| `ordinary_avoids_fallback` | Every reachable ordinary monotone prefix, first-discovery policy, both recomputation settings |
+| `successful_run_fixed` | Ordinary monotone successful runs, first-discovery policy, safe phases implementing narrowing, controlled-owner recomputation enabled |
+| `total_fixed` | Finite ordinary monotone systems; returns correctness and narrowing fixedness together |
 
-All new proofs end with `Qed`; there are no admitted goals or new axioms.
-The four public-result assumption audits report `Closed under the global
-context`. Auditing total correctness and total leastness covers their
-intermediate invariants without repeatedly traversing the same proof terms.
-The concrete regression also checks two accumulated side effects, a controlling
-back read, and spawn closure, then derives correctness from the new theorem.
-Budget regressions check an incoming side change without owner promotion,
-new materialization, and an already materialized owner.
+The ordinary prefix and successful-run results do not need the reference
+statements' finite-system premise. Fixedness uses the direct RHS result, and
+includes replay existence so an incomplete store cannot satisfy it vacuously.
+No idempotency assumption is used.
 
-## Remaining obligations before replacement or merge as a finished solver
+`first_discovery_laws` requires that observation introduces only its target
+and assigns a fresh target above existing ranks. These are explicit optional
+laws, since generic termination and correctness also support stateless ranks.
+`ordinary_phase_laws` specifies safe phases, narrowing phases, admissible
+updates, and descending update bounds. The audit specializes these laws to
+`OneBoxUpdate`: safe means `BoxW` or `BoxN`, and narrowing means `BoxN`.
+`control_avoids_fallback` checks every active and suspended frame recursively.
 
-1. Prove ordinary monotone fallback avoidance for both recomputation settings.
-2. Prove ordinary narrowing fixedness when controlled-owner recomputation is
-   enabled. Do not introduce an idempotency assumption.
-3. Restate the remaining public guarantees and audit their concrete instances.
-   Then compare proof size and time at matching theorem coverage.
+## Proof structure
 
-The existing results do not imply these remaining ordinary-system guarantees.
-Termination, total correctness, and total leastness are now complete; the
-ordinary narrowing result remains local to a quiet commit.
+Store/reference invariants, observations, execution paths, and public results
+share the same machine instance. Completed observations connect partial-store
+replay with the post-solution specification, including spawn closure. A frame
+cursor records a prefix of its constraint; its side ledger connects raw
+observations with accumulated contributions.
 
-## Build and measurement
+Termination uses a lexicographic budget of missing materializations,
+promotion reserve, and combined incoming/outgoing update credit. Higher
+recursive episodes preserve the suspended parent's phase and cannot increase
+its budget. A rerun beginning with only lower owners queued spends credit.
+Well-founded induction finishes rounds, discovery-rank induction finishes
+episodes, and root seeding plus outer draining finishes the solver.
+
+For ordinary systems, every previously discovered owner is materialized.
+Fresh recursive episodes preserve a reader boundary: lower readers watch
+only lower values, so changes in the fresh region cannot add lower work.
+A small certificate on suspended reads/spawns preserves the gap between the
+parent and fresh child. This proves that every RHS evaluation and commit has
+only lower owners queued, without retaining full trace origins.
+
+A narrowing frame carries a post-solution frontier for itself and higher
+discovered owners. Monotonicity preserves that frontier as values descend;
+read and spawn coverage rule out fresh discovery under it. Consequently
+narrowing receives descending inputs and cannot enter fallback widening.
+Finally, the precision invariant retains a quiet commit's narrowing equation
+for idle owners and owners draining their queues. It reuses the observation
+and wakeup invariants, carrying the equation to the final store.
+
+## Validation
+
+There are no admissions, new axioms, or reference-proof imports. The eight
+assumption audits report `Closed under the global context`; they cover total
+correctness, total leastness, both ordinary fallback policies, final fixedness,
+and total fixedness.
+
+Concrete regressions cover accumulated side effects, a controlling back read,
+spawn closure, and update-credit consumption. The ordinary regression has no
+direct self-read: a higher owner controls it, and slow narrowing needs several
+owner recomputations to reach `One`. With recomputation enabled, its result is
+proved narrowing-fixed by the new theorem. Reader wakeups alone terminate at
+`Top`, whose next narrowing result is `Three`, demonstrating the need for the
+conditional recomputation policy.
 
 ```sh
 opam exec --switch=5.4.0 -- make restarting-compact
@@ -114,17 +95,29 @@ opam exec --switch=5.4.0 -- make proof-tests
 opam exec --switch=5.4.0 -- python3 tools/benchmark_restarting_proofs.py --repeat 3
 ```
 
-The benchmark uses fresh serial Rocq compiler processes with existing shared
-dependencies and filesystem caches. It checks algorithm identity and reports
-source hashes, line counts, compiled object sizes, and wall times per file.
-It labels compact measurements as partial regeneration, so they cannot be
-mistaken for measurements of an equivalent finished proof stack.
+## Size and time
 
-On Rocq 9.1.1 / OCaml 5.4.0, one reference measurement took 24.54 seconds and
-produced 51,323,366 bytes of compiled objects across six targets. Its public
-theorem unit alone produced 23,968,527 bytes. The current compact subset has
-5,519 proof lines; across three runs the median was 3.78 seconds for `Proofs.v`
-and 4.64 seconds including the algorithm and audit. Its three compiled objects
-total 3,367,859 bytes. The proof unit itself is 2,870,235 bytes. These numbers
-show the current development baseline; they do **not** establish a speedup
-for a completed replacement.
+The benchmark checks algorithm identity and recompiles targets in fresh,
+serial Rocq compiler processes with existing shared dependencies and
+filesystem caches. It records source hashes, line counts, compiled object
+sizes, and per-file wall times. Its status is `matching_public_guarantees`;
+internal helper statements differ between the two developments.
+
+On Rocq 9.1.1 / OCaml 5.4.0, three fresh runs gave:
+
+| Complete stack | Reference | Compact |
+| --- | ---: | ---: |
+| Compilation targets | 6 | 3 |
+| Source lines | 33,277 | 7,770 |
+| Compiled object bytes | 51,323,366 | 4,669,015 |
+| Median compilation time | 23.22 s | 6.36 s |
+
+At matching public theorem coverage, the compact stack compiled **3.65 times
+faster** and produced **90.9% fewer compiled bytes**. Its single proof unit is
+6,705 lines, 3,486,061 compiled bytes, and compiled in a median 4.45 seconds.
+The audit is 179 lines and compiled in a median 1.78 seconds. These measurements
+include the concrete ordinary instances for both recomputation policies.
+
+The benchmark reports each run and source checksum, so results can be
+reproduced with the command above. Times depend on the host and caches;
+these figures compare the complete public guarantees on the same host.
