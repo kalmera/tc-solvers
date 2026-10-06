@@ -45,3 +45,6 @@ rocq/solvers/slr/simple/Theorems.v
 rocq/solvers/slr/simple/proofs/Correctness.v
 rocq/solvers/slr/simple/proofs/LeastSolutionProof.v
 rocq/solvers/slr/restarting/proofs/FixedPoint.v
+rocq/solvers/slr/restarting_compact/Restarting.v
+rocq/solvers/slr/restarting_compact/Proofs.v
+rocq/solvers/slr/restarting_compact/tests/Audit.v
