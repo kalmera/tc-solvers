@@ -878,6 +878,18 @@ module FirstDiscovery =
                   in
                   (st3, fr1)
 
+      (** val requeue_changed_controlled_owner :
+          state -> state -> V.t -> state **)
+
+      let requeue_changed_controlled_owner before after owner =
+        with_queue after
+          (if (&&) (S.mem owner before.controlled)
+                (negb
+                  (equivalent (sigma_value after owner)
+                    (sigma_value before owner)))
+           then queue_insert after.ranking owner after.queue
+           else after.queue)
+
       type control =
       | RunLoop
       | RunSeeds of V.t list
@@ -1115,7 +1127,9 @@ module FirstDiscovery =
                    (continue_dead st1 fr direct target remaining k changed))
          | RunCommit (fr, direct, k) ->
            let (st1, fr1) = set_value st fr direct in
-           Some { cfg_state = st1; cfg_control = (RunDrain (fr1, k)) }
+           Some { cfg_state =
+           (requeue_changed_controlled_owner st st1 fr.frame_owner);
+           cfg_control = (RunDrain (fr1, k)) }
          | RunDrain (fr, k) ->
            (match queue_peek st.queue with
             | Some next ->

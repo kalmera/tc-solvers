@@ -8,7 +8,7 @@ example systems remain beside it. Shared concrete instances live in
 | Solver directory | Algorithm | Public results |
 | --- | --- | --- |
 | `simple` | `Simple.v` | Total correctness; leastness under upper-bound-preserving updates |
-| `restarting` | `Restarting.v` | Total correctness for all four feature settings; leastness; ordinary-system narrowing fixedness under value idempotency |
+| `restarting` | `Restarting.v` | Total correctness for all eight feature settings; leastness; ordinary-system narrowing fixedness with controlled-owner recomputation |
 | `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
 
 Each public correctness interface follows the paper's order: `semantic_termination`,
@@ -27,8 +27,9 @@ final-state replay of every solved owner, including non-roots.
 Restarting separately requires `no_side_effects`; spawns are allowed. Its
 successful-run fixedness theorem also requires finite support; Narrowing Fixed
 Point needs finite support only for total correctness.
-Both use first-discovery ranking and ordinary value idempotency of the combined
-update. Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
+Both use first-discovery ranking and repeat changed controlled-owner updates.
+Restarting requires `recompute_controlled = true` for ordinary fixedness.
+Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
 The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
 `correct_final_state` requires every root to be materialized and every
@@ -56,26 +57,22 @@ The Narrowing Fixed Point result additionally assumes operational monotonicity,
 direct-widening upper bounds, narrowing bounds, and `WIDEN_STABILITY`: if
 `input` is below `old`, then `widen old input` is equivalent to `old`.
 
-The Narrowing Fixed Point solver omits the synthetic controlled-owner requeue.
-Both fixedness functors take the shared `VALUE_IDEMPOTENT V D U` law from
-`common/UpdateIdempotency.v`: replaying an
-ordinary update with its resulting phase and value, and the same input, must
-return an equivalent value. The phase itself may change. The law covers the
-combined OneBox update, not just narrowing, and imposes no condition on side
-updates. Generic correctness, termination, and join leastness do not need it.
-Actual reader wakeups, including self-reads, and side-source repairs remain.
+A controlled owner's update reads its previous value even when its RHS does not
+read the owner. When this update changes the value, Narrowing Fixed Point queues
+the owner for another evaluation with the returned phase. Restarting exposes the
+same behavior through `recompute_controlled`, enabled in `AllEnabledFeatures`.
+Fixedness follows from the eventual stable commit. Generic correctness,
+termination, and join leastness hold with either setting. Recorded reader
+wakeups and side-source repairs remain active.
 
 `make proofs` checks the generic proof units and all three public theorem files.
 Each facade retains concrete `Instances` and labelled `Print Assumptions`
-output (`Closed under the global context`). Narrowing Fixed Point shares one
-OneBox instance between its correctness and fixedness audits; the idempotent
-chain is a common instance, not a dependency on tests. `make proof-tests` checks
-the separate examples and counterexample. The new regression checks execute the
-solver and verify three RHS completions instead of a redundant fourth, phase
-changes under value idempotency, genuine self-read wakeups, effectful fanout,
-and recursive spawn closure. A missing-spawn regression shows that numerical
-satisfaction alone does not form a post-solution.
-They do not re-instantiate the full fixedness proof for each example.
+output (`Closed under the global context`). The fixedness audits use the shared
+chain instance with slow narrowing, which needs several updates to stabilize.
+`make proof-tests` checks executable regression systems, reader wakeups,
+effectful fanout, and recursive spawn closure. A missing-spawn regression shows
+that numerical satisfaction alone does not form a post-solution.
+The examples do not re-instantiate the full fixedness proof for each system.
 
 Restarting's auxiliary narrowing theorem and counterexample remain available as
 supporting results, not additional solver implementations.

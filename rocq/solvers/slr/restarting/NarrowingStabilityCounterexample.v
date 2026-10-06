@@ -108,6 +108,7 @@ Module FixedRankFallback.
   Module Features.
     Definition restart_side_phases := false.
     Definition eliminate_dead_sides := false.
+    Definition recompute_controlled := false.
   End Features.
 
   Module R := Restarting.FixedRank V D U S M Fixed Features.

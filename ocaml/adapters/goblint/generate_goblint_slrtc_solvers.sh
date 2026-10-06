@@ -107,6 +107,7 @@ generate_solver () {
           print "module type FEATURES = sig"
           print "  val side_effect_phase_reset : bool"
           print "  val dead_side_elimination : bool"
+          print "  val recompute_controlled : bool"
           print "end"
         }
         if (variant == "Restarting")
@@ -188,14 +189,14 @@ generate_solver "$simple_template" "$inlined_control" \
 generate_solver "$restarting_template" "$extracted_control" \
   "rocq/extraction/GoblintControl.v" \
   "Restarting" \
-  "first-discovery instance; proved side-reset and dead-side switches enabled" \
+  "first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled" \
   "$features_restarting" \
   "$output_directory/slrtc_restarting.ml"
 
 generate_solver "$restarting_template" "$inlined_control" \
   "ocaml/adapters/goblint/goblint_control_inlined.ml" \
   "Restarting" \
-  "first-discovery instance; proved side-reset and dead-side switches enabled" \
+  "first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled" \
   "$features_restarting" \
   "$output_directory/slrtc_inlined_restarting.ml"
 

@@ -77,6 +77,7 @@ module ES = Tc_solvers.Slr.Simple.Make (V) (Equivalent) (EJ)
 module Flags = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 module ER = Tc_solvers.Slr.Restarting.Make (V) (Equivalent) (EJ) (Flags)
 module EN = Tc_solvers.Slr.Narrowing_fixed_point.Make (V) (Equivalent) (EJ)

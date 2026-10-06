@@ -15,6 +15,8 @@ module type FEATURES =
   val restart_side_phases : bool
 
   val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
  end
 
 module AllEnabledFeatures :
@@ -22,6 +24,17 @@ module AllEnabledFeatures :
   val restart_side_phases : bool
 
   val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
+ end
+
+module ReaderWakeupsOnlyFeatures :
+ sig
+  val restart_side_phases : bool
+
+  val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
  end
 
 module Monadic :
@@ -343,6 +356,8 @@ module Make :
   val publish_targets : state -> frame -> state
 
   val set_value : state -> frame -> D.t -> state * frame
+
+  val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
   type control =
   | RunLoop
@@ -678,6 +693,8 @@ module FirstDiscoveryAlgorithm :
 
   val set_value : state -> frame -> D.t -> state * frame
 
+  val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
   type control =
   | RunLoop
   | RunSeeds of V.t list
@@ -1008,6 +1025,8 @@ module FirstDiscovery :
   val publish_targets : state -> frame -> state
 
   val set_value : state -> frame -> D.t -> state * frame
+
+  val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
   type control =
   | RunLoop
@@ -1342,6 +1361,8 @@ module FixedRank :
   val publish_targets : state -> frame -> state
 
   val set_value : state -> frame -> D.t -> state * frame
+
+  val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
   type control =
   | RunLoop

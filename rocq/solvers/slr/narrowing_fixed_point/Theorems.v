@@ -1,8 +1,7 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
   common.SolverSpecifications
-  common.instances.IdempotentChain
-  common.UpdateIdempotency
+  common.instances.Chain
   common.Assumptions common.BoxUpdate common.FiniteHeight
   solvers.slr.narrowing_fixed_point.proofs.Replay
   solvers.slr.narrowing_fixed_point.proofs.FixedPoint
@@ -51,14 +50,13 @@ Module Correctness (V : VAR) (D : DOMAIN) (U : UPDATE V D)
 End Correctness.
 
 
-(** OneBox fixedness under ordinary value idempotency; feature flags are arbitrary. *)
+(** OneBox fixedness from controlled-owner recomputation; side policies are arbitrary. *)
 Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   Module Fixed := FixedPoint.Make V D WN.
   Module U := Fixed.U.
   Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
-    (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U)
-    (IL : VALUE_IDEMPOTENT V D U).
-    Module Laws := Fixed.WithLaws DL WNL WS UL IL.
+    (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U).
+    Module Laws := Fixed.WithLaws DL WNL WS UL.
     Module WithCollections (S : SET V) (M : MAP V) (Features : Base.FEATURES)
       (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
       Module Internal := Laws.WithCollections S M Features SL ML.
@@ -107,11 +105,10 @@ End LeastSolutionMake.
 (** Share one concrete OneBox instance between correctness and fixedness audits.
     Runtime examples are separate and do not instantiate this proof graph again. *)
 Module Instances.
-  Module E := IdempotentChain.
+  Module E := Chain.
   Module Fixed := FixedPoint.Make E.V E.D E.WN.
   Module FixedUL := E.UpdateLaws Fixed.U.
-  Module FixedIL := E.Idempotency Fixed.U.
-  Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL FixedIL.
+  Module FixedLaws := Fixed.WithLaws E.DL E.WNL E.WS FixedUL.
   Module FixedCells := FixedLaws.WithCollections E.S E.M
     Base.AllEnabledFeatures E.SL E.ML.
   Module U := JoinUpdate E.V E.D.

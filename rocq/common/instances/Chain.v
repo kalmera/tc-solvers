@@ -8,7 +8,7 @@ From TcSolvers Require Import
 
 Import ListNotations.
 
-(** Shared concrete instance: a five-element chain with slow, non-idempotent
+(** Shared concrete instance: a five-element chain with slow
     narrowing, constructive update credits, and list-based collections. *)
 Module Chain.
   Module V.

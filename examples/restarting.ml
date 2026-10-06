@@ -112,21 +112,25 @@ end
 module F00 = struct
   let restart_side_phases = false
   let eliminate_dead_sides = false
+  let recompute_controlled = true
 end
 
 module F01 = struct
   let restart_side_phases = false
   let eliminate_dead_sides = true
+  let recompute_controlled = true
 end
 
 module F10 = struct
   let restart_side_phases = true
   let eliminate_dead_sides = false
+  let recompute_controlled = true
 end
 
 module F11 = struct
   let restart_side_phases = true
   let eliminate_dead_sides = true
+  let recompute_controlled = true
 end
 
 module S00 = Smoke (F00)

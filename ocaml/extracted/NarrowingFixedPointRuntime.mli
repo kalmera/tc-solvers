@@ -482,6 +482,8 @@ module FirstDiscovery :
 
       val set_value : state -> frame -> D.t -> state * frame
 
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
       type control =
       | RunLoop
       | RunSeeds of V.t list
@@ -876,6 +878,8 @@ module FirstDiscovery :
     val publish_targets : state -> frame -> state
 
     val set_value : state -> frame -> D.t -> state * frame
+
+    val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
     type control = Sem.R.control =
     | RunLoop
@@ -1398,6 +1402,9 @@ module PreCommit :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control =
           | RunLoop
           | RunSeeds of V.t list
@@ -1801,6 +1808,8 @@ module PreCommit :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -2197,6 +2206,8 @@ module PreCommit :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = Base.Sem.R.control =
       | RunLoop
@@ -2655,6 +2666,9 @@ module ReadHistory :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control =
             | RunLoop
             | RunSeeds of V.t list
@@ -3062,6 +3076,9 @@ module ReadHistory :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -3461,6 +3478,8 @@ module ReadHistory :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = Base.Sem.R.control =
         | RunLoop
@@ -3878,6 +3897,9 @@ module ReadHistory :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -4282,6 +4304,8 @@ module ReadHistory :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -4678,6 +4702,8 @@ module ReadHistory :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = P.Base.Sem.R.control =
       | RunLoop
@@ -5152,6 +5178,9 @@ module CellRepair :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control =
               | RunLoop
               | RunSeeds of V.t list
@@ -5565,6 +5594,9 @@ module CellRepair :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -5969,6 +6001,9 @@ module CellRepair :
           val publish_targets : state -> frame -> state
 
           val set_value : state -> frame -> D.t -> state * frame
+
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
 
           type control = Base.Sem.R.control =
           | RunLoop
@@ -6389,6 +6424,9 @@ module CellRepair :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -6799,6 +6837,9 @@ module CellRepair :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -7199,6 +7240,8 @@ module CellRepair :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = P.Base.Sem.R.control =
         | RunLoop
@@ -7632,6 +7675,9 @@ module CellRepair :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -8044,6 +8090,9 @@ module CellRepair :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -8447,6 +8496,8 @@ module CellRepair :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -8773,6 +8824,8 @@ module CellRepair :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = H.P.Base.Sem.R.control =
       | RunLoop
@@ -9235,6 +9288,9 @@ module PublicationStability :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -9655,6 +9711,9 @@ module PublicationStability :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -10066,6 +10125,9 @@ module PublicationStability :
             val publish_targets : state -> frame -> state
 
             val set_value : state -> frame -> D.t -> state * frame
+
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
 
             type control = Base.Sem.R.control =
             | RunLoop
@@ -10491,6 +10553,9 @@ module PublicationStability :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -10910,6 +10975,9 @@ module PublicationStability :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -11316,6 +11384,9 @@ module PublicationStability :
           val publish_targets : state -> frame -> state
 
           val set_value : state -> frame -> D.t -> state * frame
+
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
 
           type control = P.Base.Sem.R.control =
           | RunLoop
@@ -11753,6 +11824,9 @@ module PublicationStability :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -12173,6 +12247,9 @@ module PublicationStability :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -12582,6 +12659,9 @@ module PublicationStability :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -12913,6 +12993,8 @@ module PublicationStability :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = H.P.Base.Sem.R.control =
         | RunLoop
@@ -13377,6 +13459,9 @@ module Make :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -13797,6 +13882,9 @@ module Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -14208,6 +14296,9 @@ module Make :
             val publish_targets : state -> frame -> state
 
             val set_value : state -> frame -> D.t -> state * frame
+
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
 
             type control = Base.Sem.R.control =
             | RunLoop
@@ -14633,6 +14724,9 @@ module Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -15052,6 +15146,9 @@ module Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -15458,6 +15555,9 @@ module Make :
           val publish_targets : state -> frame -> state
 
           val set_value : state -> frame -> D.t -> state * frame
+
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
 
           type control = P.Base.Sem.R.control =
           | RunLoop
@@ -15895,6 +15995,9 @@ module Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -16315,6 +16418,9 @@ module Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -16724,6 +16830,9 @@ module Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -17056,6 +17165,8 @@ module Make :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -17380,6 +17491,8 @@ module Make :
 
     val set_value : state -> frame -> D.t -> state * frame
 
+    val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
     type control = PS.C.H.P.Base.Sem.R.control =
     | RunLoop
     | RunSeeds of V.t list
@@ -17689,6 +17802,8 @@ module Make :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -18414,6 +18529,9 @@ module Coq_Make :
 
                   val set_value : state -> frame -> D.t -> state * frame
 
+                  val requeue_changed_controlled_owner :
+                    state -> state -> V.t -> state
+
                   type control =
                   | RunLoop
                   | RunSeeds of V.t list
@@ -18840,6 +18958,9 @@ module Coq_Make :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -19256,6 +19377,9 @@ module Coq_Make :
               val publish_targets : state -> frame -> state
 
               val set_value : state -> frame -> D.t -> state * frame
+
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
 
               type control = Base.Sem.R.control =
               | RunLoop
@@ -19690,6 +19814,9 @@ module Coq_Make :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = P.Base.Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -20116,6 +20243,9 @@ module Coq_Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -20529,6 +20659,9 @@ module Coq_Make :
             val publish_targets : state -> frame -> state
 
             val set_value : state -> frame -> D.t -> state * frame
+
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
 
             type control = P.Base.Sem.R.control =
             | RunLoop
@@ -20975,6 +21108,9 @@ module Coq_Make :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = H.P.Base.Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -21405,6 +21541,9 @@ module Coq_Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -21820,6 +21959,9 @@ module Coq_Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -22158,6 +22300,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -22485,6 +22630,8 @@ module Coq_Make :
 
       val set_value : state -> frame -> D.t -> state * frame
 
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
       type control = PS.C.H.P.Base.Sem.R.control =
       | RunLoop
       | RunSeeds of V.t list
@@ -22800,6 +22947,8 @@ module Coq_Make :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -23495,6 +23644,9 @@ module Coq_Make :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = O.PS.C.H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -23926,6 +24078,9 @@ module Coq_Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -24344,6 +24499,9 @@ module Coq_Make :
           val publish_targets : state -> frame -> state
 
           val set_value : state -> frame -> D.t -> state * frame
+
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
 
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
@@ -24776,6 +24934,9 @@ module Coq_Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -25198,6 +25359,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -25609,6 +25773,8 @@ module Coq_Make :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -26052,6 +26218,9 @@ module Coq_Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -26474,6 +26643,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -26886,6 +27058,8 @@ module Coq_Make :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -27219,6 +27393,8 @@ module Coq_Make :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -27642,6 +27818,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -28057,6 +28236,8 @@ module Coq_Make :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -28462,6 +28643,8 @@ module Coq_Make :
 
       val set_value : state -> frame -> D.t -> state * frame
 
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
       | RunSeeds of V.t list
@@ -28788,6 +28971,8 @@ module Coq_Make :
     val publish_targets : state -> frame -> state
 
     val set_value : state -> frame -> D.t -> state * frame
+
+    val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
     type control = O.PS.C.H.P.Base.Sem.R.control =
     | RunLoop
@@ -29185,6 +29370,8 @@ module Coq_Make :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -29593,6 +29780,8 @@ module Coq_Make :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -30098,6 +30287,9 @@ module Coq_Make :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -30520,6 +30712,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -30931,6 +31126,8 @@ module Coq_Make :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -31359,6 +31556,9 @@ module Coq_Make :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -31774,6 +31974,8 @@ module Coq_Make :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -32178,6 +32380,8 @@ module Coq_Make :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -32669,6 +32873,9 @@ module Solver :
 
                   val set_value : state -> frame -> D.t -> state * frame
 
+                  val requeue_changed_controlled_owner :
+                    state -> state -> V.t -> state
+
                   type control =
                   | RunLoop
                   | RunSeeds of V.t list
@@ -33095,6 +33302,9 @@ module Solver :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -33511,6 +33721,9 @@ module Solver :
               val publish_targets : state -> frame -> state
 
               val set_value : state -> frame -> D.t -> state * frame
+
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
 
               type control = Base.Sem.R.control =
               | RunLoop
@@ -33945,6 +34158,9 @@ module Solver :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = P.Base.Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -34371,6 +34587,9 @@ module Solver :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -34784,6 +35003,9 @@ module Solver :
             val publish_targets : state -> frame -> state
 
             val set_value : state -> frame -> D.t -> state * frame
+
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
 
             type control = P.Base.Sem.R.control =
             | RunLoop
@@ -35230,6 +35452,9 @@ module Solver :
 
                 val set_value : state -> frame -> D.t -> state * frame
 
+                val requeue_changed_controlled_owner :
+                  state -> state -> V.t -> state
+
                 type control = H.P.Base.Sem.R.control =
                 | RunLoop
                 | RunSeeds of V.t list
@@ -35660,6 +35885,9 @@ module Solver :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -36075,6 +36303,9 @@ module Solver :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -36413,6 +36644,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -36740,6 +36974,8 @@ module Solver :
 
       val set_value : state -> frame -> D.t -> state * frame
 
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
       type control = PS.C.H.P.Base.Sem.R.control =
       | RunLoop
       | RunSeeds of V.t list
@@ -37055,6 +37291,8 @@ module Solver :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -37750,6 +37988,9 @@ module Solver :
 
               val set_value : state -> frame -> D.t -> state * frame
 
+              val requeue_changed_controlled_owner :
+                state -> state -> V.t -> state
+
               type control = O.PS.C.H.P.Base.Sem.R.control =
               | RunLoop
               | RunSeeds of V.t list
@@ -38181,6 +38422,9 @@ module Solver :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -38599,6 +38843,9 @@ module Solver :
           val publish_targets : state -> frame -> state
 
           val set_value : state -> frame -> D.t -> state * frame
+
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
 
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
@@ -39031,6 +39278,9 @@ module Solver :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -39453,6 +39703,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -39864,6 +40117,8 @@ module Solver :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -40307,6 +40562,9 @@ module Solver :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -40729,6 +40987,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -41141,6 +41402,8 @@ module Solver :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -41474,6 +41737,8 @@ module Solver :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -41897,6 +42162,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -42312,6 +42580,8 @@ module Solver :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -42717,6 +42987,8 @@ module Solver :
 
       val set_value : state -> frame -> D.t -> state * frame
 
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
       | RunSeeds of V.t list
@@ -43043,6 +43315,8 @@ module Solver :
     val publish_targets : state -> frame -> state
 
     val set_value : state -> frame -> D.t -> state * frame
+
+    val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
     type control = O.PS.C.H.P.Base.Sem.R.control =
     | RunLoop
@@ -43440,6 +43714,8 @@ module Solver :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -43848,6 +44124,8 @@ module Solver :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop
@@ -44353,6 +44631,9 @@ module Solver :
 
             val set_value : state -> frame -> D.t -> state * frame
 
+            val requeue_changed_controlled_owner :
+              state -> state -> V.t -> state
+
             type control = O.PS.C.H.P.Base.Sem.R.control =
             | RunLoop
             | RunSeeds of V.t list
@@ -44775,6 +45056,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -45186,6 +45470,8 @@ module Solver :
         val publish_targets : state -> frame -> state
 
         val set_value : state -> frame -> D.t -> state * frame
+
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
@@ -45614,6 +45900,9 @@ module Solver :
 
           val set_value : state -> frame -> D.t -> state * frame
 
+          val requeue_changed_controlled_owner :
+            state -> state -> V.t -> state
+
           type control = O.PS.C.H.P.Base.Sem.R.control =
           | RunLoop
           | RunSeeds of V.t list
@@ -46029,6 +46318,8 @@ module Solver :
 
         val set_value : state -> frame -> D.t -> state * frame
 
+        val requeue_changed_controlled_owner : state -> state -> V.t -> state
+
         type control = O.PS.C.H.P.Base.Sem.R.control =
         | RunLoop
         | RunSeeds of V.t list
@@ -46433,6 +46724,8 @@ module Solver :
       val publish_targets : state -> frame -> state
 
       val set_value : state -> frame -> D.t -> state * frame
+
+      val requeue_changed_controlled_owner : state -> state -> V.t -> state
 
       type control = O.PS.C.H.P.Base.Sem.R.control =
       | RunLoop

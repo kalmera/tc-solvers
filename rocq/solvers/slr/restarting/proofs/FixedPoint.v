@@ -25,14 +25,6 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
     Definition narrowing_fixed (_owner : V.t) (input value : D.t) : Prop :=
       equivalent (WN.narrow value input) value.
 
-    (** The phase may change on the repeated update. Only its value matters. *)
-    Definition value_idempotent : Prop :=
-      forall owner phase old input,
-        let result := U.update false owner phase old input in
-        equivalent
-          (snd (U.update false owner (fst result) (snd result) input))
-          (snd result).
-
     Lemma equivalent_refl : forall x, equivalent x x.
     Proof. intro x. split; apply DL.leq_refl. Qed.
     Lemma equivalent_sym : forall x y, equivalent x y -> equivalent y x.
@@ -78,55 +70,75 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       eapply equivalent_trans; [exact Hfixed |exact Hval].
     Qed.
 
-    Lemma idempotent_update_fixed : forall owner phase old input next value,
-      value_idempotent ->
-      U.update false owner phase old input = (next, value) ->
-      U.avoids_fallback next ->
-      narrowing_fixed owner input value.
+    Lemma safe_update_stutter_is_narrow_stutter :
+      forall owner phase old input,
+        U.avoids_fallback phase ->
+        equivalent
+          (snd (U.update false owner phase old input)) old ->
+        equivalent (WN.narrow old input) old.
     Proof.
-      intros owner phase old input next value Hid Hupdate Hsafe.
-      specialize (Hid owner phase old input). rewrite Hupdate in Hid. cbn in Hid.
-      pose proof (UL.update_sound false owner phase old input) as Hsound.
-      rewrite Hupdate in Hsound. cbn in Hsound.
-      destruct next; try contradiction;
-        unfold U.update in Hid; rewrite Hsound in Hid; exact Hid.
+      intros owner phase old input Hsafe Hstutter.
+      destruct phase.
+      - unfold U.update in Hstutter.
+        destruct (D.leq input old) eqn:Hle.
+        + exact Hstutter.
+        + exfalso.
+          destruct Hstutter as [Hresult_old _].
+          cbn in Hresult_old.
+          pose proof (WNL.widen_upper_input old input) as Hinput_result.
+          rewrite <- Bool.not_true_iff_false in Hle.
+          apply Hle.
+          eapply DL.leq_trans; eassumption.
+      - unfold U.update in Hstutter.
+        destruct (D.leq input old) eqn:Hle.
+        + exact Hstutter.
+        + exfalso.
+          destruct Hstutter as [Hresult_old _].
+          cbn in Hresult_old.
+          pose proof (WNL.widen_upper_input old input) as Hinput_result.
+          rewrite <- Bool.not_true_iff_false in Hle.
+          apply Hle.
+          eapply DL.leq_trans; eassumption.
+      - exfalso. apply Hsafe. reflexivity.
     Qed.
 
-    Lemma set_value_fixed : forall st fr direct st' fr',
-      value_idempotent ->
+    Lemma set_value_fixed_or_queued : forall st fr direct st' fr',
+      Features.recompute_controlled = true ->
       R.aggregate st (R.frame_owner fr) = D.bottom ->
       R.set_value st fr direct = (st', fr') ->
-      U.avoids_fallback (R.frame_phase fr') ->
+      U.avoids_fallback (R.frame_phase fr) ->
+      C.queued (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
+        (R.frame_owner fr) \/
       narrowing_fixed (R.frame_owner fr) direct
         (R.sigma_value st' (R.frame_owner fr)).
     Proof.
-      intros st fr direct st' fr' Hid Hbottom Hset Hsafe.
+      intros st fr direct st' fr' Henabled Hbottom Hset Hsafe.
       unfold R.set_value in Hset. rewrite Hbottom in Hset.
       set (owner := R.frame_owner fr) in *.
       set (candidate := D.join direct D.bottom) in *.
       set (old := R.sigma_value st owner) in *.
       assert (Hinput : equivalent candidate direct) by apply join_bottom.
       destruct (R.equivalent candidate old) eqn:Hcandidate.
-      - inversion Hset; subst. apply fixed_diagonal.
+      - inversion Hset; subst. right. apply fixed_diagonal.
         apply Bool.andb_true_iff in Hcandidate.
         eapply equivalent_trans; [apply equivalent_sym; exact Hinput |exact Hcandidate].
       - destruct (S.mem owner (R.controlled st)) eqn:Hcontrolled.
         + destruct (U.update false owner (R.frame_phase fr) old candidate)
             as [next value] eqn:Hupdate. cbn in Hset.
           destruct (R.equivalent value old) eqn:Hvalue;
-            inversion Hset; subst; cbn in Hsafe.
-          * eapply fixed_transport; [|exact Hinput | |].
+            inversion Hset; subst.
+          * right. eapply fixed_transport with (owner := owner); [|exact Hinput |apply equivalent_refl |].
             -- pose proof (UL.update_sound false owner (R.frame_phase fr)
-                 old candidate) as Hsound. rewrite Hupdate in Hsound. exact Hsound.
-            -- apply Bool.andb_true_iff in Hvalue. exact Hvalue.
-            -- eapply idempotent_update_fixed; eassumption.
-          * rewrite C.sigma_value_with_readers, C.sigma_value_enqueue_all,
-              C.sigma_value_update_same.
-            eapply fixed_transport; [|exact Hinput |apply equivalent_refl |].
-            -- pose proof (UL.update_sound false owner (R.frame_phase fr)
-                 old candidate) as Hsound. rewrite Hupdate in Hsound. exact Hsound.
-            -- eapply idempotent_update_fixed; eassumption.
-        + cbn in Hset. rewrite Hcandidate in Hset. inversion Hset; subst.
+                 old candidate) as Hsound. rewrite Hupdate in Hsound.
+               cbn in Hsound. apply Bool.andb_true_iff in Hvalue.
+               eapply DL.leq_trans; [exact Hsound |exact (proj1 Hvalue)].
+            -- eapply safe_update_stutter_is_narrow_stutter with (owner := owner);
+                 [exact Hsafe |].
+               fold old. rewrite Hupdate. cbn. now apply Bool.andb_true_iff.
+          * left. apply C.requeue_enabled; [exact Henabled |exact Hcontrolled |].
+            rewrite C.sigma_value_with_readers, C.sigma_value_enqueue_all,
+              C.sigma_value_update_same. exact Hvalue.
+        + cbn in Hset. rewrite Hcandidate in Hset. inversion Hset; subst. right.
           rewrite C.sigma_value_with_readers, C.sigma_value_enqueue_all,
             C.sigma_value_update_same.
           apply fixed_diagonal. apply equivalent_sym. exact Hinput.
@@ -134,35 +146,30 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
 
     Lemma reachable_commit_fixed : forall tf roots
       (finite : Sem.finite_system tf roots) c,
-      value_idempotent -> N.ordinary_monotonic_system tf ->
+      Features.recompute_controlled = true -> N.ordinary_monotonic_system tf ->
       Sem.steps tf (R.initial_config roots) c ->
       H.commit_property narrowing_fixed c.
     Proof.
-      intros tf roots finite [st control] Hid Hordinary Hreach
+      intros tf roots finite [st control] Henabled Hordinary Hreach
         fr direct k Hcontrol st' fr' Hset. cbn in Hcontrol. subst control.
-      eapply set_value_fixed; [exact Hid | |exact Hset |].
+      eapply set_value_fixed_or_queued; [exact Henabled | |exact Hset |].
       - exact (@N.ordinary_reachable_aggregate_bottom tf roots finite
           {| R.cfg_state := st; R.cfg_control := R.RunCommit fr direct k |}
           (R.frame_owner fr) Hordinary Hreach).
-      - assert (Hnext : Sem.steps tf (R.initial_config roots)
-          {| R.cfg_state := st'; R.cfg_control := R.RunDrain fr' k |}).
-        { eapply C.Termination.steps_append_one; [exact Hreach |].
-          change (R.set_value st fr direct = (st', fr')) in Hset.
-          unfold Sem.step. cbn -[R.set_value]. rewrite Hset. reflexivity. }
-        exact (proj1 (@N.first_discovery_ordinary_avoids_fallback
-          tf roots finite Hordinary _ Hnext)).
+      - exact (proj1 (@N.first_discovery_ordinary_avoids_fallback
+          tf roots finite Hordinary _ Hreach)).
     Qed.
 
     Theorem successful_run_fixed : forall fuel tf roots final
       (finite : Sem.finite_system tf roots),
-      value_idempotent -> N.ordinary_monotonic_system tf ->
+      Features.recompute_controlled = true -> N.ordinary_monotonic_system tf ->
       R.solve_fuel fuel tf roots = Some final ->
       forall owner, Sem.solved final owner ->
       exists direct reads effects,
         Sem.rhs_eval final (tf owner) direct reads effects /\
         narrowing_fixed owner direct (R.sigma_value final owner).
     Proof.
-      intros fuel tf roots final finite Hid Hordinary Hrun owner Hsolved.
+      intros fuel tf roots final finite Henabled Hordinary Hrun owner Hsolved.
       pose proof (@C.successful_run_terminates_to fuel tf roots final Hrun) as Hterm.
       assert (Hcommits : forall c,
         Sem.steps tf (R.initial_config roots) c -> H.commit_property narrowing_fixed c).
@@ -175,13 +182,15 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       - contradiction.
       - destruct Hsummary as [_ [direct [reads [effects
           [Htrace [Hreads [_ [_ Hfixed]]]]]]]].
+        destruct Hfixed as [Hqueued |Hfixed].
+        { exfalso. exact (@C.quiescent_not_queued final owner Hquiet Hqueued). }
         exists direct, reads, effects. split; [|exact Hfixed].
         eapply C.rhs_trace_replay; [exact Htrace |].
         eapply C.guarded_reads_agree; eassumption.
     Qed.
 
     Theorem total_correct_and_fixed : forall tf roots,
-      Sem.finite_system tf roots -> value_idempotent ->
+      Sem.finite_system tf roots -> Features.recompute_controlled = true ->
       N.ordinary_monotonic_system tf ->
       exists fuel final,
         R.solve_fuel fuel tf roots = Some final /\
@@ -191,7 +200,7 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
           Sem.rhs_eval final (tf owner) direct reads effects /\
           narrowing_fixed owner direct (R.sigma_value final owner).
     Proof.
-      intros tf roots finite Hid Hordinary.
+      intros tf roots finite Henabled Hordinary.
       destruct (@C.sufficient_fuel tf roots finite) as [fuel [final Hrun]].
       exists fuel, final. split; [exact Hrun |]. split.
       - exact (@C.solve_fuel_correct fuel tf roots final Hrun).
@@ -237,14 +246,14 @@ Module Make (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
 
     (** The public theorem adds fixedness to a successful run. Its assumptions
         and conclusion use only the shared specification vocabulary. *)
-    Theorem successful_run_narrowing_fixed : value_idempotent ->
+    Theorem successful_run_narrowing_fixed : Features.recompute_controlled = true ->
       forall fuel tf roots final,
       Sem.finite_system tf roots -> Spec.monotonic_system tf -> Spec.no_side_effects tf ->
       R.solve_fuel fuel tf roots = Some final ->
       Spec.narrowing_fixed_with WN.narrow (fun _ _ direct => direct) tf final.
     Proof.
-      intros Hid fuel tf roots final finite Hmono Hpure Hrun owner Hsolved.
-      destruct (@successful_run_fixed fuel tf roots final finite Hid
+      intros Henabled fuel tf roots final finite Hmono Hpure Hrun owner Hsolved.
+      destruct (@successful_run_fixed fuel tf roots final finite Henabled
         (ordinary_system_from_common Hmono Hpure) Hrun owner Hsolved)
         as [direct [reads [effects [Hreplay Hfixed]]]].
       split; [eauto |].

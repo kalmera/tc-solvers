@@ -1,9 +1,8 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import
   common.SolverSpecifications
-  common.instances.IdempotentChain
   common.instances.Chain
-  common.Assumptions common.BoxUpdate common.UpdateIdempotency
+  common.Assumptions common.BoxUpdate
   solvers.slr.common.DiscoveryOrderLaws
   common.FiniteHeight
   solvers.slr.restarting.proofs.FixedPoint
@@ -91,12 +90,12 @@ Module LeastSolutionMake
 End LeastSolutionMake.
 
 (** Ordinary systems have no side effects. Fixedness uses first-discovery ranks
-    and value-only idempotency of ordinary OneBox updates; phases may change. *)
+    and repeated updates of changed controlled owners with their returned phases. *)
 Module OrdinaryFixedPointMake (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
   Module Fixed := FixedPoint.Make V D WN.
   Module U := Fixed.U.
   Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
-    (UL : UPDATE_LAWS V D U) (IL : VALUE_IDEMPOTENT V D U).
+    (UL : UPDATE_LAWS V D U).
     Module WithCollections (S : SET V) (M : MAP V) (Features : Restarting.FEATURES)
       (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
       Module Internal := Fixed.WithLaws S M Features DL WNL UL SL ML.
@@ -108,10 +107,11 @@ Module OrdinaryFixedPointMake (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
       Definition narrowing_fixed := narrowing_fixed_with WN.narrow
         (fun _ _ direct => direct).
 
-      Theorem successful_run_fixed : forall fuel tf roots final,
+      Theorem successful_run_fixed : Features.recompute_controlled = true ->
+        forall fuel tf roots final,
         Sem.finite_system tf roots -> monotonic_system tf -> no_side_effects tf ->
         R.solve_fuel fuel tf roots = Some final -> narrowing_fixed tf final.
-      Proof. exact (Internal.successful_run_narrowing_fixed IL.ordinary_value_idempotent). Qed.
+      Proof. exact Internal.successful_run_narrowing_fixed. Qed.
 
     End WithCollections.
   End WithLaws.
@@ -130,14 +130,13 @@ Module Instances.
   Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
   Module Least := LeastSolutionMake E.V E.D U E.S E.M Rk Restarting.AllEnabledFeatures
     RankLaws RankFinite E.DL UL UBL E.SL E.ML.
-  Module IE := IdempotentChain.
+  Module IE := Chain.
   Module Fixed := OrdinaryFixedPointMake IE.V IE.D IE.WN.
   Module FixedUL := IE.UpdateLaws Fixed.U.
-  Module IL := IE.Idempotency Fixed.U.
-  Module FixedLaws := Fixed.WithLaws IE.DL IE.WNL FixedUL IL.
+  Module FixedLaws := Fixed.WithLaws IE.DL IE.WNL FixedUL.
   Module Ordinary := FixedLaws.WithCollections IE.S IE.M Restarting.AllEnabledFeatures
     IE.SL IE.ML.
-  Definition ordinary_fixed := Ordinary.successful_run_fixed.
+  Definition ordinary_fixed := Ordinary.successful_run_fixed eq_refl.
 End Instances.
 
 Goal True. idtac "SLR-TC_R total correctness proven with assumptions:". Abort.

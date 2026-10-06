@@ -5,11 +5,6 @@ From TcSolvers Require Import common.FiniteHeight
 Import ListNotations.
 
 Module E := Chain.
-(** Value idempotency does not require phase idempotency. *)
-Example replay_can_change_phase :
-  E.U.update false 0 E.U.BoxW E.D.Bot E.D.One = (E.U.BoxW, E.D.Top) /\
-  E.U.update false 0 E.U.BoxW E.D.Top E.D.One = (E.U.BoxN, E.D.Top).
-Proof. split; reflexivity. Qed.
 
 Module Optimized := NarrowingFixedPoint.Make E.V E.D E.U E.S E.M
   Base.AllEnabledFeatures E.DL E.UL E.SL E.ML.
@@ -37,10 +32,16 @@ End After.
 Example terminates : Optimized.solve_fuel 200 After.tf [0] = Some After.final.
 Proof. vm_compute. reflexivity. Qed.
 
-(** No synthetic fourth evaluation of owner 0. *)
+(** Changed controlled values trigger repeated updates without a self-read. *)
 Example completed_owners :
-  After.completed_owners 200 (After.R.initial_config [0]) = [1;0;1].
+  After.completed_owners 200 (After.R.initial_config [0]) = [1;0;1;0;1;0;1;0;1;0].
 Proof. vm_compute. reflexivity. Qed.
+
+Example no_self_read_owner_is_fixed :
+  After.R.sigma_value After.final 0 = E.D.One /\
+  E.WN.narrow (After.R.sigma_value After.final 0) E.D.One =
+    After.R.sigma_value After.final 0.
+Proof. vm_compute. split; reflexivity. Qed.
 
 Module SelfDependency.
   Module U := JoinUpdate E.V E.D.
@@ -53,11 +54,6 @@ Module SelfDependency.
     | E.D.Three | E.D.Top => E.D.Top end.
   Definition tf (_owner : E.V.t) : R.ConstraintSystem.rhs :=
     R.ConstraintSystem.Get 0 (fun value => R.ConstraintSystem.Ret (successor value)).
-  Example idempotent : forall owner phase old input,
-    snd (U.update false owner (fst (U.update false owner phase old input))
-      (snd (U.update false owner phase old input)) input) =
-    snd (U.update false owner phase old input).
-  Proof. intros owner phase old input; destruct old, input; reflexivity. Qed.
   Example monotone : forall old new,
     E.D.leq old new = true -> E.D.leq (successor old) (successor new) = true.
   Proof. destruct old, new; cbn; congruence. Qed.

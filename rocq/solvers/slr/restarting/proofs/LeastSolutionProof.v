@@ -1164,7 +1164,10 @@ Module Make
       destruct (@state_below_set_value
         (Sem.support finite) upper st f t next next_fr
         Hstate_below Hcompleted Hset) as [Hnext Hnext_fr].
-      constructor; [exact Hnext |]. cbn. now split.
+      constructor.
+      + cbn [R.cfg_state]. unfold R.requeue_changed_controlled_owner.
+        apply state_below_with_queue. exact Hnext.
+      + cbn. now split.
     - destruct (R.queue_peek (R.queue st)) as [next |] eqn:Hpeek.
       + destruct (V.eq_dec next (R.frame_owner f)) as [Hequal |Hneq].
         * destruct (R.queue_pop (R.queue st)) as [[ignored rest] |]

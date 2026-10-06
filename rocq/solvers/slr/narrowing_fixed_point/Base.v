@@ -541,6 +541,15 @@ Module Make
           (M.update (readers st2) owner S.empty) in
         (st3, fr1).
 
+  (** Queue-only repair.  [RunDrain] reruns this owner with the phase
+      returned by [set_value], including when narrowing needs several updates. *)
+  Definition requeue_changed_controlled_owner
+    (before after : state) (owner : V.t) : state :=
+    with_queue after
+      (if S.mem owner (controlled before) &&
+          negb (equivalent (sigma_value after owner) (sigma_value before owner))
+       then queue_insert (ranking after) owner (queue after)
+       else queue after).
 
   Inductive control : Type :=
   | RunLoop
@@ -720,7 +729,8 @@ Module Make
     | RunCommit fr direct k =>
         let '(st1, fr1) := set_value st fr direct in
         Some
-          {| cfg_state := st1;
+          {| cfg_state := requeue_changed_controlled_owner
+               st st1 (frame_owner fr);
              cfg_control := RunDrain fr1 k |}
 
     | RunDrain fr k =>

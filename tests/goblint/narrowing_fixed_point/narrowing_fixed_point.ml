@@ -12,7 +12,7 @@ module D = struct
 end
 module WN = struct
   let widen old input = if input <= old then old else 5
-  let narrow old input = if input = 0 then 0 else old
+  let narrow old input = max input (old - 1)
 end
 module Set = struct
   type t = int list

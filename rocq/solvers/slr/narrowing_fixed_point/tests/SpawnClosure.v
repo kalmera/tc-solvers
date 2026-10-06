@@ -1,5 +1,5 @@
 From Stdlib Require Import List.
-From TcSolvers Require Import common.instances.Chain common.instances.IdempotentChain
+From TcSolvers Require Import common.instances.Chain
   solvers.slr.simple.Theorems solvers.slr.restarting.Theorems
   solvers.slr.narrowing_fixed_point.Theorems.
 Import ListNotations.
@@ -110,8 +110,8 @@ Module Restarting.
 End Restarting.
 
 Module Narrowing.
-  Module C := TcSolvers.solvers.slr.narrowing_fixed_point.Theorems.Correctness IdempotentChain.V IdempotentChain.D IdempotentChain.U IdempotentChain.S IdempotentChain.M Base.AllEnabledFeatures IdempotentChain.DL IdempotentChain.UL IdempotentChain.SL IdempotentChain.ML.
-  Module E := IdempotentChain.
+  Module C := TcSolvers.solvers.slr.narrowing_fixed_point.Theorems.Correctness Chain.V Chain.D Chain.U Chain.S Chain.M Base.AllEnabledFeatures Chain.DL Chain.UL Chain.SL Chain.ML.
+  Module E := Chain.
   Module R := C.R.
   Module Sem := C.Sem.
   Module Run := C.N.

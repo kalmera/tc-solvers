@@ -130,6 +130,8 @@ Definition below_extended := H.below_extended.
 Definition ordered_extended := H.ordered_extended.
 Definition carries_write := H.carries_write.
 Definition carries_set := H.carries_set.
+Definition carries_requeue := H.carries_requeue.
+Definition requeue_extends := H.requeue_extends.
 
   Lemma continuation_carries tf before after k : carries_reads before after ->
     continuation tf before k -> continuation tf after k.
@@ -340,9 +342,10 @@ Qed.
     R.next_config tf {| R.cfg_state := st; R.cfg_control := R.RunCommit fr direct k |} = Some after ->
     valid tf after.
   Proof.
-    intros [Ho [Hc Hk]] Hstep. cbn -[R.set_value] in Hstep.
+    intros [Ho [Hc Hk]] Hstep. cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
     destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
-    inversion Hstep; subst.
+    inversion Hstep; subst. eapply valid_carries;
+      [apply requeue_extends |apply carries_requeue |].
     split; cbn.
     - rewrite (@B.set_value_frame_owner st fr direct next next_fr Hset). eapply below_extended;
         [eapply B.rank_extends_set_value; exact Hset |exact Ho].
@@ -1337,10 +1340,10 @@ Proof.
  cbn -[P.next_batched P.pending_above P.suspend_commit P.retry_current] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr)); [destruct p; discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st)); [discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hset.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|]; [discriminate |].
- inversion Hstep; subst.
+ inversion Hstep; subst. apply B.summary_valid_requeue.
  eapply B.completed_witness_set_value_summary; eassumption.
 Qed.
 
@@ -1727,9 +1730,9 @@ Proof.
    + contradiction.
    + eapply summary_spawn; eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst. right;right.
+   inversion Hstep;subst. right;right. apply B.summary_valid_requeue.
    destruct (V.eq_dec owner (R.frame_owner f)) as [->|Hneq].
    + eapply B.completed_witness_set_value_summary; [exact Hcompleted |exact Hs].
    + eapply B.summary_valid_set_value_other; eassumption.
@@ -2093,7 +2096,7 @@ Proof.
    + contradiction.
    + eapply base_spawn_consistent;eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
    inversion Hstep;subst. destruct Hconsistent as [Hhead Htail]. split;[|exact Htail].
    rewrite (@B.set_value_frame_owner st f t next next_fr Hs). exact Hhead.
@@ -2287,9 +2290,9 @@ Proof.
    + contradiction.
    + eapply spawn_solved_origin;exact Hstep.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst. intros owner Hsolved.
+   inversion Hstep;subst. intros owner Hsolved. B.clear_requeue_view.
    destruct (@B.set_value_solved_origin st f t next next_fr owner Hs Hsolved)
    as [Hbefore| ->];left;[exact Hbefore |].
    apply B.materialized_solved. exact (proj1 Howners).
@@ -3077,6 +3080,10 @@ Qed.
 Lemma target_summary_enqueue tf st owner target :
  target_summary tf st owner -> target_summary tf (R.enqueue st target) owner.
 Proof. apply target_summary_view;[intros;apply H.carries_enqueue;assumption |reflexivity]. Qed.
+Lemma target_summary_requeue tf before after source owner :
+ target_summary tf after owner ->
+ target_summary tf (R.requeue_changed_controlled_owner before after source) owner.
+Proof. apply target_summary_view;[intros;apply H.carries_requeue;assumption |reflexivity]. Qed.
 Lemma target_summary_pop_other tf st popped rest owner :
  R.queue_pop (R.queue st) = Some (popped,rest) -> owner <> popped ->
  target_summary tf st owner -> target_summary tf (R.with_queue st rest) owner.
@@ -3241,9 +3248,9 @@ Proof.
    + contradiction.
    + eapply target_spawn; eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst. right;right.
+   inversion Hstep;subst. right;right. apply target_summary_requeue.
    eapply target_summary_set; eassumption.
  - eapply target_drain; eassumption.
  - eapply target_return; eassumption.
@@ -3385,10 +3392,10 @@ Proof.
  cbn -[P.next_batched P.pending_above P.suspend_commit P.retry_current] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr));[destruct p;discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hset.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
- inversion Hstep;subst.
+ inversion Hstep;subst. apply target_summary_requeue.
  eapply target_summary_set;eassumption.
 Qed.
 Theorem next_guarded_target_summary tf roots before after owner :
@@ -3802,9 +3809,10 @@ Lemma base_commit tf st fr direct k after :
  R.next_config tf {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|}
  = Some after -> history tf (R.cfg_state after) (R.cfg_control after).
 Proof.
- intros [Hc Hk] Hstep. cbn -[R.set_value] in Hstep.
+ intros [Hc Hk] Hstep. cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
  inversion Hstep;subst.
+ eapply continuation_carries with (before:=next);[apply T.sigma_extends_with_queue |apply H.carries_requeue |].
  eapply continuation_carries;[eapply T.sigma_extends_set_value;exact Hset
  |exact (@H.carries_set st fr direct next next_fr Hset) |exact Hk].
 Qed.
@@ -4064,6 +4072,11 @@ Lemma summary_enqueue tf st owner target :
 Proof.
  eapply summary_carries;[apply T.sigma_extends_enqueue |apply H.carries_enqueue].
 Qed.
+Lemma summary_requeue tf before after source owner :
+ summary tf after owner -> summary tf (R.requeue_changed_controlled_owner before after source) owner.
+Proof.
+ eapply summary_carries;[apply T.sigma_extends_with_queue |apply H.carries_requeue].
+Qed.
 Lemma summary_pop_other tf st popped rest owner :
  R.queue_pop (R.queue st) = Some (popped,rest) -> owner <> popped ->
  summary tf st owner -> summary tf (R.with_queue st rest) owner.
@@ -4217,9 +4230,9 @@ Proof.
    + contradiction.
    + eapply guard_spawn; eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst. right;right.
+   inversion Hstep;subst. right;right. apply summary_requeue.
    eapply summary_set; eassumption.
  - eapply guard_drain; eassumption.
  - eapply guard_return; eassumption.
@@ -4356,10 +4369,10 @@ Proof.
  cbn -[P.next_batched P.pending_above P.suspend_commit P.retry_current] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr));[destruct p;discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hset.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
- inversion Hstep;subst.
+ inversion Hstep;subst. apply summary_requeue.
  eapply summary_set;eassumption.
 Qed.
 Theorem next_guarded_summary tf roots before after owner :
@@ -4676,9 +4689,9 @@ Proof.
    + contradiction.
    + eapply base_spawn;eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst. eapply set_value;eassumption.
+   inversion Hstep;subst. apply queue. eapply set_value;eassumption.
  - eapply base_drain;eassumption.
  - eapply base_return;eassumption.
 Qed.
@@ -5118,10 +5131,10 @@ Proof.
  - inversion Hstep;subst;cbn -[credit];unfold credit;rewrite T.source_credit_materialize;lia.
  - eapply base_rhs;exact Hstep.
  - eapply base_dead;exact Hstep.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst;cbn -[credit].
-   unfold credit.
+   inversion Hstep;subst;cbn -[credit R.requeue_changed_controlled_owner].
+   unfold R.requeue_changed_controlled_owner,credit. rewrite T.source_credit_with_queue.
    rewrite (@T.source_credit_set_value support st f t next next_fr source Hs). lia.
  - rewrite (@base_drain support tf st f c after source Hr Ho Ha Hstep). apply Nat.le_refl.
  - rewrite (@base_return support tf st c after source Hstep). apply Nat.le_refl.
@@ -5625,10 +5638,10 @@ Proof.
  - inversion Hstep;subst;cbn -[credit];unfold credit;rewrite T.target_credit_materialize;lia.
  - eapply base_rhs;exact Hstep.
  - eapply base_dead;exact Hstep.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst;cbn -[credit].
-   unfold credit.
+   inversion Hstep;subst;cbn -[credit R.requeue_changed_controlled_owner].
+   unfold R.requeue_changed_controlled_owner,credit. rewrite T.target_credit_with_queue.
    rewrite (@T.target_credit_set_value support st f t next next_fr root Hs). lia.
  - rewrite (@base_drain support tf st f c after root Hr Ho Ha Hstep). apply Nat.le_refl.
  - rewrite (@base_return support tf st c after root Hstep). apply Nat.le_refl.
@@ -6350,9 +6363,9 @@ Proof.
  intros Hchildren Hreach Hpending Hqueued.
  destruct (R.set_value st fr direct) as [next next_fr] eqn:Hs.
  assert (Hstep : C.next_config tf {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|}=
- Some {|R.cfg_state:=next;
+ Some {|R.cfg_state:=R.requeue_changed_controlled_owner st next (R.frame_owner fr);
  R.cfg_control:=R.RunDrain next_fr k|}).
- { cbn -[P.pending_above R.queue_contains R.set_value].
+ { cbn -[P.pending_above R.queue_contains R.set_value R.requeue_changed_controlled_owner].
    now rewrite Hpending,Hqueued,Hs. }
  assert (Howner : R.frame_owner next_fr=R.frame_owner fr) by (eapply B.set_value_owner;exact Hs).
  eapply round_prepend;[apply one,Hstep |]. apply drain_round.
@@ -6875,11 +6888,11 @@ Theorem committing_strict tf st fr direct k after next_fr next_k :
  credit {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} (R.frame_owner fr).
 Proof.
  intros Hcontrolled Hstep Hchanged.
- cbn -[P.pending_above P.retry_current R.set_value] in Hstep.
+ cbn -[P.pending_above P.retry_current R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|] eqn:Hp;[discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
  destruct (R.set_value st fr direct) as [next nf] eqn:Hs. inversion Hstep;subst.
- change (T.active_ordinary_credit after (R.RunRhs next_fr (tf (R.frame_owner fr)) next_k) (R.frame_owner fr)<
+ change (T.active_ordinary_credit next (R.RunRhs next_fr (tf (R.frame_owner fr)) next_k) (R.frame_owner fr)<
  T.active_ordinary_credit st (R.RunRhs fr (tf (R.frame_owner fr)) next_k) (R.frame_owner fr)).
  eapply T.active_ordinary_credit_set_value_decreases;[exact Hcontrolled |exact Hs |exact Hchanged].
 Qed.
@@ -7458,7 +7471,7 @@ Proof.
  { destruct Hcontext as [[Howner Hk]|Hstack];[ |exact Hstack].
    unfold T.owner_commitb in Hnot. cbn in Hnot. rewrite Howner in Hnot.
    destruct (V.eq_dec owner owner);[discriminate |contradiction]. }
- cbn -[P.pending_above P.suspend_commit P.retry_current R.set_value] in Hstep.
+ cbn -[P.pending_above P.suspend_commit P.retry_current R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|].
  - inversion Hstep;subst. right;exact Hstack.
  - destruct (R.queue_contains (R.frame_owner fr) (R.queue st)).
@@ -7794,7 +7807,7 @@ Lemma commit_not_return tf st fr direct k after basek :
  Some {|R.cfg_state:=after;R.cfg_control:=R.Return basek|} -> False.
 Proof.
  intro Hstep.
- cbn -[P.pending_above P.suspend_commit P.retry_current R.set_value] in Hstep.
+ cbn -[P.pending_above P.suspend_commit P.retry_current R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
  destruct (R.set_value st fr direct);discriminate.
@@ -8719,16 +8732,16 @@ Theorem ready support tf roots (finite : B.Sem.finite_system tf roots) st fr dir
 Proof.
  intros Hchildren Hreach Hp Hclean.
  destruct (R.set_value st fr direct) as [next next_fr] eqn:Hs.
- set (after := next).
+ set (after := R.requeue_changed_controlled_owner st next (R.frame_owner fr)).
  assert (Hstep : C.next_config tf {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|}=
  Some {|R.cfg_state:=after;R.cfg_control:=R.RunDrain next_fr k|}).
- { cbn -[P.pending_above R.queue_contains R.set_value].
+ { cbn -[P.pending_above R.queue_contains R.set_value R.requeue_changed_controlled_owner].
    now rewrite Hp,Hclean,Hs. }
  assert (Howner : R.frame_owner next_fr=R.frame_owner fr) by (eapply B.set_value_owner;exact Hs).
  destruct (S.mem (R.frame_owner fr) (R.controlled st)) eqn:Hcontrolled.
  - destruct (R.equivalent (R.sigma_value next (R.frame_owner fr)) (R.sigma_value st (R.frame_owner fr))) eqn:Hchanged.
    + eapply below;[exact Hreach |exact Hstep |exact Howner |].
-     unfold after.
+     unfold after. rewrite (@B.requeue_unchanged st next (R.frame_owner fr) Hchanged).
      eapply T.queue_below_extended;[exact (@B.rank_extends_set_value st fr direct next next_fr Hs) | | |].
      * exact (proj1 (proj1 (B.configuration_control_ranked (reachable_ranked Hreach)))).
      * eapply T.set_value_equivalent_queue;[exact Hs |exact Hchanged].
@@ -8737,7 +8750,7 @@ Proof.
      left. split;[exact Hcontrolled |exact Hchanged].
  - destruct (Nat.eq_dec (PendingBudget.credit st (R.frame_owner fr)) 0) as [Hzero|Hpositive].
    + eapply below;[exact Hreach |exact Hstep |exact Howner |].
-     unfold after.
+     unfold after. rewrite (@B.requeue_uncontrolled st next (R.frame_owner fr) Hcontrolled).
      eapply CommitQueues.uncontrolled_set_below;[exact Hreach |exact Hcontrolled | |exact Hs].
      eapply CommitQueues.zero_below;[exact Hreach |exact Hclean |exact Hzero].
    + eapply (@paid_drain support tf roots finite);[exact Hchildren |exact Hreach |exact Hstep |exact Howner |].

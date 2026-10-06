@@ -1,7 +1,6 @@
 -Q rocq TcSolvers
 
 rocq/common/Assumptions.v
-rocq/common/UpdateIdempotency.v
 rocq/common/BoxUpdate.v
 rocq/common/Collections.v
 rocq/common/ConstraintSemantics.v
@@ -35,6 +34,7 @@ rocq/solvers/slr/narrowing_fixed_point/tests/SpawnClosure.v
 rocq/solvers/slr/narrowing_fixed_point/tests/Instances.v
 rocq/solvers/slr/narrowing_fixed_point/tests/LeastInstances.v
 rocq/solvers/slr/restarting/NarrowingStabilityCounterexample.v
+rocq/solvers/slr/restarting/tests/OrdinaryFixedPoint.v
 rocq/solvers/slr/restarting/Restarting.v
 rocq/solvers/slr/restarting/Theorems.v
 rocq/solvers/slr/restarting/proofs/Correctness.v
@@ -44,6 +44,4 @@ rocq/solvers/slr/simple/Simple.v
 rocq/solvers/slr/simple/Theorems.v
 rocq/solvers/slr/simple/proofs/Correctness.v
 rocq/solvers/slr/simple/proofs/LeastSolutionProof.v
-rocq/solvers/slr/narrowing_fixed_point/Idempotency.v
 rocq/solvers/slr/restarting/proofs/FixedPoint.v
-rocq/common/instances/IdempotentChain.v

@@ -701,7 +701,9 @@ let[@inline always] pop_max queue =
               end else if owner_info.queued then
                 evaluate_owner ()
               else begin
-                ignore (set_value state frame direct);
+                let changed = set_value state frame direct in
+                if owner_info.controlled && changed then
+                  enqueue state owner;
                 drain_episode ()
               end)
             (fun _ -> ())

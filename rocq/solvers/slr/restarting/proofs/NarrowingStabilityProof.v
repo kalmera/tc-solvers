@@ -2698,6 +2698,40 @@ Module Make
     all: exact Hrest.
   Qed.
 
+  Lemma guarded_reads_requeue before after inserted owner reads :
+    Inv.guarded_reads after owner reads ->
+    Inv.guarded_reads
+      (R.requeue_changed_controlled_owner before after inserted) owner reads.
+  Proof.
+    intro H. apply (Total.requeue_preserves
+      (fun st => Inv.guarded_reads st owner reads));
+      auto using Inv.guarded_reads_enqueue.
+  Qed.
+
+  Lemma aligned_summary_requeue tf before after inserted control fr :
+    aligned_summary_history tf after control fr ->
+    aligned_summary_history tf
+      (R.requeue_changed_controlled_owner before after inserted) control fr.
+  Proof.
+    intro H. eapply aligned_summary_transport; [| | | |exact H].
+    - intros; exact H0.
+    - intros; now apply guarded_reads_requeue.
+    - intros; exact H1.
+    - intros; exact H0.
+  Qed.
+
+  Lemma aligned_continuation_requeue tf before after inserted control k :
+    aligned_continuation_history tf after control k ->
+    aligned_continuation_history tf
+      (R.requeue_changed_controlled_owner before after inserted) control k.
+  Proof.
+    intro H. eapply aligned_continuation_transport; [| | | |exact H].
+    - intros; exact H0.
+    - intros; now apply guarded_reads_requeue.
+    - intros; exact H1.
+    - intros; exact H0.
+  Qed.
+
   Lemma aligned_run_commit_step :
     forall tf roots st fr direct k after,
       Sem.steps tf (R.initial_config roots)
@@ -2724,11 +2758,14 @@ Module Make
     { intros observed Hspawn. left.
       eapply (@spawn_live_after_step_from_history tf
         {| R.cfg_state := st; R.cfg_control := R.RunCommit fr direct k |}
-        {| R.cfg_state := st1; R.cfg_control := R.RunDrain fr1 k |}
+        {| R.cfg_state := R.requeue_changed_controlled_owner st st1 (R.frame_owner fr);
+           R.cfg_control := R.RunDrain fr1 k |}
         observed); eassumption. }
     split.
-    - eapply aligned_completed_set_value_summary; eassumption.
-    - eapply aligned_continuation_set_value; eassumption.
+    - eapply aligned_summary_requeue.
+      eapply aligned_completed_set_value_summary; eassumption.
+    - eapply aligned_continuation_requeue.
+      eapply aligned_continuation_set_value; eassumption.
   Qed.
 
   Lemma aligned_evaluation_pop_other :
@@ -3283,6 +3320,16 @@ Module Make
     rewrite ML.lookup_empty in Hlookup. discriminate.
   Qed.
 
+  Lemma full_summary_requeue tf before after inserted owner :
+    full_summary_history tf after owner ->
+    full_summary_history tf
+      (R.requeue_changed_controlled_owner before after inserted) owner.
+  Proof.
+    intro H. apply (Total.requeue_preserves
+      (fun st => full_summary_history tf st owner));
+      auto using full_summary_enqueue.
+  Qed.
+
   Lemma full_state_history_run_commit_step :
     forall tf roots st fr direct k after,
       Sem.steps tf (R.initial_config roots)
@@ -3305,20 +3352,25 @@ Module Make
     destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
     inversion Hstep; subst; cbn in Haligned_after |- *.
     destruct Haligned_after as [Hsummary Hk].
-    assert (Hnew : full_summary_history tf st1 (R.frame_owner fr)).
-    { rewrite <- (@Inv.set_value_frame_owner st fr direct st1 fr1 Hset).
+    assert (Hnew : full_summary_history tf
+      (R.requeue_changed_controlled_owner st st1 (R.frame_owner fr))
+      (R.frame_owner fr)).
+    { rewrite <- (@Inv.set_value_frame_owner st fr direct st1 fr1 Hset) at 2.
       eapply aligned_summary_to_full_core.
       - exact Hhistory_after.
       - intros; discriminate.
       - exact Hsummary. }
     eapply (@full_state_history_transport tf st
-      (R.RunCommit fr direct k) st1 (R.RunDrain fr1 k)).
+      (R.RunCommit fr direct k)
+      (R.requeue_changed_controlled_owner st st1 (R.frame_owner fr))
+      (R.RunDrain fr1 k)).
     - intros owner Hsolved.
       destruct (@Inv.set_value_solved_origin
         st fr direct st1 fr1 owner Hset Hsolved) as [Hsolved0 | ->].
       + now left.
       + left. exact (proj1 (proj1 Haligned)).
-    - intros owner Hqueued. left. eapply Inv.queued_set_value; eassumption.
+    - intros owner Hqueued. left. apply Inv.queued_requeue.
+      eapply Inv.queued_set_value; eassumption.
     - intros owner Hactive. cbn in Hactive |- *.
       destruct Hactive as [-> | Hactive].
       + now right; right.
@@ -3326,7 +3378,8 @@ Module Make
     - intros owner Hsummary0.
       destruct (V.eq_dec owner (R.frame_owner fr)) as [-> | Hneq].
       + now right; right.
-      + right; right. eapply full_summary_set_value_other; eassumption.
+      + right; right. apply full_summary_requeue.
+        eapply full_summary_set_value_other; eassumption.
     - exact Hfull.
   Qed.
 
@@ -4477,6 +4530,7 @@ Module Make
       cbn -[R.set_value] in Hstep.
       destruct (R.set_value st f t) as [st1 fr1] eqn:Hset.
       inversion Hstep; subst; cbn.
+      Total.clear_requeue_view.
       eapply readers_solved_set_value; eassumption.
     - unfold Sem.step, R.next_config in Hstep.
       cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
@@ -5279,16 +5333,23 @@ Module Make
     pose proof (@Inv.set_value_frame_owner
       st fr direct st1 fr1 Hset) as Hframe_owner.
     exists base. split; [exact Hbase |].
-    split; [exact Hhigher' |]. split; [exact Hqueue' |].
+    split; [exact Hhigher' |]. split.
+    { apply (Total.requeue_preserves (fun next => higher_queue_solved root next));
+        [exact Hqueue' |].
+      apply higher_queue_solved_enqueue; [|exact Hqueue'].
+      eapply Inv.set_value_solved; [exact Hset |].
+      exact (proj1 (proj1 (reachable_control_history Hreachable))). }
     split.
     - rewrite Hframe_owner.
       destruct Howner as [Hroot | Howner_higher].
       + now left.
-      + right. unfold R.rank_lt, R.ranking_lt in *.
+      + right. change (R.rank_lt st1 root (R.frame_owner fr) = true).
+        unfold R.rank_lt, R.ranking_lt in *.
         now rewrite Hranking.
     - split.
       + exists current. now rewrite Hframe_owner.
-      + exact Hstack'.
+      + eapply wave_stack_sigma_view with (st := st1);
+          [reflexivity |reflexivity |exact Hstack'].
   Qed.
 
   Lemma boxw_set_value_candidate_decreases :
@@ -5459,7 +5520,8 @@ Module Make
       R.frame_phase fr = U.BoxW ->
       R.set_value st fr direct = (st', fr') ->
       R.frame_phase fr' = U.BoxN ->
-      wave_control tf (R.frame_owner fr) st'
+      wave_control tf (R.frame_owner fr)
+        (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
         (R.RunDrain fr' k).
   Proof.
     intros tf roots finite st fr direct st' fr' k
@@ -5500,7 +5562,8 @@ Module Make
         split; [exact Hwave |constructor]. }
     eapply (@ordinary_wave_run_commit_step
       tf roots finite (R.frame_owner fr) st fr direct k
-      {| R.cfg_state := st'; R.cfg_control := R.RunDrain fr' k |}).
+      {| R.cfg_state := R.requeue_changed_controlled_owner st st' (R.frame_owner fr);
+         R.cfg_control := R.RunDrain fr' k |}).
     - exact Hordinary.
     - exact Hreachable.
     - unfold U.avoids_fallback. rewrite Hphase. discriminate.
@@ -5945,6 +6008,7 @@ Module Make
     - cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
       inversion Hstep; subst.
+      cbn [R.cfg_state]. Total.clear_requeue_view.
       eapply unmaterialized_readers_empty_set_value; eassumption.
     - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
       destruct (R.queue_peek (R.queue st)) as [next |].
@@ -6098,6 +6162,8 @@ Module Make
     - cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
       inversion Hstep; subst.
+      cbn [R.cfg_state]. unfold Sem.R.requeue_changed_controlled_owner.
+      rewrite Total.Termination.source_credit_with_queue.
       apply Total.Termination.source_credit_set_value with
         (fr := fr) (direct := direct) (next_fr := fr1).
       exact Hset.
@@ -6987,7 +7053,9 @@ Module FirstDiscovery
       inversion Hstep; subst. cbn.
       intros variable [rank Hrank].
       assert (Hold : Total.ranked st variable).
-      { exists rank. rewrite (@set_value_same_ranking
+      { exists rank.
+        change (R.Ranking.lookup (R.ranking st1) variable = Some rank) in Hrank.
+        rewrite (@set_value_same_ranking
           st fr direct st1 fr1 Hset) in Hrank.
         exact Hrank. }
       exact (Total.Termination.step_materialized_mono
@@ -7517,6 +7585,7 @@ Module FirstDiscovery
     - cbn -[R.set_value] in Hstep.
       destruct (R.set_value st fr direct) as [st1 fr1] eqn:Hset.
       inversion Hstep; subst.
+      cbn [R.cfg_state]. Total.clear_requeue_view.
       eapply fresh_readers_from_set_value; eassumption.
     - cbn -[R.reset_registered_cells R.fresh_frame] in Hstep.
       destruct (R.queue_peek (R.queue st)) as [queued |].
@@ -7821,6 +7890,10 @@ Module FirstDiscovery
           tf roots before owner base st fr direct k);
           try eassumption. now exists rank. }
       intros queued Hranked Hin.
+      apply Total.requeue_members in Hin.
+      destruct Hin as [-> |Hin].
+      { destruct Hranked as [rank Hlookup].
+        rewrite Hframe_fresh in Hlookup. discriminate. }
       apply Hold; [exact Hranked |].
       eapply fresh_set_value_preserves_old_queue_membership;
         eassumption.

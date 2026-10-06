@@ -1,6 +1,6 @@
 From Stdlib Require Import Bool List Lia Arith.PeanoNat.
 From TcSolvers Require Import common.Assumptions common.BoxUpdate
-  common.UpdateIdempotency common.SolverSpecifications
+  common.SolverSpecifications
   solvers.slr.narrowing_fixed_point.proofs.Replay.
 Import ListNotations.
 Set Implicit Arguments.
@@ -46,8 +46,7 @@ Module Descent.
 End Descent.
 Module U := Descent.U.
 Module WithLaws (DL : DOMAIN_LAWS D) (WNL : WIDEN_NARROW_LAWS D WN)
- (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U)
- (IL : VALUE_IDEMPOTENT V D U).
+ (WS : WIDEN_STABILITY D WN) (UL : UPDATE_LAWS V D U).
 Module A := Descent.WithLaws DL WNL WS.
 Definition settled is_side variable phase value :=
  phase = U.Widen ->
@@ -589,12 +588,12 @@ Proof.
  cbn -[C.P.next_batched C.P.pending_above C.P.suspend_commit C.P.retry_current] in Hstep.
  destruct (C.P.pending_above st (R.frame_owner fr));[destruct p;discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hs.
  destruct (C.P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
  inversion Hstep;subst.
- change (live_settled after (R.frame_owner fr)).
- destruct (@set_value_side_view st fr direct after next_fr Hs) as [Ht [Hc Hv]].
+ change (live_settled next (R.frame_owner fr)).
+ destruct (@set_value_side_view st fr direct next next_fr Hs) as [Ht [Hc Hv]].
  eapply live_settled_view;eassumption.
 Qed.
 Lemma reset_live_settled st source scope :
@@ -722,9 +721,9 @@ Proof.
    + contradiction.
    + eapply live_spawn_step;eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
-   inversion Hstep;subst.
+   inversion Hstep;subst. apply live_queue.
    eapply live_set_value;eassumption.
  - eapply live_drain_step;eassumption.
  - eapply live_return_step;eassumption.
@@ -2005,6 +2004,14 @@ Proof.
    apply Hreaders with (R.frame_owner fr). apply SL.mem_spec,Hinvalidated.
  - eapply B.set_value_solved;[exact Hset |]. apply Hqueue;assumption.
 Qed.
+Lemma ordinary_requeue_higher_queue root before after owner :
+ Sem.solved after owner -> higher_queue_solved root after ->
+ higher_queue_solved root (R.requeue_changed_controlled_owner before after owner).
+Proof.
+ intros Hsolved Hqueue. unfold R.requeue_changed_controlled_owner.
+ destruct (_ && _)%bool;[|exact Hqueue].
+ apply higher_queue_enqueue;[intros _;exact Hsolved |exact Hqueue].
+Qed.
 Theorem actual_commit_higher_queue tf roots root st fr direct k after next_fr next_k :
  N.steps tf (R.initial_config roots)
  {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} ->
@@ -2018,10 +2025,12 @@ Proof.
  cbn -[C.P.next_batched C.P.pending_above C.P.suspend_commit C.P.retry_current] in Hstep.
  destruct (C.P.pending_above st (R.frame_owner fr));[destruct p;discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hset.
  destruct (C.P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
- inversion Hstep;subst. eapply set_higher_queue;eassumption.
+ inversion Hstep;subst. apply ordinary_requeue_higher_queue.
+ - eapply B.set_value_solved;[exact Hset |exact Hsource].
+ - eapply set_higher_queue;eassumption.
 Qed.
 Lemma snapshot_finish tf before after fr target changed owner result :
  snapshot tf after owner result ->
@@ -2157,22 +2166,26 @@ Lemma commit_step_shape tf st fr direct k after next_fr next_k :
  N.next_config tf {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} =
  Some {|R.cfg_state:=after;R.cfg_control:=R.RunDrain next_fr next_k|} ->
  exists next,R.set_value st fr direct = (next,next_fr) /\
- after = next /\ next_k = k.
+ after = R.requeue_changed_controlled_owner st next (R.frame_owner fr) /\ next_k = k.
 Proof.
  intro Hstep.
  cbn -[C.P.next_batched C.P.pending_above C.P.suspend_commit C.P.retry_current] in Hstep.
  destruct (C.P.pending_above st (R.frame_owner fr));[destruct p;discriminate |].
  destruct (R.queue_contains (R.frame_owner fr) (R.queue st));[discriminate |].
- cbn -[R.set_value] in Hstep.
+ cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
  destruct (R.set_value st fr direct) as [next next_frame] eqn:Hset.
  destruct (C.P.pending_above st (R.frame_owner fr)) as [[target rest]|];[discriminate |].
- inversion Hstep;subst. exists after. now repeat split.
+ inversion Hstep;subst. exists next. now repeat split.
 Qed.
 Lemma set_ranking st fr direct next next_fr :
  R.set_value st fr direct = (next,next_fr) -> R.ranking next = R.ranking st.
 Proof.
  intro Hset. destruct (@Replay.Readers.set_cases st fr direct next next_fr Hset) as [->|[value ->]];reflexivity.
 Qed.
+Lemma ordinary_requeue_snapshot tf before after source owner result :
+ snapshot tf after owner result ->
+ snapshot tf (R.requeue_changed_controlled_owner before after source) owner result.
+Proof. eapply snapshot_view;reflexivity. Qed.
 Definition higher_snapshots tf root st :=
  forall owner,R.rank_lt st root owner = true -> Sem.solved st owner ->
  exists result,snapshot tf st owner result.
@@ -2207,6 +2220,14 @@ Proof.
    [exact Hsolved' |contradiction]. }
  destruct (Hhistory owner Hhigher' Hbefore) as [result Hsnapshot].
  exists result. eapply other_commit_snapshot;eassumption.
+Qed.
+Lemma higher_snapshots_requeue tf root before after source :
+ higher_snapshots tf root after ->
+ higher_snapshots tf root (R.requeue_changed_controlled_owner before after source).
+Proof.
+ intros Hhistory owner Hhigher Hsolved.
+ destruct (Hhistory owner Hhigher Hsolved) as [result Hsnapshot].
+ exists result. apply ordinary_requeue_snapshot,Hsnapshot.
 Qed.
 Lemma controlled_commit_higher_queue tf roots st fr direct k after next_fr next_k :
  N.steps tf (R.initial_config roots)
@@ -2247,9 +2268,9 @@ Proof.
    eapply B.set_value_solved;[exact Hset |].
    eapply Replay.reachable_commit_owner_solved;exact Hreach.
  - split.
-   + exists result. rewrite Hafter. exact Hsnapshot'.
+   + exists result. rewrite Hafter. apply ordinary_requeue_snapshot,Hsnapshot'.
    + split.
-     * rewrite Hafter.
+     * rewrite Hafter. apply higher_snapshots_requeue.
        eapply higher_snapshots_set;[exact Hset |reflexivity |exact Hdown |exact Hhigher].
      * eapply actual_commit_higher_queue;[exact Hreach |exact Hstep |exact Hqueue].
 Qed.
@@ -2840,6 +2861,9 @@ Proof.
  [exact Heligible' | |exact Hstack'].
  split;[apply Replay.accumulation_fresh |intros owner Hin;exact Hin].
 Qed.
+Lemma ordinary_requeue_ranking before after source :
+ R.ranking (R.requeue_changed_controlled_owner before after source) = R.ranking after.
+Proof. unfold R.requeue_changed_controlled_owner. destruct (_ && _)%bool;reflexivity. Qed.
 Theorem wave_commit_value tf roots root base st fr direct k after next_fr next_k :
  N.steps tf (R.initial_config roots) {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} ->
  wave tf root base st (R.RunCommit fr direct k) ->
@@ -2853,16 +2877,16 @@ Proof.
  assert (Hset' : R.set_value st fr (O.observed_direct result) = (next,next_fr)) by now rewrite Hd.
  destruct (@commit_snapshot tf st fr result next next_fr Hset' Hphase Hsnapshot) as [Hdown [Hphase' Hsnapshot']].
  assert (Hr : R.ranking after = R.ranking st)
- by (rewrite Hafter;exact (@set_ranking st fr direct next next_fr Hset)).
+ by (rewrite Hafter,ordinary_requeue_ranking;exact (@set_ranking st fr direct next next_fr Hset)).
  split;[rewrite Hafter;exact Hdown |]. split;[exact Hr |].
  split.
  - eapply histories_replace with (source:=R.frame_owner fr);[exact Hr | | | |exact Hhistory].
    + intros owner Hneq Hsolved. rewrite Hafter in Hsolved.
      change (Sem.solved next owner) in Hsolved.
      destruct (@B.set_value_solved_origin st fr direct next next_fr owner Hset Hsolved) as [Hs|Heq];[exact Hs |contradiction].
-   + intros owner current Hneq Hs. rewrite Hafter.
+   + intros owner current Hneq Hs. rewrite Hafter. apply ordinary_requeue_snapshot.
      eapply other_commit_snapshot;eassumption.
-   + exists result. rewrite Hafter. exact Hsnapshot'.
+   + exists result. rewrite Hafter. apply ordinary_requeue_snapshot,Hsnapshot'.
  - split;[eapply actual_commit_higher_queue;eassumption |]. split.
    + split;[rewrite (@B.set_value_frame_owner st fr direct next next_fr Hset);eapply region_view;eassumption |exact Hphase'].
    + eapply stack_view;[exact Hr | |exact Hstack].
@@ -2885,7 +2909,7 @@ Proof.
  - destruct (R.queue_contains (R.frame_owner fr) (R.queue st)).
    + inversion Hstep;subst. split;[intros owner;apply DL.leq_refl |].
      split;[reflexivity |]. eapply wave_retry;[eapply Replay.reachable_commit_owner_solved;exact Hreach |exact Hwave].
-   + cbn -[C.P.pending_above R.set_value] in Hstep.
+   + cbn -[C.P.pending_above R.set_value R.requeue_changed_controlled_owner] in Hstep.
      rewrite Hp in Hstep.
      destruct (R.set_value st fr direct) as [next next_fr] eqn:Hset.
      inversion Hstep;subst. eapply wave_commit_value;eassumption.
@@ -3144,7 +3168,7 @@ Proof.
  - cbn in Hstep. inversion Hstep;subst. now split.
  - eapply base_rhs_phases;eassumption.
  - eapply base_dead_phases;eassumption.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr]. inversion Hstep;subst.
    split;[exact Hcommit |exact (proj2 Hp)].
  - eapply base_drain_phases;eassumption.
@@ -3574,32 +3598,13 @@ Definition narrowing_input
   Qed.
 
 
-  Lemma boxw_updated_value_fixed owner old input :
-    UL.equivalent
-      (WN.narrow (snd (U.update false owner U.BoxW old input)) input)
-      (snd (U.update false owner U.BoxW old input)).
-  Proof.
-    pose proof (IL.ordinary_value_idempotent owner U.BoxW old input) as Hid.
-    pose proof (UL.update_sound false owner U.BoxW old input) as Hsound.
-    unfold U.update in *. destruct (D.leq input old); cbn in *;
-      rewrite Hsound in Hid; exact Hid.
-  Qed.
-
-  Lemma safe_updated_value_fixed owner phase old input :
-    U.avoids_fallback phase ->
-    UL.equivalent
-      (WN.narrow (snd (U.update false owner phase old input)) input)
-      (snd (U.update false owner phase old input)).
-  Proof.
-    intro Hsafe. pose proof (boxw_updated_value_fixed owner old input) as Hfixed.
-    destruct phase; [exact Hfixed | |contradiction].
-    unfold U.update in *. destruct (D.leq input old); exact Hfixed.
-  Qed.
-
-  Lemma set_value_narrow_fixed :
+  Lemma set_value_narrow_fixed_or_queued :
     forall st fr direct st' fr',
       U.avoids_fallback (R.frame_phase fr) ->
       R.set_value st fr direct = (st', fr') ->
+      Total.queued
+        (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
+        (R.frame_owner fr) \/
       narrowing_fixed_at st' (R.frame_owner fr) direct.
   Proof.
     intros st fr direct st' fr' Hsafe Hset.
@@ -3608,44 +3613,45 @@ Definition narrowing_input
     set (candidate := D.join direct (R.aggregate st owner)) in *.
     set (old := R.sigma_value st owner) in *.
     destruct (R.equivalent candidate old) eqn:Hcandidate.
-    - inversion Hset; subst.
+    - inversion Hset; subst. right.
       unfold narrowing_fixed_at, narrowing_input. fold owner candidate old.
       now apply narrow_equivalent_input, equivalent_bool_true.
     - destruct (S.mem owner (R.controlled st)) eqn:Hcontrolled.
       + destruct (U.update false owner (R.frame_phase fr) old candidate)
           as [next_phase value] eqn:Hupdate.
         cbn in Hset. destruct (R.equivalent value old) eqn:Hvalue.
-        * inversion Hset; subst.
+        * inversion Hset; subst. right.
           unfold narrowing_fixed_at, narrowing_input. fold owner candidate old.
           eapply safe_update_stutter_is_narrow_stutter; [exact Hsafe |].
           rewrite Hupdate. cbn. now apply equivalent_bool_true.
-        * inversion Hset; subst.
-          unfold narrowing_fixed_at, narrowing_input, R.aggregate; cbn.
-          fold candidate. unfold R.sigma_value. cbn.
-          rewrite ML.lookup_update_same.
-          pose proof (@safe_updated_value_fixed owner (R.frame_phase fr)
-            old candidate Hsafe) as Hfixed.
-          rewrite Hupdate in Hfixed. exact Hfixed.
+        * inversion Hset; subst. left. apply Total.requeue_enabled.
+          -- exact Hcontrolled.
+          -- unfold R.sigma_value. cbn. rewrite ML.lookup_update_same.
+             exact Hvalue.
       + cbn in Hset. rewrite Hcandidate in Hset.
-        inversion Hset; subst.
+        inversion Hset; subst. right.
         unfold narrowing_fixed_at, narrowing_input, R.aggregate; cbn.
         fold candidate. unfold R.sigma_value. cbn.
         rewrite ML.lookup_update_same.
         apply narrow_equivalent_input. split; apply DL.leq_refl.
   Qed.
 
-  Lemma completed_witness_set_value_fixed :
+  Lemma completed_witness_set_value_fixed_or_queued :
     forall tf st fr direct st' fr',
       U.avoids_fallback (R.frame_phase fr) ->
       Total.completed_witness tf st fr direct ->
       R.set_value st fr direct = (st', fr') ->
+      Total.queued
+        (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
+        (R.frame_owner fr) \/
       fixed_summary tf st' (R.frame_owner fr).
   Proof.
     intros tf st fr direct st' fr' Hsafe
       [Hsolved [reads [effects
         [Htrace [Hreads [Heffects Hframe]]]]]] Hset.
-    pose proof (@set_value_narrow_fixed
-      st fr direct st' fr' Hsafe Hset) as Hfixed.
+    destruct (@set_value_narrow_fixed_or_queued
+      st fr direct st' fr' Hsafe Hset)
+      as [Hqueued | Hfixed]; [now left |right].
     split.
     - eapply Total.set_value_solved; eauto.
     - exists direct, reads, effects.
@@ -3813,7 +3819,30 @@ Definition narrowing_input
         [apply Total.promote_controlled_same_solver_view |exact Hsummary].
   Qed.
 
+  Lemma fixed_summary_requeue tf before st inserted owner :
+    fixed_summary tf st owner ->
+    fixed_summary tf
+      (R.requeue_changed_controlled_owner before st inserted) owner.
+  Proof.
+    intro H. apply (Total.requeue_preserves (fun st => fixed_summary tf st owner));
+      auto using fixed_summary_enqueue.
+  Qed.
 
+  Lemma committed_fixed_or_queued tf st fr direct st' fr' :
+    U.avoids_fallback (R.frame_phase fr) ->
+    Total.completed_witness tf st fr direct ->
+    R.set_value st fr direct = (st', fr') ->
+    Total.queued (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
+      (R.frame_owner fr) \/
+    fixed_summary tf (R.requeue_changed_controlled_owner st st' (R.frame_owner fr))
+      (R.frame_owner fr).
+  Proof.
+    intros Hsafe Hhistory Hset.
+    destruct (@completed_witness_set_value_fixed_or_queued
+      tf st fr direct st' fr' Hsafe Hhistory Hset) as [Hqueued |Hfixed].
+    - now left.
+    - right. now apply fixed_summary_requeue.
+  Qed.
 End F.
 Definition summary := F.fixed_summary.
 Definition guarded tf st ctrl owner :=
@@ -3911,6 +3940,19 @@ Proof.
  split;[exact Hsolved |]. exists direct,reads,effects.
  split;[exact Htrace |]. split;[eapply P.clear_other_guarded_reads;eassumption |].
  split;[exact Heffects |exact Hrest].
+Qed.
+Lemma actual_commit_fixed_or_queued tf roots st fr direct k after next_fr next_k :
+ N.steps tf (R.initial_config roots) {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} ->
+ E.monotone tf ->
+ N.next_config tf {|R.cfg_state:=st;R.cfg_control:=R.RunCommit fr direct k|} =
+ Some {|R.cfg_state:=after;R.cfg_control:=R.RunDrain next_fr next_k|} ->
+ B.queued after (R.frame_owner fr) \/ summary tf after (R.frame_owner fr).
+Proof.
+ intros Hreach Hmono Hstep.
+ destruct (@E.commit_step_shape tf st fr direct k after next_fr next_k Hstep) as [next [Hset [-> Hk]]].
+ eapply F.committed_fixed_or_queued;[ | |exact Hset].
+ - exact (proj1 (E.reachable_no_fallback Hreach Hmono)).
+ - eapply Replay.reachable_commit_witness;exact Hreach.
 Qed.
 Lemma summary_pop tf st popped rest next owner :
  R.queue_pop (R.queue st) = Some (popped,rest) ->
@@ -4022,13 +4064,13 @@ Proof.
    + contradiction.
    + eapply summary_spawn; eassumption.
  - contradiction.
- - cbn -[R.set_value] in Hstep.
+ - cbn -[R.set_value R.requeue_changed_controlled_owner] in Hstep.
    destruct (R.set_value st f t) as [next next_fr] eqn:Hs.
    inversion Hstep;subst.
    destruct (V.eq_dec owner (R.frame_owner f)) as [->|Hneq].
-   + right;right. exact (@F.completed_witness_set_value_fixed
-       tf st f t next next_fr Hsafe Hcompleted Hs).
-   + right;right. eapply F.fixed_summary_set_value_other;eassumption.
+   + destruct (@F.committed_fixed_or_queued tf st f t next next_fr Hsafe Hcompleted Hs) as [Hq|Hfixed];
+     [now left |now right;right].
+   + right;right. apply F.fixed_summary_requeue. eapply F.fixed_summary_set_value_other;eassumption.
  - eapply summary_drain; eassumption.
  - eapply summary_return; eassumption.
 Qed.
@@ -4149,7 +4191,7 @@ Lemma discharge_fixed tf roots before after owner :
  B.queued (R.cfg_state after) owner \/ summary tf (R.cfg_state after) owner.
 Proof.
  intros Hreach Hmono [st [fr [direct [k [next [next_fr [-> [Hset [-> ->]]]]]]]]].
- right. eapply F.completed_witness_set_value_fixed;[ | |exact Hset].
+ eapply F.committed_fixed_or_queued;[ | |exact Hset].
  - exact (proj1 (E.reachable_no_fallback Hreach Hmono)).
  - eapply Replay.reachable_commit_witness;exact Hreach.
 Qed.
