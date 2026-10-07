@@ -1,6 +1,6 @@
 From Stdlib Require Import List Bool Lia.
 From TcSolvers Require Import common.Assumptions common.BoxUpdate
-  solvers.slr.narrowing_fixed_point_compact.Proofs.
+  solvers.slr.narrowing_fixed_point.Proofs.
 Import ListNotations.
 Set Implicit Arguments.
 
@@ -1571,7 +1571,7 @@ Definition sufficient_fuel := P.sufficient_fuel.
 Definition successful_run_correct := P.successful_run_correct.
 Definition total_correct := P.total_correct.
 
-(** Reference public concrete-instance aliases. *)
+(** Concrete-instance precision aliases. *)
 Theorem successful_run_fixedpoint : Features.recompute_controlled = true ->
   forall fuel tf roots final, N.solve_fuel fuel tf roots = Some final ->
   monotonic_system tf -> narrowing_fixed tf final.

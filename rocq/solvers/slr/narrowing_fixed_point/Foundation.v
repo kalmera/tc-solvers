@@ -2,14 +2,13 @@ From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sort
 From TcSolvers Require Import common.Assumptions common.ConstraintSemantics
   common.SolverSpecifications common.SourceStrictness
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.narrowing_fixed_point_compact.Base.
+  solvers.slr.narrowing_fixed_point.Base.
 
 Import ListNotations.
 Set Implicit Arguments.
 
-(** Local copy of the regenerated core foundation, trimmed to the
-    certificates used by this solver. It reasons about this solver's copied Base machine. The
-    narrowing-specific execution and public results are proved in Proofs.v. *)
+(** Core state, rank, credit, and semantic certificates for Base.
+    The batched machine and its public results are proved in Proofs.v. *)
 Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Ranks : DISCOVERY_ORDER V)
   (Features : Base.FEATURES)

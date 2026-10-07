@@ -20,7 +20,7 @@ module Monadic :
     ('a1 -> 'a3) -> ('a1 -> 'a2 -> 'a3) -> ('a1 -> 'a3) -> ('a1, 'a2, 'a3)
     transfer -> 'a3
 
-  type ('v, 'd, 'monad) owner_operations = ('v, 'd, 'monad) Monadic.owner_operations = { 
+  type ('v, 'd, 'monad) owner_operations = ('v, 'd, 'monad) Monadic.owner_operations = {
   begin_evaluation : ('v -> 'monad); read_value : ('v -> 'v -> 'monad);
   emit_side_effect : ('v -> 'v -> 'd -> 'monad);
   spawn_variable : ('v -> 'v -> 'monad); commit_value : ('v -> 'd -> 'monad);

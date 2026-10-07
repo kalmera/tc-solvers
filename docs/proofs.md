@@ -88,13 +88,21 @@ termination, and join leastness hold with either setting. Recorded reader
 wakeups and side-source repairs remain active.
 
 `make proofs` checks the generic proof units and all three public theorem files.
-Each facade retains concrete `Instances` and labelled `Print Assumptions`
-output (`Closed under the global context`). The fixedness audits use the shared
-chain instance with slow narrowing, which needs several updates to stabilize.
+Each facade retains concrete `Instances` using the shared finite chain, whose
+slow narrowing needs several updates to stabilize.
 `make proof-tests` checks executable regression systems, reader wakeups,
 effectful fanout, and recursive spawn closure. A missing-spawn regression shows
 that numerical satisfaction alone does not form a post-solution.
 The examples do not re-instantiate the full fixedness proof for each system.
+The regression files report assumptions for public correctness, leastness,
+fallback avoidance, and total fixedness. These reports include dependencies on
+intermediate lemmas. `Print Assumptions` is informational; it does not fail the
+build if an assumption appears. Simple's two public assumption reports remain
+in its theorem file.
+
+Independent validation with `rocq check` is useful after substantial proof or
+module changes and before merging. It checks compiled libraries separately
+from ordinary compilation and can be run manually when needed.
 
 Restarting's internal narrowing-stability proof supports the public no-fallback
 theorem. The fixed-rank counterexample explains why the public theorem uses

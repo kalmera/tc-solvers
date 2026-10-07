@@ -1,13 +1,13 @@
 From Stdlib Require Import List Bool Lia Arith.PeanoNat Arith.Wf_nat Sorting.Sorted.
 From TcSolvers Require Import common.Assumptions common.SolverSpecifications
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.narrowing_fixed_point_compact.Foundation
-  solvers.slr.narrowing_fixed_point_compact.NarrowingFixedPoint.
+  solvers.slr.narrowing_fixed_point.Foundation
+  solvers.slr.narrowing_fixed_point.NarrowingFixedPoint.
 Import ListNotations.
 Set Implicit Arguments.
 
-(** New narrowing-fixedpoint reasoning. The local core foundation is
-    instantiated once; no other solver proof stack is imported. *)
+(** Termination, correctness, and leastness of the narrowing-fixpoint
+    machine, using one instance of the core foundation. *)
 Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Features : Base.FEATURES)
   (DL : DOMAIN_LAWS D) (UL : UPDATE_LAWS V D U)

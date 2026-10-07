@@ -1,27 +1,18 @@
 From Stdlib Require Import List.
-From TcSolvers Require Import common.instances.Chain common.FiniteHeight common.Assumptions
-  solvers.slr.common.DiscoveryOrder
-  solvers.slr.narrowing_fixed_point_compact.NarrowingFixedPoint
-  solvers.slr.narrowing_fixed_point_compact.Proofs
-  solvers.slr.narrowing_fixed_point_compact.Theorems.
+From TcSolvers Require Import common.instances.Chain
+  solvers.slr.narrowing_fixed_point.Theorems.
 Import ListNotations.
 
 Module E := Chain.
-Module Precision := Theorems.Instances.Fixed.
-Module PrecisionUL := Theorems.Instances.FixedUL.
-Module PrecisionLaws := Theorems.Instances.FixedLaws.
 Module Q := Theorems.Instances.FixedCells.
 Module P := Q.P.
-Print Assumptions P.reachable_rank_configuration.
-Print Assumptions P.successful_run_correct.
-Print Assumptions P.successful_run_least.
-Print Assumptions P.changed_cell_consumes_credit.
-Print Assumptions P.next_owner_budget.
-Print Assumptions P.next_quiet_round.
-Print Assumptions P.semantic_termination.
-Print Assumptions P.sufficient_fuel.
-Print Assumptions P.total_correct.
-Print Assumptions P.total_least_solution.
+
+(** Assumption reports for the main public results cover their dependencies. *)
+Print Assumptions Q.total_correct.
+Print Assumptions Theorems.Instances.Least.total_least_solution.
+Print Assumptions Q.monotonic_avoids_fallback.
+Print Assumptions Q.total_correct_and_fixed.
+
 Module N := P.N.
 Module R := P.R.
 Definition tf (owner : E.V.t) : R.ConstraintSystem.rhs :=
@@ -58,15 +49,3 @@ Proof. vm_compute; split; reflexivity. Qed.
 Example controlled_owner_is_narrowing_fixed :
   E.WN.narrow (R.sigma_value final 0) (E.D.join E.D.One (R.aggregate final 0)) = R.sigma_value final 0.
 Proof. vm_compute; reflexivity. Qed.
-Print Assumptions Q.reachable_precision_invariant.
-Print Assumptions Q.monotonic_avoids_fallback.
-Print Assumptions Q.reachable_fixed_invariant.
-Print Assumptions Q.successful_run_fixed.
-Print Assumptions Q.total_correct_and_fixed.
-
-(** Audit the same concrete leastness update used by the reference public stack. *)
-Module JoinU := JoinUpdate E.V E.D.
-Module JoinUL := JoinUpdateLaws E.V E.D E.DL E.Height.
-Module JoinUBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
-Module Least := Theorems.Instances.Least.
-Print Assumptions Least.total_least_solution.

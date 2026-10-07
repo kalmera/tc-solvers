@@ -512,8 +512,8 @@ module Make =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -1498,8 +1498,8 @@ module FirstDiscoveryAlgorithm =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -2503,8 +2503,8 @@ module FirstDiscovery =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -3511,8 +3511,8 @@ module FixedRank =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)

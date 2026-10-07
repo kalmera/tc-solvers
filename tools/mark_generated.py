@@ -6,5 +6,7 @@ for directory in ('ocaml/extracted', 'ocaml/adapters/goblint/generated', 'ocaml/
     for path in sorted((root / directory).iterdir()):
         if path.suffix in ('.ml', '.mli'):
             content = path.read_text()
-            if not content.startswith(header):
-                path.write_text(header + content)
+            marked = content if content.startswith(header) else header + content
+            marked = '\n'.join(line.rstrip(' \t') for line in marked.split('\n'))
+            if marked != content:
+                path.write_text(marked)

@@ -48,7 +48,7 @@ module Monadic :
     ('a1 -> 'a3) -> ('a1 -> 'a2 -> 'a3) -> ('a1 -> 'a3) -> ('a1, 'a2, 'a3)
     transfer -> 'a3
 
-  type ('v, 'd, 'monad) owner_operations = ('v, 'd, 'monad) Monadic.owner_operations = { 
+  type ('v, 'd, 'monad) owner_operations = ('v, 'd, 'monad) Monadic.owner_operations = {
   begin_evaluation : ('v -> 'monad); read_value : ('v -> 'v -> 'monad);
   emit_side_effect : ('v -> 'v -> 'd -> 'monad);
   spawn_variable : ('v -> 'v -> 'monad); commit_value : ('v -> 'd -> 'monad);
@@ -315,8 +315,8 @@ module Make :
   val reset_registered_cells : state -> V.t -> state
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   val frame_owner : frame -> V.t
@@ -651,8 +651,8 @@ module FirstDiscoveryAlgorithm :
   val reset_registered_cells : state -> V.t -> state
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   val frame_owner : frame -> V.t
@@ -984,8 +984,8 @@ module FirstDiscovery :
   val reset_registered_cells : state -> V.t -> state
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   val frame_owner : frame -> V.t
@@ -1320,8 +1320,8 @@ module FixedRank :
   val reset_registered_cells : state -> V.t -> state
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   val frame_owner : frame -> V.t

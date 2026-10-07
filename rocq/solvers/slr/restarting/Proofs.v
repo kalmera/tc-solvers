@@ -2,14 +2,13 @@ From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sort
 From TcSolvers Require Import common.Assumptions common.ConstraintSemantics
   common.SolverSpecifications common.SourceStrictness
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.restarting_compact.Restarting.
+  solvers.slr.restarting.Restarting.
 
 Import ListNotations.
 Set Implicit Arguments.
 
-(** Independent proofs for the unchanged copy of Restarting.  This unit does
-    not import any of the reference solver's proofs.  State facts, execution
-    reasoning, and the public results share a single machine instance. *)
+(** State invariants, execution, termination, correctness, and precision
+    proofs share a single restarting machine instance. *)
 Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Ranks : DISCOVERY_ORDER V)
   (Features : Restarting.FEATURES)

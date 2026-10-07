@@ -1,17 +1,16 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import common.FiniteHeight common.instances.Chain
-  solvers.slr.narrowing_fixed_point.proofs.LeastSolution.
+  solvers.slr.narrowing_fixed_point.Theorems.
 Import ListNotations.
 
-(** Use the proof module directly to avoid rebuilding the facade audit instances.
-    Concrete finite-height client; the three queued side targets exercise the
+(** Concrete finite-height client; the three queued side targets exercise the
     batched drain while all unrequested owners remain source-strict. *)
 Module BatchedJoinLeast.
  Module E := Chain.
  Module U := JoinUpdate E.V E.D.
  Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
  Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
- Module Solver := LeastSolution.Make E.V E.D U E.S E.M
+ Module Solver := Theorems.LeastSolutionMake E.V E.D U E.S E.M
   Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
  Import Solver.
  Definition tf owner := if E.V.eq_dec owner 0 then
@@ -59,5 +58,3 @@ Module BatchedJoinLeast.
  Definition total_least_solution := @Solver.total_least_solution.
  Definition least_result := @Solver.total_least_solution tf [0] finite strict monotone.
 End BatchedJoinLeast.
-
-(* Print Assumptions BatchedJoinLeast.least_result. *)

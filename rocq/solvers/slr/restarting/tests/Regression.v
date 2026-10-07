@@ -1,29 +1,18 @@
 From Stdlib Require Import List.
-From TcSolvers Require Import common.instances.Chain common.FiniteHeight
-  solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.restarting_compact.Theorems.
+From TcSolvers Require Import common.instances.Chain
+  solvers.slr.restarting.Theorems.
 
-(** Reuse the public concrete instances, including both recomputation
-    policies. The audits do not instantiate another copy of the proof graph. *)
+(** Regression systems reuse the public concrete instances, including both
+    recomputation policies. *)
 Import ListNotations.
 Module E := Chain.
-Module Ranks := ListDiscoveryOrder E.V.
-Module RL := ListDiscoveryOrderLaws E.V.
-Module RF := ListFiniteDiscoveryOrderLaws E.V.
-Module U := Theorems.Instances.U.
-Module UL := Theorems.Instances.UL.
-Module UBL := Theorems.Instances.UBL.
 Module P := Theorems.Instances.Least.Internal.
 
-(** Auditing total correctness and total leastness covers their intermediate
-    invariants too, without repeatedly traversing the same proof terms. *)
-Print Assumptions P.ordinary_aggregate.
-Print Assumptions P.quiet_commit_narrowing_fixed.
-
-Print Assumptions P.total_correct.
-Definition total_least_solution tf roots (finite : P.Sem.finite_system tf roots) :=
-  @P.total_least_solution tf roots finite UBL.update_preserves_upper_bound.
-Print Assumptions total_least_solution.
+(** Assumption reports for the main public results cover their dependencies. *)
+Print Assumptions Theorems.Instances.Correct.total_correct.
+Print Assumptions Theorems.Instances.Least.total_least_solution.
+Print Assumptions Theorems.Instances.Ordinary.ordinary_avoids_fallback.
+Print Assumptions Theorems.Instances.Ordinary.total_fixed.
 
 (** A back read controls owner 0. Its two effects on owner 2 accumulate,
     and the spawned owner 3 must be included in the final post-solution. *)
@@ -77,13 +66,10 @@ Example discovering_owner_consumes_round_budget :
     (P.round_budget [0;1] P.R.empty_state 0 tt).
 Proof. apply P.budget_materialize_new; [cbn; auto |reflexivity]. Qed.
 
-(** Audit the public OneBox instances for both owner-recomputation settings. *)
+(** Compare both owner-recomputation settings with slow OneBox narrowing. *)
 Module Ordinary.
   Module Q := Theorems.Instances.Ordinary.
   Module P := Q.Internal.
-  Definition ordinary_avoids_fallback := Q.ordinary_avoids_fallback_unbounded.
-  Definition successful_run_fixed := Q.successful_run_fixed_unbounded.
-  Definition total_fixed := Q.total_fixed.
   Definition controlled_constant owner : P.Syntax.rhs :=
     match owner with
     | 0 => P.Syntax.Get 1 (fun _ => P.Syntax.Ret E.D.One)
@@ -117,9 +103,6 @@ End Ordinary.
 Module ReaderWakeups.
   Module Q := Theorems.Instances.OrdinaryReaderWakeups.
   Module P := Q.Internal.
-  Definition ordinary_avoids_fallback := Q.ordinary_avoids_fallback_unbounded.
-  Definition successful_run_fixed := Q.successful_run_fixed_unbounded.
-  Definition total_fixed := Q.total_fixed.
   Definition controlled_constant owner : P.Syntax.rhs :=
     match owner with
     | 0 => P.Syntax.Get 1 (fun _ => P.Syntax.Ret E.D.One)
@@ -127,34 +110,8 @@ Module ReaderWakeups.
     | _ => P.Syntax.Ret E.D.Bot
     end.
 
-  Lemma constant_read_monotone target value :
-    P.Sem.rhs_dependencies_monotone (P.Syntax.Get target (fun _ => P.Syntax.Ret value)) /\
-    P.Sem.rhs_effects_monotone (P.Syntax.Get target (fun _ => P.Syntax.Ret value)).
-  Proof.
-    split; intros lower upper Hlower Hupper Hvalues; inversion Hlower; subst; inversion Hupper; subst.
-    all: repeat match goal with H : P.Sem.rhs_observes (P.Syntax.Ret _) _ |- _ => inversion H; subst; clear H end.
-    - cbn; intros x Hin; exact Hin.
-    - constructor; [apply E.DL.leq_refl |intros x payload Hin; contradiction |intros x Hin; contradiction].
-  Qed.
-  Lemma controlled_constant_monotone : P.monotonic_system controlled_constant.
-  Proof.
-    intros owner; destruct owner as [|[|owner]]; cbn [controlled_constant]; try apply constant_read_monotone.
-    split; intros lower upper Hlower Hupper Hvalues; inversion Hlower; subst; inversion Hupper; subst.
-    - intros x Hin; contradiction.
-    - constructor; [apply E.DL.leq_refl |intros x payload Hin; contradiction |intros x Hin; contradiction].
-  Qed.
-  Lemma controlled_constant_pure : P.no_side_effects controlled_constant.
-  Proof.
-    intros owner result Hobs; apply P.pure_sides with (body := controlled_constant owner); [|exact Hobs].
-    destruct owner as [|[|owner]]; cbn [controlled_constant]; constructor; intro; constructor.
-  Qed.
   Definition constant_final := P.R.cfg_state (P.R.run_fuel 128 controlled_constant (P.R.initial_config [0])).
 End ReaderWakeups.
-
-Print Assumptions Ordinary.ordinary_avoids_fallback.
-Print Assumptions ReaderWakeups.ordinary_avoids_fallback.
-Print Assumptions Ordinary.successful_run_fixed.
-Print Assumptions Ordinary.total_fixed.
 
 (** The RHS has no direct self-read. The higher owner controls it, while slow
     narrowing needs several owner recomputations to reach One. *)
@@ -175,6 +132,6 @@ Proof. vm_compute; split; reflexivity. Qed.
 Example ordinary_result_narrowing_fixed :
   Ordinary.P.narrowing_fixed E.WN.narrow Ordinary.controlled_constant Ordinary.constant_final.
 Proof.
-  eapply Ordinary.successful_run_fixed; [reflexivity |apply Ordinary.controlled_constant_monotone |
+  eapply Ordinary.Q.successful_run_fixed_unbounded; [reflexivity |apply Ordinary.controlled_constant_monotone |
     apply Ordinary.controlled_constant_pure |exact ordinary_recomputation_terminates].
 Qed.
