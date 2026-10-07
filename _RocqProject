@@ -48,3 +48,11 @@ rocq/solvers/slr/restarting/proofs/FixedPoint.v
 rocq/solvers/slr/restarting_compact/Restarting.v
 rocq/solvers/slr/restarting_compact/Proofs.v
 rocq/solvers/slr/restarting_compact/tests/Audit.v
+rocq/solvers/slr/narrowing_fixed_point_compact/Base.v
+rocq/solvers/slr/narrowing_fixed_point_compact/NarrowingFixedPoint.v
+rocq/solvers/slr/narrowing_fixed_point_compact/Foundation.v
+rocq/solvers/slr/narrowing_fixed_point_compact/Proofs.v
+rocq/solvers/slr/narrowing_fixed_point_compact/Precision.v
+rocq/solvers/slr/narrowing_fixed_point_compact/Theorems.v
+rocq/solvers/slr/narrowing_fixed_point_compact/tests/Audit.v
+rocq/solvers/slr/narrowing_fixed_point_compact/tests/RuntimeIdentity.v

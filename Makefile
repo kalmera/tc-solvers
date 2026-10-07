@@ -4,7 +4,7 @@ ROCQ_JOBS ?= 2
 RANK_WORKLIST ?= bitmap
 export RANK_WORKLIST
 .DEFAULT_GOAL := all
-.PHONY: all proofs rocq proof-tests restarting-compact extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated library
+.PHONY: all proofs rocq proof-tests restarting-compact narrowing-fixed-point-compact extract regenerate goblint-solvers goblint-adapters ocaml test narrowing-fixed-point clean check-generated library
 all: regenerate
 	$(MAKE) test
 RocqMakefile: _RocqProject
@@ -22,6 +22,10 @@ narrowing-fixed-point: RocqMakefile
 restarting-compact: RocqMakefile
 	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile rocq/solvers/slr/restarting_compact/Proofs.vo \
 	 rocq/solvers/slr/restarting_compact/tests/Audit.vo
+narrowing-fixed-point-compact: RocqMakefile
+	$(MAKE) -j$(ROCQ_JOBS) -f RocqMakefile rocq/solvers/slr/narrowing_fixed_point_compact/Proofs.vo \
+	 rocq/solvers/slr/narrowing_fixed_point_compact/Theorems.vo \
+	 rocq/solvers/slr/narrowing_fixed_point_compact/tests/Audit.vo
 # Recompile extraction roots even when their .vo files are current.
 extract: proofs
 	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractSimple.v
