@@ -1,9 +1,10 @@
 # Independent restarting proof regeneration
 
-The independent copy now proves the reference solver's public termination,
-correctness, leastness, ordinary fallback-avoidance, and narrowing-fixedness
-results. It is ready for integration review; the reference solver remains in
-place.
+This stack is prepared as a replacement for the reference solver's public
+algorithm and theorem interfaces. Change the namespace from `restarting` to
+`restarting_compact`; the public functor parameters, theorem names, and theorem
+argument order are preserved. The original entry points and extraction roots
+remain in place for the eventual integration.
 
 `Restarting.v` is a byte-for-byte copy of the reference algorithm. `Proofs.v`
 contains newly written proofs and imports only shared contracts/semantics and
@@ -11,13 +12,17 @@ this copy of the algorithm. It imports no reference restarting proofs or
 narrowing-fixpoint proofs. Reading the reference informed the obligations;
 its proof files were not copied.
 
-There are two production files and one concrete audit file. All generic
-reasoning shares one `Proofs.Make` instance. Optional upper-bound, discovery,
-phase, and narrowing laws are theorem/section parameters. Ordinary proofs do
-not instantiate the whole proof functor again. Public results are available
-from `Proofs.Make` directly; a separate theorem facade would duplicate module
-contents without adding a useful abstraction. Concrete instantiation and
-assumption audits live in `tests/Audit.v`.
+There are three production files. `Proofs.v` contains the generic reasoning;
+`Theorems.v` exposes the reference-compatible `Make`, `LeastSolutionMake`, and
+`OrdinaryFixedPointMake` interfaces and the existing `Instances` names. Each
+public instance uses one proof functor. The ordinary facade discharges the
+first-discovery and OneBox phase laws generically, so clients supply exactly
+the reference law parameters. Audits reuse these concrete instances.
+
+`Sem` retains the state-oriented replay and execution vocabulary. Public
+correctness uses the shared specification, including spawn closure. Internal
+proof helpers are implementation details and need not have the reference
+proof stack's names.
 
 ## Public results
 
@@ -31,8 +36,11 @@ assumption audits live in `tests/Audit.v`.
 | `successful_run_fixed` | Ordinary monotone successful runs, first-discovery policy, safe phases implementing narrowing, controlled-owner recomputation enabled |
 | `total_fixed` | Finite ordinary monotone systems; returns correctness and narrowing fixedness together |
 
-The ordinary prefix and successful-run results do not need the reference
-statements' finite-system premise. Fixedness uses the direct RHS result, and
+The generic ordinary prefix and successful-run results do not need the
+reference statements' finite-system premise. The facade preserves the old
+statements and exposes the stronger forms as
+`ordinary_avoids_fallback_unbounded` and `successful_run_fixed_unbounded`.
+Fixedness uses the direct RHS result, and
 includes replay existence so an incomplete store cannot satisfy it vacuously.
 No idempotency assumption is used.
 
@@ -79,7 +87,15 @@ and wakeup invariants, carrying the equation to the final store.
 There are no admissions, new axioms, or reference-proof imports. The eight
 assumption audits report `Closed under the global context`; they cover total
 correctness, total leastness, both ordinary fallback policies, final fixedness,
-and total fixedness.
+and total fixedness. `tests/PublicInterface.v` additionally audits the five
+reference public instance guarantees and checks generic clients using the
+original parameter lists and theorem argument order.
+
+`make check-compact-replacements` compiles the same generic clients against
+both namespaces, then recompiles the existing runtime and spawn-closure
+clients with only their solver namespaces changed. All seven client checks
+pass. A fresh source-only tree containing common modules and the two compact
+stacks also builds; independent `rocq check` verifies both public facades.
 
 Concrete regressions cover accumulated side effects, a controlling back read,
 spawn closure, and update-credit consumption. The ordinary regression has no
@@ -91,7 +107,7 @@ conditional recomputation policy.
 
 ```sh
 opam exec --switch=5.4.0 -- make restarting-compact
-opam exec --switch=5.4.0 -- make proof-tests
+opam exec --switch=5.4.0 -- make check-compact-replacements
 opam exec --switch=5.4.0 -- python3 tools/benchmark_restarting_proofs.py --repeat 3
 ```
 
@@ -103,7 +119,8 @@ filesystem caches. It records source hashes, line counts, compiled object
 sizes, and per-file wall times. Its status is `matching_public_guarantees`;
 internal helper statements differ between the two developments.
 
-On Rocq 9.1.1 / OCaml 5.4.0, three fresh runs gave:
+Before adding the reference-compatible facade, on Rocq 9.1.1 / OCaml 5.4.0,
+three fresh runs gave:
 
 | Complete stack | Reference | Compact |
 | --- | ---: | ---: |
@@ -118,6 +135,7 @@ faster** and produced **90.9% fewer compiled bytes**. Its single proof unit is
 The audit is 179 lines and compiled in a median 1.78 seconds. These measurements
 include the concrete ordinary instances for both recomputation policies.
 
-The benchmark reports each run and source checksum, so results can be
-reproduced with the command above. Times depend on the host and caches;
-these figures compare the complete public guarantees on the same host.
+These historical measurements covered the same mathematical guarantees,
+using the generic proof interface. The benchmark now also includes
+`Theorems.v` and its reference-compatible concrete instances. It reports each
+run and source checksum. Times depend on the host and caches.

@@ -17,9 +17,37 @@ Module P := Proofs.Make V D U S M Features DL UL SL ML.
 Module B := P.B.
 Module R := P.R.
 Module N := P.N.
-Module Sem := P.Sem.
+Module Sem.
+  Include P.Sem.
+  Arguments support _ _ _ : clear implicits.
+  Module R := P.R.
+  Module ConstraintSyntax := P.B.Syntax.
+  Definition step := P.B.step.
+  Definition steps := P.B.steps.
+  Definition StepsRefl := P.B.steps_refl.
+  Definition StepsStep := P.B.steps_cons.
+  Definition quiescent (st : R.state) := R.queue_peek (R.queue st) = None.
+  Definition terminal_config := P.B.terminal.
+  Definition terminates_to tf roots final :=
+    steps tf (R.initial_config roots) (terminal_config final) /\ quiescent final.
+  Definition solved := P.Spec.solved.
+  Definition state_valuation (st : R.state) : valuation := R.sigma_value st.
+  Definition rhs_eval := P.Spec.replay.
+  Definition side_effects_below (st : R.state) (effects : list (V.t * D.t)) :=
+    forall target value, In (target,value) effects -> D.leq value (R.sigma_value st target) = true.
+  Definition rhs_post_solution (st : R.state) owner (body : R.ConstraintSystem.rhs) :=
+    forall direct reads effects, rhs_eval st body direct reads effects ->
+      D.leq direct (R.sigma_value st owner) = true /\ side_effects_below st effects.
+  Definition correct_final_state tf roots final := forall owner, In owner roots ->
+    solved final owner /\ rhs_post_solution final owner (tf owner).
+  Definition totally_correct_on tf roots := exists fuel final,
+    R.solve_fuel fuel tf roots = Some final /\ correct_final_state tf roots final.
+  Definition rhs_observes_spawns_supported := P.B.supported_spawns.
+  Definition observes_at_deterministic := P.B.observation_unique.
+End Sem.
 Module O := Sem.Observation.
-Include P.Spec.
+Module Spec := P.Spec.
+Include Spec.
 Definition values_descend before after := forall target,
   D.leq (R.sigma_value after target) (R.sigma_value before target) = true.
 Definition rows_descend before after := forall source target,
@@ -1512,10 +1540,11 @@ Proof.
 Qed.
 Definition narrowing_fixed := narrowing_fixed_with WN.narrow
   (fun final owner direct => D.join direct (R.aggregate final owner)).
-Theorem successful_run_fixed fuel tf roots final : Features.recompute_controlled = true ->
-  monotonic_system tf -> N.solve_fuel fuel tf roots = Some final -> narrowing_fixed tf final.
+Theorem successful_run_fixed : Features.recompute_controlled = true ->
+  forall fuel tf roots final, monotonic_system tf ->
+  N.solve_fuel fuel tf roots = Some final -> narrowing_fixed tf final.
 Proof.
-  intros Henabled Hmono Hrun; destruct (@P.successful_path fuel tf roots final Hrun) as [Hpath Hqueue].
+  intros Henabled fuel tf roots final Hmono Hrun; destruct (@P.successful_path fuel tf roots final Hrun) as [Hpath Hqueue].
   pose proof (@reachable_fixed_invariant tf roots (B.terminal final) Henabled Hmono Hpath) as Hfixed.
   intros owner Hsolved; assert (Hready : B.incoming_ready (B.terminal final) owner).
   { split; [change (~ In owner (R.queue final)); rewrite Hqueue; tauto |left; cbn [B.terminal R.cfg_control B.active_owners]; tauto]. }
@@ -1541,6 +1570,16 @@ Definition semantic_termination := P.semantic_termination.
 Definition sufficient_fuel := P.sufficient_fuel.
 Definition successful_run_correct := P.successful_run_correct.
 Definition total_correct := P.total_correct.
+
+(** Reference public concrete-instance aliases. *)
+Theorem successful_run_fixedpoint : Features.recompute_controlled = true ->
+  forall fuel tf roots final, N.solve_fuel fuel tf roots = Some final ->
+  monotonic_system tf -> narrowing_fixed tf final.
+Proof. intros Hon fuel tf roots final Hrun Hmono; eapply successful_run_fixed; eauto. Qed.
+Definition public_reachable_no_fallback := reachable_no_fallback.
+Module E.
+  Definition reachable_no_fallback := public_reachable_no_fallback.
+End E.
 
 End WithCollections.
 End WithLaws.

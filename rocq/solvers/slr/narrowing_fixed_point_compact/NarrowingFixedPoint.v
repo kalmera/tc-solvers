@@ -1,5 +1,6 @@
 From Stdlib Require Import List Bool Arith.PeanoNat.
 From TcSolvers Require Export solvers.slr.narrowing_fixed_point_compact.Base.
+From TcSolvers Require Import common.Assumptions.
 Import ListNotations.
 Set Implicit Arguments.
 
@@ -155,11 +156,31 @@ Module WithCore (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   Definition solve_fuel fuel tf roots :=
     R.terminal_state (run_fuel fuel tf (R.initial_config roots)).
 
+  Inductive steps tf : R.config -> R.config -> Prop :=
+  | steps_refl : forall c, steps tf c c
+  | steps_next : forall before next after,
+      next_config tf before = Some next -> steps tf next after -> steps tf before after.
+
+  Lemma fuel_steps fuel tf c : steps tf c (run_fuel fuel tf c).
+  Proof.
+    revert c; induction fuel as [|fuel IH]; intro c; cbn; [constructor |].
+    destruct (next_config tf c) as [next|] eqn:Hstep;
+      [econstructor; [exact Hstep |apply IH] |constructor].
+  Qed.
 End WithCore.
 
-Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
+Module Runtime (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Features : Base.FEATURES).
   Module Ranks := ListDiscoveryOrder V.
   Module R := Base.Make V D U S M Ranks Features.
   Include WithCore V D U S M Ranks Features R.
+End Runtime.
+
+(** Preserve the reference functor's argument list. Laws are proof-only;
+    execution is the independent [Runtime] above. *)
+Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
+  (S : SET V) (M : MAP V) (Features : Base.FEATURES)
+  (DL : DOMAIN_LAWS D) (UL : UPDATE_LAWS V D U)
+  (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
+  Include Runtime V D U S M Features.
 End Make.

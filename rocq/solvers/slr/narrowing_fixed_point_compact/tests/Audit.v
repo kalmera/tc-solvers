@@ -7,10 +7,10 @@ From TcSolvers Require Import common.instances.Chain common.FiniteHeight common.
 Import ListNotations.
 
 Module E := Chain.
-Module Precision := Theorems.Make E.V E.D E.WN.
-Module PrecisionUL := E.UpdateLaws Precision.U.
-Module PrecisionLaws := Precision.WithLaws E.DL E.WNL E.WS PrecisionUL.
-Module Q := PrecisionLaws.WithCollections E.S E.M Base.AllEnabledFeatures E.SL E.ML.
+Module Precision := Theorems.Instances.Fixed.
+Module PrecisionUL := Theorems.Instances.FixedUL.
+Module PrecisionLaws := Theorems.Instances.FixedLaws.
+Module Q := Theorems.Instances.FixedCells.
 Module P := Q.P.
 Print Assumptions P.reachable_rank_configuration.
 Print Assumptions P.successful_run_correct.
@@ -68,6 +68,5 @@ Print Assumptions Q.total_correct_and_fixed.
 Module JoinU := JoinUpdate E.V E.D.
 Module JoinUL := JoinUpdateLaws E.V E.D E.DL E.Height.
 Module JoinUBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
-Module Least := Theorems.LeastSolutionMake E.V E.D JoinU E.S E.M Base.AllEnabledFeatures
-  E.DL JoinUL JoinUBL E.SL E.ML.
+Module Least := Theorems.Instances.Least.
 Print Assumptions Least.total_least_solution.

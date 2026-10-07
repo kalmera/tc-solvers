@@ -23,22 +23,24 @@ Module Spec := B.Spec.
 Include Spec.
 
 Definition step tf before after := N.next_config tf before = Some after.
-Inductive steps tf : R.config -> R.config -> Prop :=
-| steps_refl c : steps tf c c
-| steps_cons before next after :
-    step tf before next -> steps tf next after -> steps tf before after.
+Definition steps := N.steps.
+Definition steps_refl := N.steps_refl.
+Definition steps_cons := N.steps_next.
 Definition reachable tf roots c := steps tf (R.initial_config roots) c.
 Definition terminates_to tf roots final :=
   reachable tf roots (B.terminal final) /\ B.quiescent final.
 
 Lemma steps_append tf a b c : steps tf a b -> steps tf b c -> steps tf a c.
-Proof. intros H1 H2; induction H1; eauto using steps. Qed.
+Proof.
+  intros H1 H2; induction H1 as [first|first next last Hnext Htail IH].
+  - exact H2.
+  - eapply steps_cons; [exact Hnext |exact (IH H2)].
+Qed.
 Lemma steps_snoc tf a b c : steps tf a b -> step tf b c -> steps tf a c.
-Proof. intros; eapply steps_append; eauto using steps. Qed.
+Proof. intros Hpath Hstep; eapply steps_append; [exact Hpath |eapply steps_cons; [exact Hstep |constructor]]. Qed.
 Lemma fuel_path fuel tf c : steps tf c (N.run_fuel fuel tf c).
 Proof.
-  revert c; induction fuel; intro c; cbn; [constructor |].
-  destruct (N.next_config tf c) eqn:Heq; eauto using steps.
+  exact (N.fuel_steps fuel tf c).
 Qed.
 Lemma path_fuel tf a b : steps tf a b -> exists fuel, N.run_fuel fuel tf a = b.
 Proof.
@@ -1920,7 +1922,9 @@ Inductive episode_steps tf owner : R.config -> R.config -> Prop :=
 | episode_cons before next after : In owner (B.active_owners (R.cfg_control before)) ->
     step tf before next -> episode_steps tf owner next after -> episode_steps tf owner before after.
 Lemma episode_path tf owner before after : episode_steps tf owner before after -> steps tf before after.
-Proof. intro Hpath; induction Hpath; eauto using steps. Qed.
+Proof.
+  intro Hpath; induction Hpath; [constructor |eapply steps_cons; eassumption].
+Qed.
 Lemma episode_append tf owner a b c : episode_steps tf owner a b -> episode_steps tf owner b c -> episode_steps tf owner a c.
 Proof. intros Hab Hbc; induction Hab; eauto using episode_steps. Qed.
 Lemma next_episode_scope tf before after owner base : B.episode_scope owner base (R.cfg_control before) ->

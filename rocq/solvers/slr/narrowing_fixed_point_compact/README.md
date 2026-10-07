@@ -1,7 +1,16 @@
 # Independent narrowing-fixedpoint proof regeneration
 
-This copy regenerates the narrowing-fixedpoint proofs while preserving the
-reference solver's runtime. The original solver remains available unchanged.
+This stack is prepared as a replacement for the reference solver's public
+algorithm and theorem interfaces. Change the namespace from
+`narrowing_fixed_point` to `narrowing_fixed_point_compact`; the public functor
+parameters, theorem names, theorem argument order, state-oriented `Sem`
+vocabulary, and `Instances` names are preserved. The original entry points and
+extraction roots remain available for the eventual integration.
+
+`NarrowingFixedPoint.Make` accepts the reference's `DL`, `UL`, `SL`, and `ML`
+arguments. They are proof-only; `Runtime` offers the same executable solver
+without those law arguments. The public runtime and the proofs share one
+native `steps` relation.
 
 The production dependency graph is local:
 
@@ -52,12 +61,26 @@ solver. It proves the copied transition, fuel execution, and solver result
 definitionally identical. It is checked by `make proof-tests`, and excluded
 from the independent build and performance comparison.
 
-The independent source-only build contains common modules and this copy, with
-no other solver source or compiled artifact. Its audit is also checked with
-`rocq check`. The repository proof-test target checks runtime identity and the
-existing regressions separately.
+`tests/PublicInterface.v` checks generic clients using the reference parameter
+lists and exact theorem argument order, and audits the four existing public
+instance guarantees. The `support` projection retains the reference interface's
+explicit arguments. Internal proof helpers remain implementation details.
 
-A full-coverage clean comparison on this host used Rocq 9.1.1, OCaml 5.4.0,
+```sh
+opam exec --switch=5.4.0 -- make check-compact-replacements
+```
+
+This check compiles the same generic clients against both namespaces and the
+existing runtime/spawn-closure clients with only their solver namespaces
+changed. All seven client checks pass.
+
+A fresh source-only tree contains common modules and both independent compact
+stacks, with no reference solver source or compiled artifact. Both public
+facades are independently checked with `rocq check`. The repository proof-test
+target additionally checks runtime identity and existing regressions.
+
+Before adding the reference-compatible facade, a full-coverage clean comparison
+on this host used Rocq 9.1.1, OCaml 5.4.0,
 and `make -j2`. Both trees started without compiled artifacts and included the
 same common sources and concrete OneBox/JoinUpdate laws. The reference target
 was `narrowing_fixed_point/Theorems.vo`; the compact targets were
@@ -72,5 +95,8 @@ was `narrowing_fixed_point/Theorems.vo`; the compact targets were
 
 This single clean run was 43% faster, with 79% fewer source lines and
 97.3% less compiled solver data. Sizes exclude common modules; wall times
-include them. Timing varies by host and load. Production uses six source files;
-`tests/Audit.v` adds the seventh measured file.
+include them. These historical figures describe the initial compact facade;
+the reference-compatible facade also retains the old concrete `Instances`.
+Timing varies by host and load. Production still uses six source files.
+Audits share the public concrete instances instead of rebuilding their proof
+graphs.

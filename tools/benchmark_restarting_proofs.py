@@ -28,6 +28,7 @@ REFERENCE = [
 COMPACT = [
     "rocq/solvers/slr/restarting_compact/Restarting.v",
     "rocq/solvers/slr/restarting_compact/Proofs.v",
+    "rocq/solvers/slr/restarting_compact/Theorems.v",
     "rocq/solvers/slr/restarting_compact/tests/Audit.v",
 ]
 
