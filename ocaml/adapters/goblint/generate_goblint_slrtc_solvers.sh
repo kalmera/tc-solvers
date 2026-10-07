@@ -189,14 +189,14 @@ generate_solver "$simple_template" "$inlined_control" \
 generate_solver "$restarting_template" "$extracted_control" \
   "rocq/extraction/GoblintControl.v" \
   "Restarting" \
-  "first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled" \
+  "first-discovery instance; side-reset and dead-side enabled; controlled-owner recomputation disabled" \
   "$features_restarting" \
   "$output_directory/slrtc_restarting.ml"
 
 generate_solver "$restarting_template" "$inlined_control" \
   "ocaml/adapters/goblint/goblint_control_inlined.ml" \
   "Restarting" \
-  "first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled" \
+  "first-discovery instance; side-reset and dead-side enabled; controlled-owner recomputation disabled" \
   "$features_restarting" \
   "$output_directory/slrtc_inlined_restarting.ml"
 

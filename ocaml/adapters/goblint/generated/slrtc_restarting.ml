@@ -2,7 +2,7 @@
 (* GENERATED FILE. DO NOT EDIT.
    Control: rocq/extraction/GoblintControl.v
    Variant: Restarting
-   Configuration: first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled
+   Configuration: first-discovery instance; side-reset and dead-side enabled; controlled-owner recomputation disabled
    Rank worklist: bitmap
    Adapter: ocaml/adapters/goblint/goblint_slrtc_restarting.ml.in
    Regenerate with: make goblint-solvers *)
@@ -197,11 +197,12 @@ end
 
 module Features = struct
   (** The three compile-time policies exposed by the proved Restarting solver.
-      The generated Goblint examples enable all three. *)
+      The Goblint adapter default enables side reset and dead-side elimination,
+      and disables controlled-owner recomputation. *)
 
   let side_effect_phase_reset = true
   let dead_side_elimination = true
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 
 module type FEATURES = sig

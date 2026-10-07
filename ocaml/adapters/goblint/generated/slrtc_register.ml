@@ -23,22 +23,22 @@ end
 module Base = struct
   let side_effect_phase_reset = false
   let dead_side_elimination = false
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 module SideReset = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = false
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 module DeadSide = struct
   let side_effect_phase_reset = false
   let dead_side_elimination = true
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 module Both = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 
 module Restarting (Features : Slrtc_restarting.FEATURES) =

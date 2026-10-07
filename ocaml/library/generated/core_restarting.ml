@@ -169,11 +169,12 @@ end
 
 module Features = struct
   (** The three compile-time policies exposed by the proved Restarting solver.
-      The internal example configuration enables all three. *)
+      The internal default enables side reset and dead-side elimination,
+      and disables controlled-owner recomputation. *)
 
   let side_effect_phase_reset = true
   let dead_side_elimination = true
-  let recompute_controlled = true
+  let recompute_controlled = false
 end
 
 module type FEATURES = sig
