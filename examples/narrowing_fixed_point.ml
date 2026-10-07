@@ -1,16 +1,16 @@
 module V = struct type t = int let eq_dec = Int.equal end
 module D = struct
-  type t = Bottom | One | Two
-  let rank = function Bottom -> 0 | One -> 1 | Two -> 2
+  type t = Bottom | One | Two | Three | Four | Top
+  let rank = function Bottom -> 0 | One -> 1 | Two -> 2 | Three -> 3 | Four -> 4 | Top -> 5
   let bottom = Bottom
   let leq x y = rank x <= rank y
   let join x y = if leq x y then y else x
+  let predecessor = function
+    | Bottom | One -> Bottom | Two -> One | Three -> Two | Four -> Three | Top -> Four
 end
 module WN = struct
-  (* Finite-height widening and exact narrowing make the combined update
-     value-idempotent, including across phase changes. *)
-  let widen = D.join
-  let narrow _ input = input
+  let widen old input = if D.leq input old then old else D.Top
+  let narrow old input = D.join input (D.predecessor old)
 end
 module Set = struct
   type t = int list
@@ -34,13 +34,18 @@ module U = struct
       else (if phase=N then F else W), WN.widen old (D.join old input)
     | F -> F, WN.widen old (D.join old input)
 end
-module Flags = struct let restart_side_phases = true let eliminate_dead_sides = true end
-(* Finite-height credits reserve room for narrowing and fallback phases. *)
+module Flags = struct
+  let restart_side_phases = true
+  let eliminate_dead_sides = true
+  let recompute_controlled = true
+end
+(* For the six-element chain: at most five increasing changes, five
+   narrowing changes, and a final widening to Top after a fallback. *)
 module Credit = struct
   let remaining_changes phase value = match phase with
-    | U.W -> 8 - D.rank value
-    | U.N -> 3 + D.rank value
-    | U.F -> 2 - D.rank value
+    | U.W -> 12 - D.rank value
+    | U.N -> 1 + D.rank value
+    | U.F -> if D.rank value < 5 then 1 else 0
 end
 module Empty = struct end
 

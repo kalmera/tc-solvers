@@ -15,6 +15,8 @@ module type FEATURES =
   val restart_side_phases : bool
 
   val eliminate_dead_sides : bool
+
+  val recompute_controlled : bool
  end
 
 module AllEnabledFeatures =
@@ -28,6 +30,29 @@ module AllEnabledFeatures =
 
   let eliminate_dead_sides =
     true
+
+  (** val recompute_controlled : bool **)
+
+  let recompute_controlled =
+    true
+ end
+
+module ReaderWakeupsOnlyFeatures =
+ struct
+  (** val restart_side_phases : bool **)
+
+  let restart_side_phases =
+    true
+
+  (** val eliminate_dead_sides : bool **)
+
+  let eliminate_dead_sides =
+    true
+
+  (** val recompute_controlled : bool **)
+
+  let recompute_controlled =
+    false
  end
 
 module Monadic = Monadic
@@ -487,8 +512,8 @@ module Make =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -664,6 +689,20 @@ module Make =
               let st3 = with_readers st2 (M.update st2.readers owner S.empty)
               in
               (st3, fr1)
+
+  (** val requeue_changed_controlled_owner :
+      state -> state -> V.t -> state **)
+
+  let requeue_changed_controlled_owner before after owner =
+    with_queue after
+      (if (&&)
+            ((&&) Features.recompute_controlled
+              (S.mem owner before.controlled))
+            (negb
+              (equivalent (sigma_value after owner)
+                (sigma_value before owner)))
+       then queue_insert after.ranking owner after.queue
+       else after.queue)
 
   type control =
   | RunLoop
@@ -894,7 +933,9 @@ module Make =
                Some (continue_dead st1 fr direct target remaining k changed))
      | RunCommit (fr, direct, k) ->
        let (st1, fr1) = set_value st fr direct in
-       Some { cfg_state = st1; cfg_control = (RunDrain (fr1, k)) }
+       Some { cfg_state =
+       (requeue_changed_controlled_owner st st1 fr.frame_owner);
+       cfg_control = (RunDrain (fr1, k)) }
      | RunDrain (fr, k) ->
        (match queue_peek st.queue with
         | Some next ->
@@ -1457,8 +1498,8 @@ module FirstDiscoveryAlgorithm =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -1634,6 +1675,20 @@ module FirstDiscoveryAlgorithm =
               let st3 = with_readers st2 (M.update st2.readers owner S.empty)
               in
               (st3, fr1)
+
+  (** val requeue_changed_controlled_owner :
+      state -> state -> V.t -> state **)
+
+  let requeue_changed_controlled_owner before after owner =
+    with_queue after
+      (if (&&)
+            ((&&) AllEnabledFeatures.recompute_controlled
+              (S.mem owner before.controlled))
+            (negb
+              (equivalent (sigma_value after owner)
+                (sigma_value before owner)))
+       then queue_insert after.ranking owner after.queue
+       else after.queue)
 
   type control =
   | RunLoop
@@ -1864,7 +1919,9 @@ module FirstDiscoveryAlgorithm =
                Some (continue_dead st1 fr direct target remaining k changed))
      | RunCommit (fr, direct, k) ->
        let (st1, fr1) = set_value st fr direct in
-       Some { cfg_state = st1; cfg_control = (RunDrain (fr1, k)) }
+       Some { cfg_state =
+       (requeue_changed_controlled_owner st st1 fr.frame_owner);
+       cfg_control = (RunDrain (fr1, k)) }
      | RunDrain (fr, k) ->
        (match queue_peek st.queue with
         | Some next ->
@@ -2446,8 +2503,8 @@ module FirstDiscovery =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -2623,6 +2680,20 @@ module FirstDiscovery =
               let st3 = with_readers st2 (M.update st2.readers owner S.empty)
               in
               (st3, fr1)
+
+  (** val requeue_changed_controlled_owner :
+      state -> state -> V.t -> state **)
+
+  let requeue_changed_controlled_owner before after owner =
+    with_queue after
+      (if (&&)
+            ((&&) Features.recompute_controlled
+              (S.mem owner before.controlled))
+            (negb
+              (equivalent (sigma_value after owner)
+                (sigma_value before owner)))
+       then queue_insert after.ranking owner after.queue
+       else after.queue)
 
   type control =
   | RunLoop
@@ -2853,7 +2924,9 @@ module FirstDiscovery =
                Some (continue_dead st1 fr direct target remaining k changed))
      | RunCommit (fr, direct, k) ->
        let (st1, fr1) = set_value st fr direct in
-       Some { cfg_state = st1; cfg_control = (RunDrain (fr1, k)) }
+       Some { cfg_state =
+       (requeue_changed_controlled_owner st st1 fr.frame_owner);
+       cfg_control = (RunDrain (fr1, k)) }
      | RunDrain (fr, k) ->
        (match queue_peek st.queue with
         | Some next ->
@@ -3438,8 +3511,8 @@ module FixedRank =
     else st
 
   type frame = { frame_owner : V.t; frame_phase : U.phase;
-                 frame_local_side : D.t M.t; frame_previous_targets : 
-                 S.t; frame_current_targets : S.t; frame_min_scope : 
+                 frame_local_side : D.t M.t; frame_previous_targets :
+                 S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
   (** val frame_owner : frame -> V.t **)
@@ -3615,6 +3688,20 @@ module FixedRank =
               let st3 = with_readers st2 (M.update st2.readers owner S.empty)
               in
               (st3, fr1)
+
+  (** val requeue_changed_controlled_owner :
+      state -> state -> V.t -> state **)
+
+  let requeue_changed_controlled_owner before after owner =
+    with_queue after
+      (if (&&)
+            ((&&) Features.recompute_controlled
+              (S.mem owner before.controlled))
+            (negb
+              (equivalent (sigma_value after owner)
+                (sigma_value before owner)))
+       then queue_insert after.ranking owner after.queue
+       else after.queue)
 
   type control =
   | RunLoop
@@ -3845,7 +3932,9 @@ module FixedRank =
                Some (continue_dead st1 fr direct target remaining k changed))
      | RunCommit (fr, direct, k) ->
        let (st1, fr1) = set_value st fr direct in
-       Some { cfg_state = st1; cfg_control = (RunDrain (fr1, k)) }
+       Some { cfg_state =
+       (requeue_changed_controlled_owner st st1 fr.frame_owner);
+       cfg_control = (RunDrain (fr1, k)) }
      | RunDrain (fr, k) ->
        (match queue_peek st.queue with
         | Some next ->

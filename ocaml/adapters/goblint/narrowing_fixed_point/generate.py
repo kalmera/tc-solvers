@@ -45,7 +45,7 @@ def generate(inlined):
     once('      S.Dom.equal left right',
          '      left == right || (S.Dom.leq left right && S.Dom.leq right left)')
     # Return the decision already made at commit, rather than comparing again
-    # for tracing. All equivalent updates retain the old value.
+    # for owner recomputation and tracing. Equivalent updates retain the old value.
     a = source.index('    let[@inline always] set_value state frame direct =')
     b = source.index('    let solve xs roots _old_data =', a)
     source = source[:a] + '''    let[@inline always] set_value state frame direct =
@@ -78,16 +78,18 @@ def generate(inlined):
       changed
 
 ''' + source[b:]
-    # Match the frozen generated feature interface without changing its source.
+    # Keep enabled defaults while exposing the same three policies as Restarting.
     a = source.index('module type FEATURES = sig')
     b = source.index('\nend', a) + len('\nend')
     source = source[:a] + '''module Features = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 module type FEATURES = sig
   val side_effect_phase_reset : bool
   val dead_side_elimination : bool
+  val recompute_controlled : bool
 end''' + source[b:]
     # Arbitrary clear_owner uses lazy deletion, with one physical entry per rank.
     once('      mutable queued : bool;', '      mutable queued : bool;\n      mutable resident : bool;')
@@ -146,13 +148,14 @@ end''' + source[b:]
               end else if owner_info.queued then
                 evaluate_owner ()
               else begin
-                ignore (set_value state frame direct);
+                let changed = set_value state frame direct in
+                if Features.recompute_controlled && owner_info.controlled && changed then
+                  enqueue state owner;
                 drain_episode ()
               end)
             (fun _ -> ())''')
-    # Initial values are RHS constants, as in the extracted reference. Preloading
-    # sigma would skip the first controlled update now that synthetic rechecks
-    # are gone. Their roots are still seeded by solve_initial.
+    # Initial contributions are RHS constants, as in the extracted reference.
+    # Let the first controlled update observe them; solve_initial seeds their roots.
     once('''          VH.replace state.starts variable start;
           VH.replace state.sigma variable start)''',
          '''          VH.replace state.starts variable start)''')

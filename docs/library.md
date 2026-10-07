@@ -39,9 +39,13 @@ This example domain is the finite chain 0 through 5; clients must keep its
 values within that range. Complete runnable examples for all three families
 are in `examples/library/`.
 
-`Slr.Restarting.Make (V) (D) (U) (Features)` accepts two compile-time booleans:
-`side_effect_phase_reset` and `dead_side_elimination`. All four combinations
-are supported. `Slr.Narrowing_fixed_point.Make (V) (D) (U)` enables both policies.
+`Slr.Restarting.Make (V) (D) (U) (Features)` accepts three compile-time booleans:
+`side_effect_phase_reset`, `dead_side_elimination`, and `recompute_controlled`.
+All eight combinations are supported. Enable `recompute_controlled` to repeat a
+changed controlled-owner update even when its RHS does not read itself.
+`Slr.Narrowing_fixed_point.Make_with_features (V) (D) (U) (Features)` accepts
+these same three booleans. `Slr.Narrowing_fixed_point.Make (V) (D) (U)` keeps all
+three enabled by default.
 Hash tables and the bitmap worklist are internal. The first-discovery order
 and maximum-rank-first work processing match the existing callback adapters.
 
@@ -103,17 +107,17 @@ leastness additionally requires finite height, operational monotonicity, and
 source strictness outside roots. The proved narrowing-fixed-point instance uses
 the zero-copy box, direct-widening upper bounds, and covered-input stability:
 `leq input old` implies that `widen old input` is equivalent to `old`.
-Narrowing fixedness also requires ordinary value-only idempotency of the combined
-update: if `update(false, owner, phase, old, input) = (phase2, value2)`, then the
-value of `update(false, owner, phase2, value2, input)` must be equivalent to
-`value2`. The phase may change. The scheduler skips the synthetic owner recheck
-but retains dependency wakeups. These extra laws belong to narrowing fixedness,
-not generic total correctness. Selecting the suggested two-copy policy does not instantiate
-that theorem.
+Changed controlled owners are evaluated again with the returned phase because
+the update itself depends on the previous value. Both solvers expose
+`recompute_controlled`; their narrowing-fixedness theorems require this option
+to be enabled. Restarting additionally requires no side effects. Narrowing
+Fixed Point's owner fallback-avoidance theorem allows side effects and holds
+with recomputation enabled or disabled. Selecting the suggested two-copy policy does not
+instantiate the OneBox fixedness theorem.
 
 Only callback control is extracted; the mutable runtime has no mechanized
-refinement proof. Differential tests cover all six configurations and three
-policies. Nine existing differences from extracted references are checked as
+refinement proof. Differential tests cover eleven configurations and three
+policies. Existing differences from extracted references are checked as
 exact baselines in `tests/library/differential.ml`; all tested join and Narrowing
 Fixed Point cases agree with their extracted references.
 

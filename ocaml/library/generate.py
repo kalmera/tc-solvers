@@ -65,8 +65,8 @@ def transform(source, variant, bitmap):
     once('\nmodule SLRTC = Make (Control)' +
          ('' if variant == 'simple' else ' (Features)'), '')
     if variant == 'restarting':
-        once('The generated Goblint examples enable both.',
-             'The internal example configuration enables both.')
+        once('The generated Goblint examples enable all three.',
+             'The internal example configuration enables all three.')
     for forbidden in ('Goblint', 'Batteries', 'Yojson', 'SolverStats', 'marshal',
                       'IncrSolver', 'DemandEq', 'Sys.getenv', 'Slrtc_update'):
         if forbidden in source:

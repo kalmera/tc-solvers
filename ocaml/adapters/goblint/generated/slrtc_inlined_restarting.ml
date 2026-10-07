@@ -2,7 +2,7 @@
 (* GENERATED FILE. DO NOT EDIT.
    Control: ocaml/adapters/goblint/goblint_control_inlined.ml
    Variant: Restarting
-   Configuration: first-discovery instance; proved side-reset and dead-side switches enabled
+   Configuration: first-discovery instance; proved side-reset, dead-side, and owner-recomputation switches enabled
    Rank worklist: bitmap
    Adapter: ocaml/adapters/goblint/goblint_slrtc_restarting.ml.in
    Regenerate with: make goblint-solvers *)
@@ -122,16 +122,18 @@ module type CONTROL = sig
 end
 
 module Features = struct
-  (** The two compile-time policies exposed by the proved Restarting solver.
-      The generated Goblint examples enable both. *)
+  (** The three compile-time policies exposed by the proved Restarting solver.
+      The generated Goblint examples enable all three. *)
 
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 
 module type FEATURES = sig
   val side_effect_phase_reset : bool
   val dead_side_elimination : bool
+  val recompute_controlled : bool
 end
 
 
@@ -731,8 +733,10 @@ module Make
               U.update false owner frame.owner_phase old candidate
             in
             frame.owner_phase <- next_phase;
-            if not (lattice_equal next old) then
-              write_changed_value state frame.owner_rank owner_info owner next
+            if not (lattice_equal next old) then begin
+              write_changed_value state frame.owner_rank owner_info owner next;
+              if Features.recompute_controlled then enqueue state owner
+            end
           end else
             write_changed_value
               state frame.owner_rank owner_info owner candidate

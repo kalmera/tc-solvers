@@ -13,6 +13,10 @@ The `slr-paper` registration set preserves the paper's configuration:
 | `slrtc_rds` | Restarting | yes | yes |
 | `slrtc_n` | Narrowing Fixed Point | yes | yes |
 
+The Restarting and Narrowing Fixed Point registrations enable controlled-owner
+recomputation. Direct integrations can set either solver's `recompute_controlled`
+flag to choose this behavior; reader wakeups and side-source repairs remain active.
+
 All six use extracted callback control, the bitmap worklist, and `CopyUpdate`
 (two copies followed by the widening/narrowing box).
 `SLRTC_TRACE` is disabled by default.

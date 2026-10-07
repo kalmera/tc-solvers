@@ -3,8 +3,8 @@
 Executable constraint solvers and constructive total-correctness proofs in Rocq,
 with a generic OCaml solver library, extracted reference versions, and Goblint adapters.
 
-The initial version contains Simple, Restarting (four side-effect configurations),
-and Narrowing Fixed Point. Each proves total correctness and finite-height join
+The initial version contains Simple, Restarting (four side-effect configurations, with optional controlled-owner recomputation),
+and Narrowing Fixed Point (with the same optional recomputation). Each proves total correctness and finite-height join
 leastness under its stated assumptions; Narrowing Fixed Point also proves a
 narrowing-fixpoint result. See the [theorem map](docs/proofs.md).
 

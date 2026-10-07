@@ -193,10 +193,12 @@ end
 module Features = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 module type FEATURES = sig
   val side_effect_phase_reset : bool
   val dead_side_elimination : bool
+  val recompute_controlled : bool
 end
 
 module Make
@@ -887,7 +889,9 @@ let[@inline always] pop_max queue =
               end else if owner_info.queued then
                 evaluate_owner ()
               else begin
-                ignore (set_value state frame direct);
+                let changed = set_value state frame direct in
+                if Features.recompute_controlled && owner_info.controlled && changed then
+                  enqueue state owner;
                 drain_episode ()
               end)
             (fun _ -> ())

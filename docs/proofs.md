@@ -8,8 +8,8 @@ example systems remain beside it. Shared concrete instances live in
 | Solver directory | Algorithm | Public results |
 | --- | --- | --- |
 | `simple` | `Simple.v` | Total correctness; leastness under upper-bound-preserving updates |
-| `restarting` | `Restarting.v` | Total correctness for all four feature settings; leastness; ordinary-system narrowing fixedness under value idempotency |
-| `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness; leastness under upper-bound-preserving updates; narrowing fixpoint |
+| `restarting` | `Restarting.v` | Total correctness for all eight feature settings; leastness; ordinary-system absence of fallback; narrowing fixedness with controlled-owner recomputation |
+| `narrowing_fixed_point` | `NarrowingFixedPoint.v` | Total correctness for all eight feature settings; leastness; monotone-system owner fallback avoidance; narrowing fixedness with controlled-owner recomputation |
 
 Each public correctness interface follows the paper's order: `semantic_termination`,
 `sufficient_fuel`, `successful_run_correct`, then `total_correct` as a corollary
@@ -27,9 +27,32 @@ final-state replay of every solved owner, including non-roots.
 Restarting separately requires `no_side_effects`; spawns are allowed. Its
 successful-run fixedness theorem also requires finite support; Narrowing Fixed
 Point needs finite support only for total correctness.
-Both use first-discovery ranking and ordinary value idempotency of the combined
-update. Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
+Both use first-discovery ranking and require `recompute_controlled = true` for
+fixedness. Disabling it retains reader wakeups and side-source repairs.
+Only Narrowing Fixed Point additionally requires `WIDEN_STABILITY` and
 includes incoming side contributions in its fixedness equation.
+
+Restarting's `OrdinaryFixedPointMake.WithLaws.WithCollections` also exposes
+`ordinary_avoids_fallback`: finite support, `monotonic_system`, and
+`no_side_effects` imply `avoids_fallback tf roots`. This means that every
+configuration reachable from `R.initial_config roots` has
+`control_avoids_fallback`: every active and suspended owner frame has a phase
+other than `U.Widen`. It covers the whole run, including unfinished prefixes,
+and requires neither successful termination nor `recompute_controlled = true`.
+All eight feature settings satisfy this property with first-discovery ranking;
+ordinary systems may still spawn unknowns. Initial `BoxW` widening and restarts
+into `BoxW` are allowed; the theorem excludes the permanent fallback `Widen`.
+
+Narrowing Fixed Point's `Make.WithLaws.WithCollections` exposes
+`monotonic_avoids_fallback`: `monotonic_system tf` implies
+`avoids_fallback tf roots` for all eight feature settings. This covers active
+and suspended owner frames throughout every reachable prefix, including
+systems with side effects and spawns. It requires neither finite support nor
+controlled-owner recomputation. Side-cell phases are outside this invariant.
+Its `successful_run_fixed` additionally requires `recompute_controlled = true`;
+the fixedness equation joins each owner's replayed direct result with the
+stored incoming side contributions.
+
 The shared statement vocabulary is defined in `common/SolverSpecifications.v`.
 `correct_final_state` requires every root to be materialized and every
 materialized unknown to satisfy `owner_post_solution`. Each constraint has a
@@ -56,26 +79,31 @@ The Narrowing Fixed Point result additionally assumes operational monotonicity,
 direct-widening upper bounds, narrowing bounds, and `WIDEN_STABILITY`: if
 `input` is below `old`, then `widen old input` is equivalent to `old`.
 
-The Narrowing Fixed Point solver omits the synthetic controlled-owner requeue.
-Both fixedness functors take the shared `VALUE_IDEMPOTENT V D U` law from
-`common/UpdateIdempotency.v`: replaying an
-ordinary update with its resulting phase and value, and the same input, must
-return an equivalent value. The phase itself may change. The law covers the
-combined OneBox update, not just narrowing, and imposes no condition on side
-updates. Generic correctness, termination, and join leastness do not need it.
-Actual reader wakeups, including self-reads, and side-source repairs remain.
+A controlled owner's update reads its previous value even when its RHS does not
+read the owner. With `recompute_controlled = true`, both solvers queue a changed
+controlled owner for another evaluation with the returned phase. The option is
+enabled in `AllEnabledFeatures`. `ReaderWakeupsOnlyFeatures` disables it.
+Fixedness follows from the eventual stable commit. Generic correctness,
+termination, and join leastness hold with either setting. Recorded reader
+wakeups and side-source repairs remain active.
 
 `make proofs` checks the generic proof units and all three public theorem files.
-Each facade retains concrete `Instances` and labelled `Print Assumptions`
-output (`Closed under the global context`). Narrowing Fixed Point shares one
-OneBox instance between its correctness and fixedness audits; the idempotent
-chain is a common instance, not a dependency on tests. `make proof-tests` checks
-the separate examples and counterexample. The new regression checks execute the
-solver and verify three RHS completions instead of a redundant fourth, phase
-changes under value idempotency, genuine self-read wakeups, effectful fanout,
-and recursive spawn closure. A missing-spawn regression shows that numerical
-satisfaction alone does not form a post-solution.
-They do not re-instantiate the full fixedness proof for each example.
+Each facade retains concrete `Instances` using the shared finite chain, whose
+slow narrowing needs several updates to stabilize.
+`make proof-tests` checks executable regression systems, reader wakeups,
+effectful fanout, and recursive spawn closure. A missing-spawn regression shows
+that numerical satisfaction alone does not form a post-solution.
+The examples do not re-instantiate the full fixedness proof for each system.
+The regression files report assumptions for public correctness, leastness,
+fallback avoidance, and total fixedness. These reports include dependencies on
+intermediate lemmas. `Print Assumptions` is informational; it does not fail the
+build if an assumption appears. Simple's two public assumption reports remain
+in its theorem file.
 
-Restarting's auxiliary narrowing theorem and counterexample remain available as
-supporting results, not additional solver implementations.
+Independent validation with `rocq check` is useful after substantial proof or
+module changes and before merging. It checks compiled libraries separately
+from ordinary compilation and can be run manually when needed.
+
+Restarting's internal narrowing-stability proof supports the public no-fallback
+theorem. The fixed-rank counterexample explains why the public theorem uses
+first-discovery ranking.

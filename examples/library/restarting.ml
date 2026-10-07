@@ -4,6 +4,7 @@ module U = Tc_solvers.Update.TwoCopy (V) (D)
 module Features = struct
   let side_effect_phase_reset = true
   let dead_side_elimination = true
+  let recompute_controlled = true
 end
 module Solver = Tc_solvers.Slr.Restarting.Make (V) (D) (U) (Features)
 
@@ -19,7 +20,9 @@ let system = function
 let () =
   let solution = Solver.solve system [0] in
   assert (Solver.value solution 0 = 1);
-  assert (Solver.value solution 1 = 2);
+  (* Repeating the source also repeats its side publications; the box can
+     widen their target to top. Ordinary fixedness assumes no side effects. *)
+  assert (Solver.value solution 1 = 5);
   assert (Solver.mem solution 2);
   assert (not (Solver.mem solution 99));
   Solver.iter (fun variable value -> Printf.printf "%d = %d\n" variable value) solution

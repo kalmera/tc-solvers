@@ -71,10 +71,14 @@ let rec add_constant d = function
   | Spawn (x,k) -> Spawn (x, add_constant d k)
   | Side (x,v,k) -> Side (x,v, add_constant d k)
 
-module F00 = struct let side_effect_phase_reset = false let dead_side_elimination = false end
-module F01 = struct let side_effect_phase_reset = false let dead_side_elimination = true end
-module F10 = struct let side_effect_phase_reset = true let dead_side_elimination = false end
-module F11 = struct let side_effect_phase_reset = true let dead_side_elimination = true end
+module F00 = struct let side_effect_phase_reset = false let dead_side_elimination = false let recompute_controlled = true end
+module F01 = struct let side_effect_phase_reset = false let dead_side_elimination = true let recompute_controlled = true end
+module F10 = struct let side_effect_phase_reset = true let dead_side_elimination = false let recompute_controlled = true end
+module F11 = struct let side_effect_phase_reset = true let dead_side_elimination = true let recompute_controlled = true end
+module F00Off = struct include F00 let recompute_controlled = false end
+module F01Off = struct include F01 let recompute_controlled = false end
+module F10Off = struct include F10 let recompute_controlled = false end
+module F11Off = struct include F11 let recompute_controlled = false end
 module type SOLVER = Tc_solvers.SOLVER with type variable = int and type value = int
 module Empty = struct end
 (* Computational credit argument of the fuelled reference; this is not a proof witness. *)
@@ -98,7 +102,10 @@ let reference_gaps = [
     ([0,5;1,5;2,5;3,5;4,5], [0,3;1,2;2,2;3,3;4,3]);
 ] @ List.map (fun variant ->
   ("WidenNarrow", "initial values, duplicate contributions, RHS-less owner " ^ variant),
-    ([0,5;1,5;3,3], [0,2;1,5;3,3])) ["Simple"; "R00"; "R01"; "R10"; "R11"]
+    ([0,5;1,5;3,3], [0,2;1,5;3,3])) ["Simple"; "R00Off"; "R01Off"; "R10Off"; "R11Off"]
+@ List.map (fun variant ->
+  ("WidenNarrow", "initial values, duplicate contributions, RHS-less owner " ^ variant),
+    ([0,2;1,1;3,3], [0,2;1,5;3,3])) ["R00"; "R01"; "R10"; "R11"]
 
 module CheckPolicy
   (U : Tc_solvers.UPDATE with type variable = int and type value = int)
@@ -122,6 +129,7 @@ module CheckPolicy
   module FlagsR00 = struct
     let restart_side_phases = F00.side_effect_phase_reset
     let eliminate_dead_sides = F00.dead_side_elimination
+    let recompute_controlled = F00.recompute_controlled
   end
   module ER00 = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR00)
   let reference_R00 body roots =
@@ -140,6 +148,7 @@ module CheckPolicy
   module FlagsR01 = struct
     let restart_side_phases = F01.side_effect_phase_reset
     let eliminate_dead_sides = F01.dead_side_elimination
+    let recompute_controlled = F01.recompute_controlled
   end
   module ER01 = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR01)
   let reference_R01 body roots =
@@ -158,6 +167,7 @@ module CheckPolicy
   module FlagsR10 = struct
     let restart_side_phases = F10.side_effect_phase_reset
     let eliminate_dead_sides = F10.dead_side_elimination
+    let recompute_controlled = F10.recompute_controlled
   end
   module ER10 = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR10)
   let reference_R10 body roots =
@@ -176,6 +186,7 @@ module CheckPolicy
   module FlagsR11 = struct
     let restart_side_phases = F11.side_effect_phase_reset
     let eliminate_dead_sides = F11.dead_side_elimination
+    let recompute_controlled = F11.recompute_controlled
   end
   module ER11 = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR11)
   let reference_R11 body roots =
@@ -189,11 +200,88 @@ module CheckPolicy
     match ER11.solve_fuel 100000 (fun x -> convert (body x)) roots with
     | Some final -> ER11.sigma final
     | None -> failwith "R11: extracted reference exhausted fuel"
+  module LR00Off = Tc_solvers.Slr.Restarting.Make (V) (D) (U) (F00Off)
+  module GR00Off = Slrtc_restarting.Make (Slrtc_restarting.Control) (F00Off) (GU) (Arg) (System) (H)
+  module FlagsR00Off = struct
+    let restart_side_phases = F00Off.side_effect_phase_reset
+    let eliminate_dead_sides = F00Off.dead_side_elimination
+    let recompute_controlled = F00Off.recompute_controlled
+  end
+  module ER00Off = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR00Off)
+  let reference_R00Off body roots =
+    let module C = ER00Off.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ER00Off.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ER00Off.sigma final
+    | None -> failwith "R00Off: extracted reference exhausted fuel"
+  module LR01Off = Tc_solvers.Slr.Restarting.Make (V) (D) (U) (F01Off)
+  module GR01Off = Slrtc_restarting.Make (Slrtc_restarting.Control) (F01Off) (GU) (Arg) (System) (H)
+  module FlagsR01Off = struct
+    let restart_side_phases = F01Off.side_effect_phase_reset
+    let eliminate_dead_sides = F01Off.dead_side_elimination
+    let recompute_controlled = F01Off.recompute_controlled
+  end
+  module ER01Off = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR01Off)
+  let reference_R01Off body roots =
+    let module C = ER01Off.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ER01Off.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ER01Off.sigma final
+    | None -> failwith "R01Off: extracted reference exhausted fuel"
+  module LR10Off = Tc_solvers.Slr.Restarting.Make (V) (D) (U) (F10Off)
+  module GR10Off = Slrtc_restarting.Make (Slrtc_restarting.Control) (F10Off) (GU) (Arg) (System) (H)
+  module FlagsR10Off = struct
+    let restart_side_phases = F10Off.side_effect_phase_reset
+    let eliminate_dead_sides = F10Off.dead_side_elimination
+    let recompute_controlled = F10Off.recompute_controlled
+  end
+  module ER10Off = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR10Off)
+  let reference_R10Off body roots =
+    let module C = ER10Off.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ER10Off.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ER10Off.sigma final
+    | None -> failwith "R10Off: extracted reference exhausted fuel"
+  module LR11Off = Tc_solvers.Slr.Restarting.Make (V) (D) (U) (F11Off)
+  module GR11Off = Slrtc_restarting.Make (Slrtc_restarting.Control) (F11Off) (GU) (Arg) (System) (H)
+  module FlagsR11Off = struct
+    let restart_side_phases = F11Off.side_effect_phase_reset
+    let eliminate_dead_sides = F11Off.dead_side_elimination
+    let recompute_controlled = F11Off.recompute_controlled
+  end
+  module ER11Off = Tc_solvers_extracted_restarting.Restarting.FirstDiscovery (V) (D) (U) (Set) (Map) (FlagsR11Off)
+  let reference_R11Off body roots =
+    let module C = ER11Off.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ER11Off.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ER11Off.sigma final
+    | None -> failwith "R11Off: extracted reference exhausted fuel"
   module LNfp = Tc_solvers.Slr.Narrowing_fixed_point.Make (V) (D) (U)
   module GNfp = Slrtc_narrowing_fixed_point.Make (Slrtc_narrowing_fixed_point.Control) (F11) (GU) (Arg) (System) (H)
   module FlagsNfp = struct
     let restart_side_phases = F11.side_effect_phase_reset
     let eliminate_dead_sides = F11.dead_side_elimination
+    let recompute_controlled = F11.recompute_controlled
   end
   module ENfp = Tc_solvers_extracted_narrowing_fixed_point.NarrowingFixedPointRuntime.Solver (V) (D) (U) (Set) (Map) (FlagsNfp) (Empty) (Credit) (Empty) (Empty)
   let reference_Nfp body roots =
@@ -207,6 +295,25 @@ module CheckPolicy
     match ENfp.solve_fuel 100000 (fun x -> convert (body x)) roots with
     | Some final -> ENfp.R.sigma final
     | None -> failwith "Nfp: extracted reference exhausted fuel"
+  module LNfpOff = Tc_solvers.Slr.Narrowing_fixed_point.Make_with_features (V) (D) (U) (F11Off)
+  module GNfpOff = Slrtc_narrowing_fixed_point.Make (Slrtc_narrowing_fixed_point.Control) (F11Off) (GU) (Arg) (System) (H)
+  module FlagsNfpOff = struct
+    let restart_side_phases = F11Off.side_effect_phase_reset
+    let eliminate_dead_sides = F11Off.dead_side_elimination
+    let recompute_controlled = F11Off.recompute_controlled
+  end
+  module ENfpOff = Tc_solvers_extracted_narrowing_fixed_point.NarrowingFixedPointRuntime.Solver (V) (D) (U) (Set) (Map) (FlagsNfpOff) (Empty) (Credit) (Empty) (Empty)
+  let reference_NfpOff body roots =
+    let module C = ENfpOff.R.ConstraintSystem in
+    let rec convert = function
+      | Ret d -> C.Ret d
+      | Get (x,k) -> C.Get (x, fun d -> convert (k d))
+      | Side (x,d,k) -> C.Side (x,d,convert k)
+      | Spawn (x,k) -> C.Spawn (x,convert k)
+    in
+    match ENfpOff.solve_fuel 100000 (fun x -> convert (body x)) roots with
+    | Some final -> ENfpOff.R.sigma final
+    | None -> failwith "NfpOff: extracted reference exhausted fuel"
   let check (module L : SOLVER) goblint reference label starts missing tf roots =
     current := tf; rhsless := missing;
     let actual = L.solve ~initial:starts System.system roots in
@@ -226,7 +333,10 @@ module CheckPolicy
     | Some (known_reference, known_adapter) ->
         incr observed_gaps;
         if sorted expected <> known_reference || sorted !bindings <> known_adapter then
-          failwith (label ^ ": documented reference gap changed")
+          let show bindings = String.concat ";"
+            (List.map (fun (x,d) -> Printf.sprintf "%d=%d" x d) (sorted bindings)) in
+          failwith (Printf.sprintf "%s: documented reference gap changed (reference [%s], adapter [%s])"
+            label (show expected) (show !bindings))
     | None ->
         if sorted expected <> sorted !bindings then
           failwith (label ^ ": unexpected extracted machine mismatch"));
@@ -249,12 +359,29 @@ module CheckPolicy
     check (module LR01) GR01.solve reference_R01 (name ^ " R01") starts missing tf roots;
     check (module LR10) GR10.solve reference_R10 (name ^ " R10") starts missing tf roots;
     check (module LR11) GR11.solve reference_R11 (name ^ " R11") starts missing tf roots;
-    check (module LNfp) GNfp.solve reference_Nfp (name ^ " Nfp") starts missing tf roots
+    check (module LR00Off) GR00Off.solve reference_R00Off (name ^ " R00Off") starts missing tf roots;
+    check (module LR01Off) GR01Off.solve reference_R01Off (name ^ " R01Off") starts missing tf roots;
+    check (module LR10Off) GR10Off.solve reference_R10Off (name ^ " R10Off") starts missing tf roots;
+    check (module LR11Off) GR11Off.solve reference_R11Off (name ^ " R11Off") starts missing tf roots;
+    check (module LNfp) GNfp.solve reference_Nfp (name ^ " Nfp") starts missing tf roots;
+    check (module LNfpOff) GNfpOff.solve reference_NfpOff (name ^ " NfpOff") starts missing tf roots
 
   let run () =
   test "empty" (fun _ -> Ret 0) [];
   test "ordinary cycle and duplicate roots" (function
     | 0 -> Get (1, fun v -> Ret v) | 1 -> Get (0, fun _ -> Ret 1) | _ -> Ret 0) [0;0];
+  test "controlled owner without a self-read" (function
+    | 0 -> Get (1, fun _ -> Ret 1) | 1 -> Get (0, fun _ -> Ret 0) | _ -> Ret 0) [0];
+  if !policy = "WidenNarrow" then begin
+    let enabled = LR11.solve System.system [0] in
+    let disabled = LR11Off.solve System.system [0] in
+    assert (LR11.value enabled 0 = 1);
+    assert (LR11Off.value disabled 0 = 5);
+    let nfp_enabled = LNfp.solve System.system [0] in
+    let nfp_disabled = LNfpOff.solve System.system [0] in
+    assert (LNfp.value nfp_enabled 0 = 1);
+    assert (LNfpOff.value nfp_disabled 0 = 5)
+  end;
   test "effectful local-repair witness" (function
     | 0 -> Side (3,1,Ret 1)
     | 1 -> Get (2, fun v -> Side (2,min v 1,Ret (max v 1)))

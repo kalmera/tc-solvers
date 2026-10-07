@@ -24,6 +24,7 @@ end
 module type FEATURES = sig
   val side_effect_phase_reset : bool
   val dead_side_elimination : bool
+  val recompute_controlled : bool
 end
 
 module type SOLVER = sig
