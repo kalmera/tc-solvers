@@ -122,3 +122,15 @@ Module Instances.
   Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
   Module Least := LeastSolutionMake E.V E.D U E.S E.M Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
 End Instances.
+
+Goal True. idtac "SLR-TC_N total correctness proven with assumptions:". Abort.
+Print Assumptions Instances.FixedCells.total_correct.
+
+Goal True. idtac "SLR-TC_N leastness proven with assumptions:". Abort.
+Print Assumptions Instances.Least.total_least_solution.
+
+Goal True. idtac "SLR-TC_N monotone-system owner fallback avoidance proven with assumptions:". Abort.
+Print Assumptions Instances.FixedCells.monotonic_avoids_fallback.
+
+Goal True. idtac "SLR-TC_N total narrowing fixedness proven with assumptions:". Abort.
+Print Assumptions Instances.FixedCells.total_correct_and_fixed.

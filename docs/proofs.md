@@ -94,11 +94,12 @@ slow narrowing needs several updates to stabilize.
 effectful fanout, and recursive spawn closure. A missing-spawn regression shows
 that numerical satisfaction alone does not form a post-solution.
 The examples do not re-instantiate the full fixedness proof for each system.
-The regression files report assumptions for public correctness, leastness,
-fallback avoidance, and total fixedness. These reports include dependencies on
+Each `Theorems.v` reports assumptions for its main public results, with an
+`idtac` label before each `Print Assumptions` command. Simple reports correctness
+and leastness; Restarting and Narrowing Fixed Point additionally report fallback
+avoidance and total narrowing fixedness. These reports include dependencies on
 intermediate lemmas. `Print Assumptions` is informational; it does not fail the
-build if an assumption appears. Simple's two public assumption reports remain
-in its theorem file.
+build if an assumption appears.
 
 Independent validation with `rocq check` is useful after substantial proof or
 module changes and before merging. It checks compiled libraries separately

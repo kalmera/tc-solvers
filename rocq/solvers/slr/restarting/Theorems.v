@@ -234,3 +234,15 @@ Module Instances.
     Restarting.ReaderWakeupsOnlyFeatures IE.SL IE.ML.
   Definition ordinary_fixed := Ordinary.successful_run_fixed eq_refl.
 End Instances.
+
+Goal True. idtac "SLR-TC_R total correctness proven with assumptions:". Abort.
+Print Assumptions Instances.Correct.total_correct.
+
+Goal True. idtac "SLR-TC_R leastness proven with assumptions:". Abort.
+Print Assumptions Instances.Least.total_least_solution.
+
+Goal True. idtac "SLR-TC_R ordinary fallback avoidance proven with assumptions:". Abort.
+Print Assumptions Instances.Ordinary.ordinary_avoids_fallback.
+
+Goal True. idtac "SLR-TC_R total ordinary narrowing fixedness proven with assumptions:". Abort.
+Print Assumptions Instances.Ordinary.total_fixed.

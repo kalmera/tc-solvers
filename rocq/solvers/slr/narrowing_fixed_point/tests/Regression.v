@@ -7,12 +7,6 @@ Module E := Chain.
 Module Q := Theorems.Instances.FixedCells.
 Module P := Q.P.
 
-(** Assumption reports for the main public results cover their dependencies. *)
-Print Assumptions Q.total_correct.
-Print Assumptions Theorems.Instances.Least.total_least_solution.
-Print Assumptions Q.monotonic_avoids_fallback.
-Print Assumptions Q.total_correct_and_fixed.
-
 Module N := P.N.
 Module R := P.R.
 Definition tf (owner : E.V.t) : R.ConstraintSystem.rhs :=

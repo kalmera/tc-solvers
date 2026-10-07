@@ -8,12 +8,6 @@ Import ListNotations.
 Module E := Chain.
 Module P := Theorems.Instances.Least.Internal.
 
-(** Assumption reports for the main public results cover their dependencies. *)
-Print Assumptions Theorems.Instances.Correct.total_correct.
-Print Assumptions Theorems.Instances.Least.total_least_solution.
-Print Assumptions Theorems.Instances.Ordinary.ordinary_avoids_fallback.
-Print Assumptions Theorems.Instances.Ordinary.total_fixed.
-
 (** A back read controls owner 0. Its two effects on owner 2 accumulate,
     and the spawned owner 3 must be included in the final post-solution. *)
 Definition effects_and_spawn owner : P.Syntax.rhs :=
