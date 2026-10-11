@@ -7,12 +7,11 @@ Import ListNotations.
     batched drain while all unrequested owners remain source-strict. *)
 Module BatchedJoinLeast.
  Module E := Chain.
- Module U := JoinUpdate E.V E.D.
- Module UL := JoinUpdateLaws E.V E.D E.DL E.Height.
- Module UBL := JoinUpdateUpperBoundLaws E.V E.D E.DL.
- Module Solver := Theorems.LeastSolutionMake E.V E.D U E.S E.M
-  Base.AllEnabledFeatures E.DL UL UBL E.SL E.ML.
- Import Solver.
+ Module Parameters := ChainParameters SolverFeatures.AllEnabledFeatures.
+ Module Solver := Theorems.LeastSolutionMake Parameters.
+ Module R := Solver.Solver.R.
+ Module Sem := Solver.Solver.TransferSemantics.
+ Module N := Solver.Solver.N.
  Definition tf owner := if E.V.eq_dec owner 0 then
   R.ConstraintSystem.Side 1 E.D.One
    (R.ConstraintSystem.Side 2 E.D.Two
@@ -47,7 +46,7 @@ Module BatchedJoinLeast.
     + intros target value Hin'. exists value. split;[exact Hin' |apply E.DL.leq_refl].
     + intros x Hx;exact Hx.
  Qed.
- Lemma strict : Solver.source_strict_on tf [0;1;2;3] [0].
+ Lemma strict : Solver.Spec.source_strict_on tf [0;1;2;3] [0].
  Proof.
   intros owner Hin Hnonroot values result Hobs Hbottom.
   unfold tf in Hobs. destruct (E.V.eq_dec owner 0) as [->|Hne];

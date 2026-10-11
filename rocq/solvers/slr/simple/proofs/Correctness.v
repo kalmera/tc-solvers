@@ -3,10 +3,10 @@ From Stdlib Require Import
   Wellfounded Wf_nat Relations.Relation_Operators
   Wellfounded.Inverse_Image Wellfounded.Lexicographic_Product.
 From TcSolvers Require Import
-  common.Assumptions common.SolverSpecifications
+  common.Assumptions common.SolverContracts
   common.ConstraintSemantics
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.simple.Simple.
+  solvers.slr.simple.SimpleInterface.
 
 Import ListNotations.
 Set Implicit Arguments.
@@ -18,17 +18,10 @@ Module Make
   (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (S : SET V) (M : MAP V) (Rk : DISCOVERY_ORDER V).
 
-  Module R := Simple.Make V D U S M Rk.
-  Module ConstraintSyntax.
-    Definition rhs := R.ConstraintSystem.rhs.
-    Definition Ret := R.ConstraintSystem.Ret.
-    Definition Get := R.ConstraintSystem.Get.
-    Definition Side := R.ConstraintSystem.Side.
-    Definition Spawn := R.ConstraintSystem.Spawn.
-    Definition system := V.t -> rhs.
-  End ConstraintSyntax.
-  Module ConstraintSemantics :=
-    ConstraintSemantics.Make V D ConstraintSyntax.
+  Module Solver := SimpleInterface.Make V D U S M Rk.
+  Module R := Solver.R.
+  Module ConstraintSyntax := Solver.Syntax.
+  Module ConstraintSemantics := Solver.TransferSemantics.
   Include ConstraintSemantics.
 
   Lemma rhs_observes_spawns_supported : forall supported body result,
@@ -45,50 +38,18 @@ Module Make
       eapply IHHobs; eassumption.
   Qed.
 
-  Definition step
-    (tf : R.ConstraintSystem.system) (before after : R.config) : Prop :=
-    R.next_config tf before = Some after.
-
-  Inductive steps
-    (tf : R.ConstraintSystem.system) : R.config -> R.config -> Prop :=
-  | StepsRefl : forall c, steps tf c c
-  | StepsStep : forall first next final,
-      step tf first next ->
-      steps tf next final ->
-      steps tf first final.
-
-  Definition quiescent (st : R.state) : Prop :=
-    R.queue_peek (R.queue st) = None.
-
-  Definition terminal_config (st : R.state) : R.config :=
-    {| R.cfg_state := st; R.cfg_control := R.RunLoop |}.
-
+  Include Solver.ExecutionSemantics.
   Definition terminates_to
     (tf : R.ConstraintSystem.system)
     (initial : list V.t) (final : R.state) : Prop :=
     steps tf (R.initial_config initial) (terminal_config final) /\
     quiescent final.
 
-  Definition solved (st : R.state) (x : V.t) : Prop :=
-    exists value, M.lookup (R.sigma st) x = Some value.
-
-  Definition rhs_eval (st : R.state) :=
-    rhs_eval_with (fun target => M.lookup (R.sigma st) target).
-
-  Definition side_effects_below
-    (st : R.state) (effects : list (V.t * D.t)) : Prop :=
-    forall target value,
-      List.In (target, value) effects ->
-      D.leq value (R.sigma_value st target) = true.
-
-  (** Numerical replay bounds; public owner_post_solution also requires spawn closure. *)
-  Definition rhs_post_solution
-    (st : R.state) (owner : V.t)
-    (body : R.ConstraintSystem.rhs) : Prop :=
-    forall direct reads effects,
-      rhs_eval st body direct reads effects ->
-      D.leq direct (R.sigma_value st owner) = true /\
-      side_effects_below st effects.
+  Module StateSpec := SolverSpecifications.Make V D Solver.Sem Solver.View.
+  Definition solved := StateSpec.solved.
+  Definition rhs_eval := StateSpec.replay.
+  Definition side_effects_below := StateSpec.side_effects_below.
+  Definition rhs_post_solution := StateSpec.rhs_post_solution.
 
   Definition correct_final_state
     (tf : R.ConstraintSystem.system)
@@ -103,6 +64,7 @@ Module Make
     exists fuel final,
       R.solve_fuel fuel tf initial = Some final /\
       correct_final_state tf initial final.
+
 
 End Make.
 End Semantics.
@@ -12703,23 +12665,7 @@ Module Make
     exact (@solve_fuel_correct fuel tf roots final Hsolve).
   Qed.
 (** Shared public specifications are bound here, outside extraction dependencies. *)
-  Module Store.
-    Definition state := R.state.
-    Definition sigma := R.sigma.
-    Definition sigma_value := R.sigma_value.
-  End Store.
-  Module TransferView.
-    Definition rhs := Sem.ConstraintSyntax.rhs.
-    Definition observation := Sem.observation.
-    Definition observed_sides := Sem.observed_sides.
-    Definition observed_spawns := Sem.observed_spawns.
-    Definition observes_at := Sem.observes_at.
-    Definition rhs_observes := Sem.rhs_observes.
-    Definition rhs_eval_with := Sem.rhs_eval_with.
-    Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
-    Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
-  End TransferView.
-  Module Spec := SolverSpecifications.Make V D M TransferView Store.
+  Module Spec := Sem.StateSpec.
 
   Theorem solve_fuel_spawn_correct : forall fuel tf roots final,
     R.solve_fuel fuel tf roots = Some final -> Spec.correct_final_state tf roots final.
@@ -12746,6 +12692,17 @@ Module Make
           [exact Htrace | |exact Hobs |exact Hin].
         intros read value Hread. eapply Sem.rhs_eval_reads_lookup; eassumption.
   Qed.
+
+  (* Assemble certificates over this proof's machine; both public wrappers
+     reuse them rather than constructing another total-correctness instance. *)
+  Module PublicSpec := SolverContracts.ForSolver V D Sem.Solver.
+  Module Certificates <: PublicSpec.VERIFIED.
+    Theorem correctness : PublicSpec.Correctness.
+    Proof. constructor. exact solve_fuel_spawn_correct. Qed.
+    Theorem termination : PublicSpec.Termination.
+    Proof. constructor; [exact solver_terminates |exact sufficient_fuel]. Qed.
+  End Certificates.
+
 
 End Make.
 

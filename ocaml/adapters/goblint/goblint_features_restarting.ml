@@ -1,4 +1,4 @@
-(** The three compile-time policies exposed by the proved Restarting solver.
+(* The three compile-time policies exposed by the proved Restarting solver.
     The Goblint adapter default enables side reset and dead-side elimination,
     and disables controlled-owner recomputation. *)
 

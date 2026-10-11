@@ -39,3 +39,33 @@
  (public_name tc-solvers.extracted.slr.narrowing_fixed_point)
  (flags (:standard -w -33-39-67 -warn-error -A))
  (modules NarrowingFixedPointRuntime))
+
+(library
+ (name tc_solvers_extracted_reluctant_restarting)
+ (public_name tc-solvers.extracted.slr.reluctant_restarting)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules ReluctantRestartingRuntime))
+
+(library
+ (name tc_solvers_extracted_dormant_restarting)
+ (public_name tc-solvers.extracted.slr.dormant_restarting)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules DormantRestartingRuntime))
+
+(library
+ (name tc_solvers_extracted_dirty_read_restarting)
+ (public_name tc-solvers.extracted.slr.dirty_read_restarting)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules DirtyReadRestartingRuntime))
+
+(library
+ (name tc_solvers_extracted_plus_restarting)
+ (public_name tc-solvers.extracted.slr.plus_restarting)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules PlusRestartingRuntime))
+
+(library
+ (name tc_solvers_extracted_deferred_simple)
+ (public_name tc-solvers.extracted.slr.deferred_simple)
+ (flags (:standard -w -33-39-67 -warn-error -A))
+ (modules DeferredSimpleRuntime))

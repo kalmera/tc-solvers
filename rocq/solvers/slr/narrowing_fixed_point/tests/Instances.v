@@ -1,7 +1,7 @@
 From Stdlib Require Import List.
 From TcSolvers Require Import common.FiniteHeight
   solvers.slr.narrowing_fixed_point.NarrowingFixedPoint
-  solvers.slr.narrowing_fixed_point.tests.Chain.
+  common.instances.Chain.
 Import ListNotations.
 
 Module E := Chain.

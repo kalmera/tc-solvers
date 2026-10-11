@@ -1,4 +1,4 @@
-    (** Default online order for callback-based solvers. Variables receive
+    (* Default online order for callback-based solvers. Variables receive
         dense, increasing ranks when first encountered. Existing ranks never
         change, and the work queue always selects the greatest queued rank. *)
     (* @@RANK_WORKLIST@@ *)
@@ -29,7 +29,7 @@
         trace_node queue.trace result variable;
         result
 
-    (** Queue ranks are nonnegative, so [-1] denotes an empty heap without
+    (* Queue ranks are nonnegative, so [-1] denotes an empty heap without
         allocating an [option] in the episode-draining hot path. *)
     let[@inline always] queue_max_rank queue =
       if RankQueue.is_empty queue.heap
@@ -92,7 +92,7 @@
       | Some variable_rank ->
         (Dynarray.get queue.infos variable_rank).started
 
-    (** Roots are discovered one at a time. Work reached from one seed is
+    (* Roots are discovered one at a time. Work reached from one seed is
         drained before the next seed can receive a rank. Starting-state
         variables which were not reached from a root are seeded afterward. *)
     let solve_initial queue solve_episode roots starts =

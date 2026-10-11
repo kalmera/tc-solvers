@@ -4,7 +4,7 @@ From TcSolvers Require Import common.instances.Chain
 Import ListNotations.
 
 Module E := Chain.
-Module Q := Theorems.Instances.FixedCells.
+Module Q := Theorems.Instances.Fixed.Internal.
 Module P := Q.P.
 
 Module N := P.N.

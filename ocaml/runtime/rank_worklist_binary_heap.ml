@@ -1,4 +1,4 @@
-(** A mutable max-heap specialized to distinct integer ranks.
+(* A mutable max-heap specialized to distinct integer ranks.
     The caller owns membership and must not add a rank already present. *)
 
 type t = {

@@ -1196,7 +1196,7 @@ Module Make
 
   Lemma solved_dec : forall st x, {Sem.solved st x} + {~ Sem.solved st x}.
   Proof.
-    intros st x. unfold Sem.solved.
+    intros st x. unfold Sem.solved, Sem.StateSpec.solved.
     destruct (M.lookup (R.sigma st) x) eqn:Hlookup.
     - left. now exists t.
     - right. intros [value Hvalue]. discriminate.

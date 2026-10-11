@@ -25,6 +25,11 @@ extract: proofs
 	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractRestarting.v
 	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractNarrowingFixedPoint.v
 	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/GoblintControl.v
+	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractReluctantRestarting.v
+	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractDormantRestarting.v
+	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractDirtyReadRestarting.v
+	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractPlusRestarting.v
+	$(ROCQ) compile -Q rocq TcSolvers rocq/extraction/ExtractDeferredSimple.v
 	python3 tools/mark_generated.py
 regenerate goblint-solvers: extract
 	$(MAKE) goblint-adapters
@@ -33,6 +38,7 @@ library:
 	python3 ocaml/library/generate.py
 goblint-adapters:
 	sh ocaml/adapters/goblint/generate_goblint_slrtc_solvers.sh
+	sh ocaml/adapters/goblint/catching_up/generate.sh
 	python3 ocaml/adapters/goblint/narrowing_fixed_point/generate.py
 	cp ocaml/adapters/goblint/goblint_slrtc_register.ml ocaml/adapters/goblint/generated/slrtc_register.ml
 	python3 tools/mark_generated.py
@@ -45,5 +51,5 @@ test: ocaml
 check-generated: regenerate
 	python3 tools/check_generated.py
 clean:
-	if test -f RocqMakefile; then $(MAKE) -f RocqMakefile clean; fi
+	if test -f RocqMakefile; then $(MAKE) -f RocqMakefile cleanall; fi
 	$(DUNE) clean

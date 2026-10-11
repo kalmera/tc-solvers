@@ -1,4 +1,4 @@
-(**
+(*
    Goblint callback adapter for SLR-TC Restarting.
 
    This is a mutable implementation of the algorithm in
@@ -93,7 +93,7 @@ module Make
     type side_cell_row = side_cell VH.t
     type reset_sources = set VH.t
 
-    (** Target-local state lives beside its dense rank so callbacks hash a
+    (* Target-local state lives beside its dense rank so callbacks hash a
         variable only once, when obtaining that rank. *)
     type rank_info = {
       mutable queued : bool;
@@ -136,7 +136,7 @@ module Make
       mutable local_side : side_row option;
       mutable previous_targets : set option;
       mutable current_targets : set option;
-      (** Minimum-ranked owner or dependency read in this evaluation. *)
+      (* Minimum-ranked owner or dependency read in this evaluation. *)
       mutable min_scope : S.v * int;
     }
 

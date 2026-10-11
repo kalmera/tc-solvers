@@ -1,4 +1,4 @@
-(** A four-child max-heap for the same distinct integer-rank workload as the
+(* A four-child max-heap for the same distinct integer-rank workload as the
     binary backend. *)
 
 type t = {

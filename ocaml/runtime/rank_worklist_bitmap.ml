@@ -1,4 +1,4 @@
-(** A hierarchical bitmap for distinct dense nonnegative ranks. Each level
+(* A hierarchical bitmap for distinct dense nonnegative ranks. Each level
     summarizes the nonempty words of the level below it. Native OCaml integer
     words avoid the allocation incurred by boxed [int64] operations. *)
 
@@ -69,7 +69,7 @@ let mask_through offset =
   if offset = word_mask then -1
   else (1 lsl (offset + 1)) - 1
 
-(** Find the greatest set index strictly below [limit] at [level], or [-1].
+(* Find the greatest set index strictly below [limit] at [level], or [-1].
     The sentinel keeps maximum removal allocation-free. *)
 let rec find_before queue level limit =
   if limit <= 0 then -1

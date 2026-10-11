@@ -2,7 +2,7 @@ From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sort
 From TcSolvers Require Import common.Assumptions common.ConstraintSemantics
   common.SolverSpecifications common.SourceStrictness
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.narrowing_fixed_point.Base.
+  solvers.slr.narrowing_fixed_point.NarrowingFixedPointInterface.
 
 Import ListNotations.
 Set Implicit Arguments.
@@ -18,32 +18,10 @@ Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
 
 Module R := Base.Make V D U S M Ranks Features.
-Module Syntax.
-  Definition rhs := R.ConstraintSystem.rhs.
-  Definition Ret := R.ConstraintSystem.Ret.
-  Definition Get := R.ConstraintSystem.Get.
-  Definition Side := R.ConstraintSystem.Side.
-  Definition Spawn := R.ConstraintSystem.Spawn.
-  Definition system := V.t -> rhs.
-End Syntax.
-Module Sem := ConstraintSemantics.Make V D Syntax.
-Module Transfer.
-  Definition rhs := Syntax.rhs.
-  Definition observation := Sem.observation.
-  Definition observed_sides := Sem.observed_sides.
-  Definition observed_spawns := Sem.observed_spawns.
-  Definition observes_at := Sem.observes_at.
-  Definition rhs_observes := Sem.rhs_observes.
-  Definition rhs_eval_with := Sem.rhs_eval_with.
-  Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
-  Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
-End Transfer.
-Module Store.
-  Definition state := R.state.
-  Definition sigma := R.sigma.
-  Definition sigma_value := R.sigma_value.
-End Store.
-Module Spec := SolverSpecifications.Make V D M Transfer Store.
+Module Solver := NarrowingFixedPointInterface.WithCore V D U S M Ranks Features R.
+Module Syntax := Solver.Syntax.
+Module Sem := Solver.TransferSemantics.
+Module Spec := SolverSpecifications.Make V D Solver.Sem Solver.View.
 Include Spec.
 
 Definition step tf before after := R.next_config tf before = Some after.
@@ -1695,13 +1673,13 @@ Proof.
   unfold R.materialize; destruct (M.lookup (R.sigma st) x); [intros y Hy; exact Hy |].
   intros y [value Hlookup]; destruct (V.eq_dec y x) as [-> |Hneq].
   - exists D.bottom; cbn; apply ML.lookup_update_same.
-  - exists value; cbn; rewrite ML.lookup_update_other; auto.
+  - exists value; change (M.lookup (M.update (R.sigma st) x D.bottom) y = Some value); rewrite ML.lookup_update_other; auto.
 Qed.
 Lemma preserves_live_update st x value : preserves_live st (R.with_sigma st (M.update (R.sigma st) x value)).
 Proof.
   intros y [old Hlookup]; destruct (V.eq_dec y x) as [-> |Hneq].
   - exists value; cbn; apply ML.lookup_update_same.
-  - exists old; cbn; rewrite ML.lookup_update_other; auto.
+  - exists old; change (M.lookup (M.update (R.sigma st) x value) y = Some old); rewrite ML.lookup_update_other; auto.
 Qed.
 Lemma preserves_live_get st fr target next next_fr value : R.complete_get st fr target = (next,next_fr,value) ->
   preserves_live st next /\ solved next target.
@@ -3356,7 +3334,7 @@ Qed.
 
 Lemma materialized_iff_solved st x : R.is_materialized st x = true <-> solved st x.
 Proof.
-  split; [apply materialized_solved |intros [value Hvalue]; unfold Store.sigma in Hvalue; unfold R.is_materialized; rewrite Hvalue; reflexivity].
+  split; [apply materialized_solved |intros [value Hvalue]; change (M.lookup (R.sigma st) x = Some value) in Hvalue; unfold R.is_materialized; rewrite Hvalue; reflexivity].
 Qed.
 Definition missing_count support st := sum_over (fun x => if R.is_materialized st x then 0 else 1) support.
 Lemma missing_count_mono support before after : preserves_live before after -> missing_count support after <= missing_count support before.

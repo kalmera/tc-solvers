@@ -28,7 +28,7 @@ module Make =
   | Side of V.t * D.t * rhs
   | Spawn of V.t * rhs
 
-  (** val rhs_rect :
+  (* val rhs_rect :
       (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t ->
       D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs -> 'a1 **)
 
@@ -38,7 +38,7 @@ module Make =
   | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
   | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-  (** val rhs_rec :
+  (* val rhs_rec :
       (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t ->
       D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs -> 'a1 **)
 

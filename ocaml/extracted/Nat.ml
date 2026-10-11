@@ -6,48 +6,48 @@ open Number
 
 type t = int
 
-(** val zero : int **)
+(* val zero : int **)
 
 let zero =
   0
 
-(** val one : int **)
+(* val one : int **)
 
 let one =
   Stdlib.Int.succ 0
 
-(** val two : int **)
+(* val two : int **)
 
 let two =
   Stdlib.Int.succ (Stdlib.Int.succ 0)
 
-(** val succ : int -> int **)
+(* val succ : int -> int **)
 
 let succ x =
   Stdlib.Int.succ x
 
-(** val pred : int -> int **)
+(* val pred : int -> int **)
 
 let pred = fun n -> Stdlib.max 0 (n-1)
 
-(** val add : int -> int -> int **)
+(* val add : int -> int -> int **)
 
 let rec add = (+)
 
-(** val double : int -> int **)
+(* val double : int -> int **)
 
 let double n =
   add n n
 
-(** val mul : int -> int -> int **)
+(* val mul : int -> int -> int **)
 
 let rec mul = ( * )
 
-(** val sub : int -> int -> int **)
+(* val sub : int -> int -> int **)
 
 let rec sub = fun n m -> Stdlib.max 0 (n-m)
 
-(** val eqb : int -> int -> bool **)
+(* val eqb : int -> int -> bool **)
 
 let rec eqb n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -63,7 +63,7 @@ let rec eqb n m =
       m)
     n
 
-(** val leb : int -> int -> bool **)
+(* val leb : int -> int -> bool **)
 
 let rec leb n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -75,12 +75,12 @@ let rec leb n m =
       m)
     n
 
-(** val ltb : int -> int -> bool **)
+(* val ltb : int -> int -> bool **)
 
 let ltb n m =
   leb (Stdlib.Int.succ n) m
 
-(** val compare : int -> int -> comparison **)
+(* val compare : int -> int -> comparison **)
 
 let rec compare n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -96,7 +96,7 @@ let rec compare n m =
       m)
     n
 
-(** val even : int -> bool **)
+(* val even : int -> bool **)
 
 let rec even n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -108,12 +108,12 @@ let rec even n =
       n0)
     n
 
-(** val odd : int -> bool **)
+(* val odd : int -> bool **)
 
 let odd n =
   negb (even n)
 
-(** val pow : int -> int -> int **)
+(* val pow : int -> int -> int **)
 
 let rec pow n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -121,7 +121,7 @@ let rec pow n m =
     (fun m0 -> mul n (pow n m0))
     m
 
-(** val tail_add : int -> int -> int **)
+(* val tail_add : int -> int -> int **)
 
 let rec tail_add n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -129,7 +129,7 @@ let rec tail_add n m =
     (fun n0 -> tail_add n0 (Stdlib.Int.succ m))
     n
 
-(** val tail_addmul : int -> int -> int -> int **)
+(* val tail_addmul : int -> int -> int -> int **)
 
 let rec tail_addmul r n m =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -137,12 +137,12 @@ let rec tail_addmul r n m =
     (fun n0 -> tail_addmul (tail_add m r) n0 m)
     n
 
-(** val tail_mul : int -> int -> int **)
+(* val tail_mul : int -> int -> int **)
 
 let tail_mul n m =
   tail_addmul 0 n m
 
-(** val of_uint_acc : Decimal.uint -> int -> int **)
+(* val of_uint_acc : Decimal.uint -> int -> int **)
 
 let rec of_uint_acc d acc =
   match d with
@@ -206,12 +206,12 @@ let rec of_uint_acc d acc =
         (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ
         (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ 0)))))))))) acc))))))))))
 
-(** val of_uint : Decimal.uint -> int **)
+(* val of_uint : Decimal.uint -> int **)
 
 let of_uint d =
   of_uint_acc d 0
 
-(** val of_hex_uint_acc : Hexadecimal.uint -> int -> int **)
+(* val of_hex_uint_acc : Hexadecimal.uint -> int -> int **)
 
 let rec of_hex_uint_acc d acc =
   match d with
@@ -353,18 +353,18 @@ let rec of_hex_uint_acc d acc =
         (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ
         (Stdlib.Int.succ 0)))))))))))))))) acc))))))))))))))))
 
-(** val of_hex_uint : Hexadecimal.uint -> int **)
+(* val of_hex_uint : Hexadecimal.uint -> int **)
 
 let of_hex_uint d =
   of_hex_uint_acc d 0
 
-(** val of_num_uint : uint -> int **)
+(* val of_num_uint : uint -> int **)
 
 let of_num_uint = function
 | UIntDecimal d0 -> of_uint d0
 | UIntHexadecimal d0 -> of_hex_uint d0
 
-(** val to_little_uint : int -> Decimal.uint -> Decimal.uint **)
+(* val to_little_uint : int -> Decimal.uint -> Decimal.uint **)
 
 let rec to_little_uint n acc =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -372,12 +372,12 @@ let rec to_little_uint n acc =
     (fun n0 -> to_little_uint n0 (Decimal.Little.succ acc))
     n
 
-(** val to_uint : int -> Decimal.uint **)
+(* val to_uint : int -> Decimal.uint **)
 
 let to_uint n =
   Decimal.rev (to_little_uint n (Decimal.D0 Decimal.Nil))
 
-(** val to_little_hex_uint : int -> Hexadecimal.uint -> Hexadecimal.uint **)
+(* val to_little_hex_uint : int -> Hexadecimal.uint -> Hexadecimal.uint **)
 
 let rec to_little_hex_uint n acc =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -385,57 +385,57 @@ let rec to_little_hex_uint n acc =
     (fun n0 -> to_little_hex_uint n0 (Little.succ acc))
     n
 
-(** val to_hex_uint : int -> Hexadecimal.uint **)
+(* val to_hex_uint : int -> Hexadecimal.uint **)
 
 let to_hex_uint n =
   rev (to_little_hex_uint n (D0 Nil))
 
-(** val to_num_uint : int -> uint **)
+(* val to_num_uint : int -> uint **)
 
 let to_num_uint n =
   UIntDecimal (to_uint n)
 
-(** val to_num_hex_uint : int -> uint **)
+(* val to_num_hex_uint : int -> uint **)
 
 let to_num_hex_uint n =
   UIntHexadecimal (to_hex_uint n)
 
-(** val of_int : Decimal.signed_int -> int option **)
+(* val of_int : Decimal.signed_int -> int option **)
 
 let of_int d =
   match Decimal.norm d with
   | Decimal.Pos u -> Some (of_uint u)
   | Decimal.Neg _ -> None
 
-(** val of_hex_int : Hexadecimal.signed_int -> int option **)
+(* val of_hex_int : Hexadecimal.signed_int -> int option **)
 
 let of_hex_int d =
   match norm d with
   | Pos u -> Some (of_hex_uint u)
   | Neg _ -> None
 
-(** val of_num_int : signed_int -> int option **)
+(* val of_num_int : signed_int -> int option **)
 
 let of_num_int = function
 | IntDecimal d0 -> of_int d0
 | IntHexadecimal d0 -> of_hex_int d0
 
-(** val to_int : int -> Decimal.signed_int **)
+(* val to_int : int -> Decimal.signed_int **)
 
 let to_int n =
   Decimal.Pos (to_uint n)
 
-(** val to_hex_int : int -> Hexadecimal.signed_int **)
+(* val to_hex_int : int -> Hexadecimal.signed_int **)
 
 let to_hex_int n =
   Pos (to_hex_uint n)
 
-(** val to_num_int : int -> signed_int **)
+(* val to_num_int : int -> signed_int **)
 
 let to_num_int n =
   IntDecimal (to_int n)
 
-(** val divmod : int -> int -> int -> int -> int * int **)
+(* val divmod : int -> int -> int -> int -> int * int **)
 
 let rec divmod x y q u =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -447,7 +447,7 @@ let rec divmod x y q u =
       u)
     x
 
-(** val div : int -> int -> int **)
+(* val div : int -> int -> int **)
 
 let div x y =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -455,7 +455,7 @@ let div x y =
     (fun y' -> fst (divmod x y' 0 y'))
     y
 
-(** val modulo : int -> int -> int **)
+(* val modulo : int -> int -> int **)
 
 let modulo x y =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -463,7 +463,7 @@ let modulo x y =
     (fun y' -> sub y' (snd (divmod x y' 0 y')))
     y
 
-(** val gcd : int -> int -> int **)
+(* val gcd : int -> int -> int **)
 
 let rec gcd a b =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -471,12 +471,12 @@ let rec gcd a b =
     (fun a' -> gcd (modulo b (Stdlib.Int.succ a')) (Stdlib.Int.succ a'))
     a
 
-(** val square : int -> int **)
+(* val square : int -> int **)
 
 let square n =
   mul n n
 
-(** val sqrt_iter : int -> int -> int -> int -> int **)
+(* val sqrt_iter : int -> int -> int -> int -> int **)
 
 let rec sqrt_iter k p q r =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -490,12 +490,12 @@ let rec sqrt_iter k p q r =
       r)
     k
 
-(** val sqrt : int -> int **)
+(* val sqrt : int -> int **)
 
 let sqrt n =
   sqrt_iter n 0 0 0
 
-(** val log2_iter : int -> int -> int -> int -> int **)
+(* val log2_iter : int -> int -> int -> int -> int **)
 
 let rec log2_iter k p q r =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -508,12 +508,12 @@ let rec log2_iter k p q r =
       r)
     k
 
-(** val log2 : int -> int **)
+(* val log2 : int -> int **)
 
 let log2 n =
   log2_iter (pred n) 0 (Stdlib.Int.succ 0) 0
 
-(** val iter : int -> ('a1 -> 'a1) -> 'a1 -> 'a1 **)
+(* val iter : int -> ('a1 -> 'a1) -> 'a1 -> 'a1 **)
 
 let rec iter n f x =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -521,7 +521,7 @@ let rec iter n f x =
     (fun n0 -> f (iter n0 f x))
     n
 
-(** val div2 : int -> int **)
+(* val div2 : int -> int **)
 
 let rec div2 n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -533,7 +533,7 @@ let rec div2 n =
       n0)
     n
 
-(** val testbit : int -> int -> bool **)
+(* val testbit : int -> int -> bool **)
 
 let rec testbit a n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -541,7 +541,7 @@ let rec testbit a n =
     (fun n0 -> testbit (div2 a) n0)
     n
 
-(** val shiftl : int -> int -> int **)
+(* val shiftl : int -> int -> int **)
 
 let rec shiftl a n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -549,7 +549,7 @@ let rec shiftl a n =
     (fun n0 -> double (shiftl a n0))
     n
 
-(** val shiftr : int -> int -> int **)
+(* val shiftr : int -> int -> int **)
 
 let rec shiftr a n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -557,7 +557,7 @@ let rec shiftr a n =
     (fun n0 -> div2 (shiftr a n0))
     n
 
-(** val bitwise : (bool -> bool -> bool) -> int -> int -> int -> int **)
+(* val bitwise : (bool -> bool -> bool) -> int -> int -> int -> int **)
 
 let rec bitwise op n a b =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -568,22 +568,22 @@ let rec bitwise op n a b =
         (bitwise op n' (div2 a) (div2 b))))
     n
 
-(** val coq_land : int -> int -> int **)
+(* val coq_land : int -> int -> int **)
 
 let coq_land a b =
   bitwise (&&) a a b
 
-(** val coq_lor : int -> int -> int **)
+(* val coq_lor : int -> int -> int **)
 
 let coq_lor a b =
   bitwise (||) (Stdlib.max a b) a b
 
-(** val ldiff : int -> int -> int **)
+(* val ldiff : int -> int -> int **)
 
 let ldiff a b =
   bitwise (fun b0 b' -> (&&) b0 (negb b')) a a b
 
-(** val coq_lxor : int -> int -> int **)
+(* val coq_lxor : int -> int -> int **)
 
 let coq_lxor a b =
   bitwise xorb (Stdlib.max a b) a b

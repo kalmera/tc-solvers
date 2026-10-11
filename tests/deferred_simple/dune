@@ -1,0 +1,13 @@
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_deferred_simple.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_inlined_deferred_simple.ml)
+(rule (target slrtc_update.ml) (action (copy ../../ocaml/adapters/goblint/generated/slrtc_catching_up_update.ml %{target})))
+(copy_files ../catching_up/goblint_constraint.ml)
+(copy_files ../catching_up/gobPretty.ml)
+(copy_files ../catching_up/solverStats.ml)
+(copy_files ../../ocaml/extracted/DeferredSimpleRuntime.ml*)
+(executable
+ (name deferred_simple)
+ (flags (:standard -w -33-39-60-67 -warn-error -A))
+ (libraries batteries yojson unix))
+(rule (alias runtest)
+ (action (setenv SLRTC_TRACE "" (run %{exe:deferred_simple.exe}))))

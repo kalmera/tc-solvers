@@ -1,4 +1,4 @@
-(** OCaml 5.4 reference backend. *)
+(* OCaml 5.4 reference backend. *)
 
 include Pqueue.MakeMax (struct
   type t = int

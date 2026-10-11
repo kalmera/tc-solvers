@@ -7,22 +7,22 @@ module ListSet =
  struct
   type t = V.t list
 
-  (** val empty : t **)
+  (* val empty : t **)
 
   let empty =
     []
 
-  (** val mem : V.t -> t -> bool **)
+  (* val mem : V.t -> t -> bool **)
 
   let mem x xs =
     if in_dec V.eq_dec x xs then true else false
 
-  (** val add : V.t -> t -> t **)
+  (* val add : V.t -> t -> t **)
 
   let add x xs =
     if in_dec V.eq_dec x xs then xs else x :: xs
 
-  (** val elements : t -> V.t list **)
+  (* val elements : t -> V.t list **)
 
   let elements xs =
     xs
@@ -33,12 +33,12 @@ module AssocMap =
  struct
   type 'a t = (V.t * 'a) list
 
-  (** val empty : 'a1 t **)
+  (* val empty : 'a1 t **)
 
   let empty =
     []
 
-  (** val lookup : 'a1 t -> V.t -> 'a1 option **)
+  (* val lookup : 'a1 t -> V.t -> 'a1 option **)
 
   let rec lookup m x =
     match m with
@@ -46,7 +46,7 @@ module AssocMap =
     | p :: rest ->
       let (y, value) = p in if V.eq_dec x y then Some value else lookup rest x
 
-  (** val update : 'a1 t -> V.t -> 'a1 -> 'a1 t **)
+  (* val update : 'a1 t -> V.t -> 'a1 -> 'a1 t **)
 
   let rec update m x value =
     match m with
@@ -57,7 +57,7 @@ module AssocMap =
       then (y, value) :: rest
       else (y, old) :: (update rest x value)
 
-  (** val values : 'a1 t -> 'a1 list **)
+  (* val values : 'a1 t -> 'a1 list **)
 
   let rec values = function
   | [] -> []
@@ -72,37 +72,37 @@ module OrderedListQueue =
  struct
   type t = V.t list
 
-  (** val empty : unit -> t **)
+  (* val empty : unit -> t **)
 
   let empty _ =
     []
 
-  (** val insert_fresh : V.t -> t -> t **)
+  (* val insert_fresh : V.t -> t -> t **)
 
   let rec insert_fresh x = function
   | [] -> x :: []
   | y :: rest ->
     if O.lt y x then x :: (y :: rest) else y :: (insert_fresh x rest)
 
-  (** val insert : V.t -> t -> t **)
+  (* val insert : V.t -> t -> t **)
 
   let insert x q =
     if in_dec V.eq_dec x q then q else insert_fresh x q
 
-  (** val insert_all : V.t list -> t -> t **)
+  (* val insert_all : V.t list -> t -> t **)
 
   let rec insert_all xs q =
     match xs with
     | [] -> q
     | x :: rest -> insert_all rest (insert x q)
 
-  (** val peek_max : t -> V.t option **)
+  (* val peek_max : t -> V.t option **)
 
   let peek_max = function
   | [] -> None
   | x :: _ -> Some x
 
-  (** val pop_max : t -> (V.t * t) option **)
+  (* val pop_max : t -> (V.t * t) option **)
 
   let pop_max = function
   | [] -> None

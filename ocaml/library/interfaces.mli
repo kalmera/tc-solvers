@@ -35,16 +35,16 @@ module type SOLVER = sig
   type system = variable -> rhs option
   type solution
 
-  (** Fresh solve; repeated initial contributions are joined and retained.
+  (* Fresh solve; repeated initial contributions are joined and retained.
       Callback and system-lookup exceptions propagate. *)
   val solve : ?initial:(variable * value) list -> system -> variable list -> solution
 
-  (** Bottom when absent. *)
+  (* Bottom when absent. *)
   val value : solution -> variable -> value
 
-  (** Whether the variable has a stored binding, including stored bottom. *)
+  (* Whether the variable has a stored binding, including stored bottom. *)
   val mem : solution -> variable -> bool
 
-  (** Visit each stored binding once, in unspecified order. *)
+  (* Visit each stored binding once, in unspecified order. *)
   val iter : (variable -> value -> unit) -> solution -> unit
 end

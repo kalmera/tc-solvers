@@ -6,7 +6,7 @@ From TcSolvers Require Import common.instances.Chain
     recomputation policies. *)
 Import ListNotations.
 Module E := Chain.
-Module P := Theorems.Instances.Least.Internal.
+Module P := Theorems.Instances.Least.Total.Internal.
 
 (** A back read controls owner 0. Its two effects on owner 2 accumulate,
     and the spawned owner 3 must be included in the final post-solution. *)
@@ -63,7 +63,7 @@ Proof. apply P.budget_materialize_new; [cbn; auto |reflexivity]. Qed.
 (** Compare both owner-recomputation settings with slow OneBox narrowing. *)
 Module Ordinary.
   Module Q := Theorems.Instances.Ordinary.
-  Module P := Q.Internal.
+  Module P := Q.Internal.Core.
   Definition controlled_constant owner : P.Syntax.rhs :=
     match owner with
     | 0 => P.Syntax.Get 1 (fun _ => P.Syntax.Ret E.D.One)
@@ -96,7 +96,7 @@ Module Ordinary.
 End Ordinary.
 Module ReaderWakeups.
   Module Q := Theorems.Instances.OrdinaryReaderWakeups.
-  Module P := Q.Internal.
+  Module P := Q.Internal.Core.
   Definition controlled_constant owner : P.Syntax.rhs :=
     match owner with
     | 0 => P.Syntax.Get 1 (fun _ => P.Syntax.Ret E.D.One)
@@ -126,6 +126,6 @@ Proof. vm_compute; split; reflexivity. Qed.
 Example ordinary_result_narrowing_fixed :
   Ordinary.P.narrowing_fixed E.WN.narrow Ordinary.controlled_constant Ordinary.constant_final.
 Proof.
-  eapply Ordinary.Q.successful_run_fixed_unbounded; [reflexivity |apply Ordinary.controlled_constant_monotone |
-    apply Ordinary.controlled_constant_pure |exact ordinary_recomputation_terminates].
+  eapply Ordinary.Q.successful_run_fixed; [reflexivity | |exact ordinary_recomputation_terminates].
+  split; [apply Ordinary.controlled_constant_monotone |apply Ordinary.controlled_constant_pure].
 Qed.

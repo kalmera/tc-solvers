@@ -6,7 +6,7 @@
    Rank worklist: bitmap
    Adapter: ocaml/adapters/goblint/goblint_slrtc_simple.ml.in
    Regenerate with: make goblint-solvers *)
-(**
+(*
    Goblint callback adapter for SLR-TC Simple.
 
    This is a mutable implementation of the algorithm in
@@ -281,7 +281,7 @@ module Make
 
     type side_row = side_cell VH.t
 
-    (** Target-local state lives beside its dense rank so callbacks hash a
+    (* Target-local state lives beside its dense rank so callbacks hash a
         variable only once, when obtaining that rank. *)
     type rank_info = {
       mutable queued : bool;
@@ -306,11 +306,11 @@ module Make
         side_cells = None;
       }
 
-    (** Default online order for callback-based solvers. Variables receive
+    (* Default online order for callback-based solvers. Variables receive
         dense, increasing ranks when first encountered. Existing ranks never
         change, and the work queue always selects the greatest queued rank. *)
     module RankQueue = struct
-      (** A hierarchical bitmap for distinct dense nonnegative ranks. Each level
+      (* A hierarchical bitmap for distinct dense nonnegative ranks. Each level
           summarizes the nonempty words of the level below it. Native OCaml integer
           words avoid the allocation incurred by boxed [int64] operations. *)
 
@@ -381,7 +381,7 @@ module Make
         if offset = word_mask then -1
         else (1 lsl (offset + 1)) - 1
 
-      (** Find the greatest set index strictly below [limit] at [level], or [-1].
+      (* Find the greatest set index strictly below [limit] at [level], or [-1].
           The sentinel keeps maximum removal allocation-free. *)
       let rec find_before queue level limit =
         if limit <= 0 then -1
@@ -459,7 +459,7 @@ module Make
         trace_node queue.trace result variable;
         result
 
-    (** Queue ranks are nonnegative, so [-1] denotes an empty heap without
+    (* Queue ranks are nonnegative, so [-1] denotes an empty heap without
         allocating an [option] in the episode-draining hot path. *)
     let[@inline always] queue_max_rank queue =
       if RankQueue.is_empty queue.heap
@@ -522,7 +522,7 @@ module Make
       | Some variable_rank ->
         (Dynarray.get queue.infos variable_rank).started
 
-    (** Roots are discovered one at a time. Work reached from one seed is
+    (* Roots are discovered one at a time. Work reached from one seed is
         drained before the next seed can receive a rank. Starting-state
         variables which were not reached from a root are seeded afterward. *)
     let solve_initial queue solve_episode roots starts =

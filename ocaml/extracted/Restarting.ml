@@ -21,17 +21,17 @@ module type FEATURES =
 
 module AllEnabledFeatures =
  struct
-  (** val restart_side_phases : bool **)
+  (* val restart_side_phases : bool **)
 
   let restart_side_phases =
     true
 
-  (** val eliminate_dead_sides : bool **)
+  (* val eliminate_dead_sides : bool **)
 
   let eliminate_dead_sides =
     true
 
-  (** val recompute_controlled : bool **)
+  (* val recompute_controlled : bool **)
 
   let recompute_controlled =
     true
@@ -39,17 +39,17 @@ module AllEnabledFeatures =
 
 module ReaderWakeupsOnlyFeatures =
  struct
-  (** val restart_side_phases : bool **)
+  (* val restart_side_phases : bool **)
 
   let restart_side_phases =
     true
 
-  (** val eliminate_dead_sides : bool **)
+  (* val eliminate_dead_sides : bool **)
 
   let eliminate_dead_sides =
     true
 
-  (** val recompute_controlled : bool **)
+  (* val recompute_controlled : bool **)
 
   let recompute_controlled =
     false
@@ -116,7 +116,7 @@ module Make =
 
   type work_queue = V.t list
 
-  (** val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
+  (* val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
 
   let ranking_lt order x y =
     match Ranking.lookup order x with
@@ -126,13 +126,13 @@ module Make =
        | None -> false)
     | None -> false
 
-  (** val queue_contains : V.t -> work_queue -> bool **)
+  (* val queue_contains : V.t -> work_queue -> bool **)
 
   let rec queue_contains x = function
   | [] -> false
   | head :: rest -> if V.eq_dec x head then true else queue_contains x rest
 
-  (** val queue_insert_fresh :
+  (* val queue_insert_fresh :
       Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh order x = function
@@ -142,12 +142,12 @@ module Make =
     then x :: (head :: rest)
     else head :: (queue_insert_fresh order x rest)
 
-  (** val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
+  (* val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let queue_insert order x q =
     if queue_contains x q then q else queue_insert_fresh order x q
 
-  (** val queue_insert_all :
+  (* val queue_insert_all :
       Ranking.t -> V.t list -> work_queue -> work_queue **)
 
   let rec queue_insert_all order xs q =
@@ -155,13 +155,13 @@ module Make =
     | [] -> q
     | x :: rest -> queue_insert_all order rest (queue_insert order x q)
 
-  (** val queue_peek : work_queue -> V.t option **)
+  (* val queue_peek : work_queue -> V.t option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (V.t * work_queue) option **)
+  (* val queue_pop : work_queue -> (V.t * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -169,12 +169,12 @@ module Make =
 
   type side_cell = { side_phase : U.phase; side_reset_at : V.t option }
 
-  (** val side_phase : side_cell -> U.phase **)
+  (* val side_phase : side_cell -> U.phase **)
 
   let side_phase s =
     s.side_phase
 
-  (** val side_reset_at : side_cell -> V.t option **)
+  (* val side_reset_at : side_cell -> V.t option **)
 
   let side_reset_at s =
     s.side_reset_at
@@ -194,59 +194,59 @@ module Make =
                  side_cells : side_cell_table; reset_at_close : reset_table;
                  last_targets : target_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val side_cells : state -> side_cell_table **)
+  (* val side_cells : state -> side_cell_table **)
 
   let side_cells s =
     s.side_cells
 
-  (** val reset_at_close : state -> reset_table **)
+  (* val reset_at_close : state -> reset_table **)
 
   let reset_at_close s =
     s.reset_at_close
 
-  (** val last_targets : state -> target_table **)
+  (* val last_targets : state -> target_table **)
 
   let last_targets s =
     s.last_targets
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; readers =
       M.empty; contributions = M.empty; side_cells = M.empty;
       reset_at_close = M.empty; last_targets = M.empty; controlled = S.empty }
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; readers =
@@ -254,7 +254,7 @@ module Make =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; readers =
@@ -262,7 +262,7 @@ module Make =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; readers =
@@ -270,7 +270,7 @@ module Make =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -278,7 +278,7 @@ module Make =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -286,7 +286,7 @@ module Make =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_cells_and_resets :
+  (* val with_cells_and_resets :
       state -> side_cell_table -> reset_table -> state **)
 
   let with_cells_and_resets st cells resets =
@@ -295,7 +295,7 @@ module Make =
       reset_at_close = resets; last_targets = st.last_targets; controlled =
       st.controlled }
 
-  (** val with_last_targets : state -> target_table -> state **)
+  (* val with_last_targets : state -> target_table -> state **)
 
   let with_last_targets st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -303,7 +303,7 @@ module Make =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -311,116 +311,116 @@ module Make =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = next }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     let row = lookup_map table outer in
     M.update table outer (M.update row inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
+  (* val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
 
   let lookup_reset_ids table scope =
     match M.lookup table scope with
     | Some ids -> ids
     | None -> []
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     match M.lookup st.sigma x with
     | Some _ -> st
     | None -> with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state **)
+  (* val observe : state -> V.t -> state **)
 
   let observe st x =
     let (next, _) = Ranking.observe st.ranking x in with_ranking st next
 
-  (** val rank_lt : state -> V.t -> V.t -> bool **)
+  (* val rank_lt : state -> V.t -> V.t -> bool **)
 
   let rank_lt st x y =
     ranking_lt st.ranking x y
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     with_queue st (queue_insert st.ranking x st.queue)
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let enqueue_all st xs =
     with_queue st (queue_insert_all st.ranking xs st.queue)
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val default_side_cell : V.t -> side_cell **)
+  (* val default_side_cell : V.t -> side_cell **)
 
   let default_side_cell target =
     { side_phase = (U.initial_phase true target); side_reset_at = None }
 
-  (** val stored_side_cell : state -> V.t -> V.t -> side_cell **)
+  (* val stored_side_cell : state -> V.t -> V.t -> side_cell **)
 
   let stored_side_cell st source target =
     match M.lookup (lookup_map st.side_cells source) target with
     | Some cell -> cell
     | None -> default_side_cell target
 
-  (** val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
+  (* val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
 
   let cell_id_eq_dec left right =
     let (a, b) = left in
     let (t0, t1) = right in if V.eq_dec a t0 then V.eq_dec b t1 else false
 
-  (** val remove_cell_id :
+  (* val remove_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let rec remove_cell_id id = function
@@ -430,25 +430,25 @@ module Make =
     then remove_cell_id id rest
     else candidate :: (remove_cell_id id rest)
 
-  (** val add_cell_id :
+  (* val add_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let add_cell_id id ids =
     if in_dec cell_id_eq_dec id ids then ids else id :: ids
 
-  (** val remove_registration :
+  (* val remove_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let remove_registration resets scope id =
     M.update resets scope (remove_cell_id id (lookup_reset_ids resets scope))
 
-  (** val add_registration :
+  (* val add_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let add_registration resets scope id =
     M.update resets scope (add_cell_id id (lookup_reset_ids resets scope))
 
-  (** val same_scope : V.t option -> V.t option -> bool **)
+  (* val same_scope : V.t option -> V.t option -> bool **)
 
   let same_scope left right =
     match left with
@@ -460,7 +460,7 @@ module Make =
                | Some _ -> false
                | None -> true)
 
-  (** val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
+  (* val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
 
   let register_reset st source target scope phase0 =
     let id = (source, target) in
@@ -491,7 +491,7 @@ module Make =
     with_cells_and_resets st
       (update_map st.side_cells source target next_cell) next_resets
 
-  (** val reset_cells :
+  (* val reset_cells :
       side_cell_id list -> side_cell_table -> side_cell_table **)
 
   let rec reset_cells ids cells =
@@ -502,7 +502,7 @@ module Make =
       let fresh = default_side_cell target in
       reset_cells rest (update_map cells source target fresh)
 
-  (** val reset_registered_cells : state -> V.t -> state **)
+  (* val reset_registered_cells : state -> V.t -> state **)
 
   let reset_registered_cells st owner =
     if Features.restart_side_phases
@@ -516,42 +516,42 @@ module Make =
                  S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
-  (** val frame_owner : frame -> V.t **)
+  (* val frame_owner : frame -> V.t **)
 
   let frame_owner f =
     f.frame_owner
 
-  (** val frame_phase : frame -> U.phase **)
+  (* val frame_phase : frame -> U.phase **)
 
   let frame_phase f =
     f.frame_phase
 
-  (** val frame_local_side : frame -> D.t M.t **)
+  (* val frame_local_side : frame -> D.t M.t **)
 
   let frame_local_side f =
     f.frame_local_side
 
-  (** val frame_previous_targets : frame -> S.t **)
+  (* val frame_previous_targets : frame -> S.t **)
 
   let frame_previous_targets f =
     f.frame_previous_targets
 
-  (** val frame_current_targets : frame -> S.t **)
+  (* val frame_current_targets : frame -> S.t **)
 
   let frame_current_targets f =
     f.frame_current_targets
 
-  (** val frame_min_scope : frame -> V.t **)
+  (* val frame_min_scope : frame -> V.t **)
 
   let frame_min_scope f =
     f.frame_min_scope
 
-  (** val frame_max_read : frame -> V.t option **)
+  (* val frame_max_read : frame -> V.t option **)
 
   let frame_max_read f =
     f.frame_max_read
 
-  (** val fresh_frame : state -> V.t -> U.phase -> frame **)
+  (* val fresh_frame : state -> V.t -> U.phase -> frame **)
 
   let fresh_frame st owner phase0 =
     { frame_owner = owner; frame_phase = phase0; frame_local_side = M.empty;
@@ -559,7 +559,7 @@ module Make =
       frame_current_targets = S.empty; frame_min_scope = owner;
       frame_max_read = None }
 
-  (** val with_frame_phase : frame -> U.phase -> frame **)
+  (* val with_frame_phase : frame -> U.phase -> frame **)
 
   let with_frame_phase fr phase0 =
     { frame_owner = fr.frame_owner; frame_phase = phase0; frame_local_side =
@@ -568,7 +568,7 @@ module Make =
       fr.frame_current_targets; frame_min_scope = fr.frame_min_scope;
       frame_max_read = fr.frame_max_read }
 
-  (** val with_frame_read : frame -> V.t -> V.t option -> frame **)
+  (* val with_frame_read : frame -> V.t -> V.t option -> frame **)
 
   let with_frame_read fr minimum maximum =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -577,7 +577,7 @@ module Make =
       fr.frame_current_targets; frame_min_scope = minimum; frame_max_read =
       maximum }
 
-  (** val with_frame_side : frame -> V.t -> D.t -> frame **)
+  (* val with_frame_side : frame -> V.t -> D.t -> frame **)
 
   let with_frame_side fr target input =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -587,12 +587,12 @@ module Make =
       frame_min_scope = fr.frame_min_scope; frame_max_read =
       fr.frame_max_read }
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
+  (* val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
 
   let complete_get st fr target =
     let owner = fr.frame_owner in
@@ -618,26 +618,26 @@ module Make =
     in
     let st3 = materialize st2 target in ((st3, fr1), (sigma_value st3 target))
 
-  (** val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input fr target raw =
     match M.lookup fr.frame_local_side target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
+  (* val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
 
   let record_side_input fr target raw =
     let input = accumulated_side_input fr target raw in
     ((with_frame_side fr target input), input)
 
-  (** val promote_side_target : state -> frame -> V.t -> state **)
+  (* val promote_side_target : state -> frame -> V.t -> state **)
 
   let promote_side_target st fr target =
     let source = fr.frame_owner in
     if rank_lt st target source then st else promote_controlled st source
 
-  (** val write_side_contribution :
+  (* val write_side_contribution :
       state -> frame -> V.t -> D.t -> state * bool **)
 
   let write_side_contribution st fr target input =
@@ -659,13 +659,13 @@ module Make =
     let changed = negb (equivalent (aggregate st3 target) old_aggregate) in
     (st3, changed)
 
-  (** val publish_targets : state -> frame -> state **)
+  (* val publish_targets : state -> frame -> state **)
 
   let publish_targets st fr =
     with_last_targets st
       (M.update st.last_targets fr.frame_owner fr.frame_current_targets)
 
-  (** val set_value : state -> frame -> D.t -> state * frame **)
+  (* val set_value : state -> frame -> D.t -> state * frame **)
 
   let set_value st fr direct =
     let owner = fr.frame_owner in
@@ -690,7 +690,7 @@ module Make =
               in
               (st3, fr1)
 
-  (** val requeue_changed_controlled_owner :
+  (* val requeue_changed_controlled_owner :
       state -> state -> V.t -> state **)
 
   let requeue_changed_controlled_owner before after owner =
@@ -723,7 +723,7 @@ module Make =
   | KDead of frame * D.t * V.t list * continuation
   | KDrain of frame * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -741,7 +741,7 @@ module Make =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -759,7 +759,7 @@ module Make =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -780,7 +780,7 @@ module Make =
     f4 f6 t0 l c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
   | KDrain (f6, c0) -> f5 f6 c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -803,22 +803,22 @@ module Make =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val continue_side :
+  (* val continue_side :
       state -> frame -> V.t -> ConstraintSystem.rhs -> continuation -> bool
       -> config **)
 
@@ -832,7 +832,7 @@ module Make =
            k)) }
   | false -> { cfg_state = st; cfg_control = (RunRhs (fr, next, k)) }
 
-  (** val continue_dead :
+  (* val continue_dead :
       state -> frame -> D.t -> V.t -> V.t list -> continuation -> bool ->
       config **)
 
@@ -847,7 +847,7 @@ module Make =
   | false ->
     { cfg_state = st; cfg_control = (RunDead (fr, direct, remaining, k)) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -981,7 +981,7 @@ module Make =
         | KDrain (fr, k') ->
           Some { cfg_state = st; cfg_control = (RunDrain (fr, k')) }))
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -992,7 +992,7 @@ module Make =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -1002,13 +1002,13 @@ module Make =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -1042,7 +1042,7 @@ module FirstDiscoveryAlgorithm =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -1053,7 +1053,7 @@ module FirstDiscoveryAlgorithm =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -1079,22 +1079,22 @@ module FirstDiscoveryAlgorithm =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -1102,7 +1102,7 @@ module FirstDiscoveryAlgorithm =
 
   type work_queue = V.t list
 
-  (** val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
+  (* val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
 
   let ranking_lt order x y =
     match Ranking.lookup order x with
@@ -1112,13 +1112,13 @@ module FirstDiscoveryAlgorithm =
        | None -> false)
     | None -> false
 
-  (** val queue_contains : V.t -> work_queue -> bool **)
+  (* val queue_contains : V.t -> work_queue -> bool **)
 
   let rec queue_contains x = function
   | [] -> false
   | head :: rest -> if V.eq_dec x head then true else queue_contains x rest
 
-  (** val queue_insert_fresh :
+  (* val queue_insert_fresh :
       Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh order x = function
@@ -1128,12 +1128,12 @@ module FirstDiscoveryAlgorithm =
     then x :: (head :: rest)
     else head :: (queue_insert_fresh order x rest)
 
-  (** val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
+  (* val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let queue_insert order x q =
     if queue_contains x q then q else queue_insert_fresh order x q
 
-  (** val queue_insert_all :
+  (* val queue_insert_all :
       Ranking.t -> V.t list -> work_queue -> work_queue **)
 
   let rec queue_insert_all order xs q =
@@ -1141,13 +1141,13 @@ module FirstDiscoveryAlgorithm =
     | [] -> q
     | x :: rest -> queue_insert_all order rest (queue_insert order x q)
 
-  (** val queue_peek : work_queue -> V.t option **)
+  (* val queue_peek : work_queue -> V.t option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (V.t * work_queue) option **)
+  (* val queue_pop : work_queue -> (V.t * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -1155,12 +1155,12 @@ module FirstDiscoveryAlgorithm =
 
   type side_cell = { side_phase : U.phase; side_reset_at : V.t option }
 
-  (** val side_phase : side_cell -> U.phase **)
+  (* val side_phase : side_cell -> U.phase **)
 
   let side_phase s =
     s.side_phase
 
-  (** val side_reset_at : side_cell -> V.t option **)
+  (* val side_reset_at : side_cell -> V.t option **)
 
   let side_reset_at s =
     s.side_reset_at
@@ -1180,59 +1180,59 @@ module FirstDiscoveryAlgorithm =
                  side_cells : side_cell_table; reset_at_close : reset_table;
                  last_targets : target_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val side_cells : state -> side_cell_table **)
+  (* val side_cells : state -> side_cell_table **)
 
   let side_cells s =
     s.side_cells
 
-  (** val reset_at_close : state -> reset_table **)
+  (* val reset_at_close : state -> reset_table **)
 
   let reset_at_close s =
     s.reset_at_close
 
-  (** val last_targets : state -> target_table **)
+  (* val last_targets : state -> target_table **)
 
   let last_targets s =
     s.last_targets
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; readers =
       M.empty; contributions = M.empty; side_cells = M.empty;
       reset_at_close = M.empty; last_targets = M.empty; controlled = S.empty }
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; readers =
@@ -1240,7 +1240,7 @@ module FirstDiscoveryAlgorithm =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; readers =
@@ -1248,7 +1248,7 @@ module FirstDiscoveryAlgorithm =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; readers =
@@ -1256,7 +1256,7 @@ module FirstDiscoveryAlgorithm =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -1264,7 +1264,7 @@ module FirstDiscoveryAlgorithm =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -1272,7 +1272,7 @@ module FirstDiscoveryAlgorithm =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_cells_and_resets :
+  (* val with_cells_and_resets :
       state -> side_cell_table -> reset_table -> state **)
 
   let with_cells_and_resets st cells resets =
@@ -1281,7 +1281,7 @@ module FirstDiscoveryAlgorithm =
       reset_at_close = resets; last_targets = st.last_targets; controlled =
       st.controlled }
 
-  (** val with_last_targets : state -> target_table -> state **)
+  (* val with_last_targets : state -> target_table -> state **)
 
   let with_last_targets st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -1289,7 +1289,7 @@ module FirstDiscoveryAlgorithm =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -1297,116 +1297,116 @@ module FirstDiscoveryAlgorithm =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = next }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     let row = lookup_map table outer in
     M.update table outer (M.update row inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
+  (* val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
 
   let lookup_reset_ids table scope =
     match M.lookup table scope with
     | Some ids -> ids
     | None -> []
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     match M.lookup st.sigma x with
     | Some _ -> st
     | None -> with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state **)
+  (* val observe : state -> V.t -> state **)
 
   let observe st x =
     let (next, _) = Ranking.observe st.ranking x in with_ranking st next
 
-  (** val rank_lt : state -> V.t -> V.t -> bool **)
+  (* val rank_lt : state -> V.t -> V.t -> bool **)
 
   let rank_lt st x y =
     ranking_lt st.ranking x y
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     with_queue st (queue_insert st.ranking x st.queue)
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let enqueue_all st xs =
     with_queue st (queue_insert_all st.ranking xs st.queue)
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val default_side_cell : V.t -> side_cell **)
+  (* val default_side_cell : V.t -> side_cell **)
 
   let default_side_cell target =
     { side_phase = (U.initial_phase true target); side_reset_at = None }
 
-  (** val stored_side_cell : state -> V.t -> V.t -> side_cell **)
+  (* val stored_side_cell : state -> V.t -> V.t -> side_cell **)
 
   let stored_side_cell st source target =
     match M.lookup (lookup_map st.side_cells source) target with
     | Some cell -> cell
     | None -> default_side_cell target
 
-  (** val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
+  (* val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
 
   let cell_id_eq_dec left right =
     let (a, b) = left in
     let (t0, t1) = right in if V.eq_dec a t0 then V.eq_dec b t1 else false
 
-  (** val remove_cell_id :
+  (* val remove_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let rec remove_cell_id id = function
@@ -1416,25 +1416,25 @@ module FirstDiscoveryAlgorithm =
     then remove_cell_id id rest
     else candidate :: (remove_cell_id id rest)
 
-  (** val add_cell_id :
+  (* val add_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let add_cell_id id ids =
     if in_dec cell_id_eq_dec id ids then ids else id :: ids
 
-  (** val remove_registration :
+  (* val remove_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let remove_registration resets scope id =
     M.update resets scope (remove_cell_id id (lookup_reset_ids resets scope))
 
-  (** val add_registration :
+  (* val add_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let add_registration resets scope id =
     M.update resets scope (add_cell_id id (lookup_reset_ids resets scope))
 
-  (** val same_scope : V.t option -> V.t option -> bool **)
+  (* val same_scope : V.t option -> V.t option -> bool **)
 
   let same_scope left right =
     match left with
@@ -1446,7 +1446,7 @@ module FirstDiscoveryAlgorithm =
                | Some _ -> false
                | None -> true)
 
-  (** val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
+  (* val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
 
   let register_reset st source target scope phase0 =
     let id = (source, target) in
@@ -1477,7 +1477,7 @@ module FirstDiscoveryAlgorithm =
     with_cells_and_resets st
       (update_map st.side_cells source target next_cell) next_resets
 
-  (** val reset_cells :
+  (* val reset_cells :
       side_cell_id list -> side_cell_table -> side_cell_table **)
 
   let rec reset_cells ids cells =
@@ -1488,7 +1488,7 @@ module FirstDiscoveryAlgorithm =
       let fresh = default_side_cell target in
       reset_cells rest (update_map cells source target fresh)
 
-  (** val reset_registered_cells : state -> V.t -> state **)
+  (* val reset_registered_cells : state -> V.t -> state **)
 
   let reset_registered_cells st owner =
     if AllEnabledFeatures.restart_side_phases
@@ -1502,42 +1502,42 @@ module FirstDiscoveryAlgorithm =
                  S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
-  (** val frame_owner : frame -> V.t **)
+  (* val frame_owner : frame -> V.t **)
 
   let frame_owner f =
     f.frame_owner
 
-  (** val frame_phase : frame -> U.phase **)
+  (* val frame_phase : frame -> U.phase **)
 
   let frame_phase f =
     f.frame_phase
 
-  (** val frame_local_side : frame -> D.t M.t **)
+  (* val frame_local_side : frame -> D.t M.t **)
 
   let frame_local_side f =
     f.frame_local_side
 
-  (** val frame_previous_targets : frame -> S.t **)
+  (* val frame_previous_targets : frame -> S.t **)
 
   let frame_previous_targets f =
     f.frame_previous_targets
 
-  (** val frame_current_targets : frame -> S.t **)
+  (* val frame_current_targets : frame -> S.t **)
 
   let frame_current_targets f =
     f.frame_current_targets
 
-  (** val frame_min_scope : frame -> V.t **)
+  (* val frame_min_scope : frame -> V.t **)
 
   let frame_min_scope f =
     f.frame_min_scope
 
-  (** val frame_max_read : frame -> V.t option **)
+  (* val frame_max_read : frame -> V.t option **)
 
   let frame_max_read f =
     f.frame_max_read
 
-  (** val fresh_frame : state -> V.t -> U.phase -> frame **)
+  (* val fresh_frame : state -> V.t -> U.phase -> frame **)
 
   let fresh_frame st owner phase0 =
     { frame_owner = owner; frame_phase = phase0; frame_local_side = M.empty;
@@ -1545,7 +1545,7 @@ module FirstDiscoveryAlgorithm =
       frame_current_targets = S.empty; frame_min_scope = owner;
       frame_max_read = None }
 
-  (** val with_frame_phase : frame -> U.phase -> frame **)
+  (* val with_frame_phase : frame -> U.phase -> frame **)
 
   let with_frame_phase fr phase0 =
     { frame_owner = fr.frame_owner; frame_phase = phase0; frame_local_side =
@@ -1554,7 +1554,7 @@ module FirstDiscoveryAlgorithm =
       fr.frame_current_targets; frame_min_scope = fr.frame_min_scope;
       frame_max_read = fr.frame_max_read }
 
-  (** val with_frame_read : frame -> V.t -> V.t option -> frame **)
+  (* val with_frame_read : frame -> V.t -> V.t option -> frame **)
 
   let with_frame_read fr minimum maximum =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -1563,7 +1563,7 @@ module FirstDiscoveryAlgorithm =
       fr.frame_current_targets; frame_min_scope = minimum; frame_max_read =
       maximum }
 
-  (** val with_frame_side : frame -> V.t -> D.t -> frame **)
+  (* val with_frame_side : frame -> V.t -> D.t -> frame **)
 
   let with_frame_side fr target input =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -1573,12 +1573,12 @@ module FirstDiscoveryAlgorithm =
       frame_min_scope = fr.frame_min_scope; frame_max_read =
       fr.frame_max_read }
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
+  (* val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
 
   let complete_get st fr target =
     let owner = fr.frame_owner in
@@ -1604,26 +1604,26 @@ module FirstDiscoveryAlgorithm =
     in
     let st3 = materialize st2 target in ((st3, fr1), (sigma_value st3 target))
 
-  (** val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input fr target raw =
     match M.lookup fr.frame_local_side target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
+  (* val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
 
   let record_side_input fr target raw =
     let input = accumulated_side_input fr target raw in
     ((with_frame_side fr target input), input)
 
-  (** val promote_side_target : state -> frame -> V.t -> state **)
+  (* val promote_side_target : state -> frame -> V.t -> state **)
 
   let promote_side_target st fr target =
     let source = fr.frame_owner in
     if rank_lt st target source then st else promote_controlled st source
 
-  (** val write_side_contribution :
+  (* val write_side_contribution :
       state -> frame -> V.t -> D.t -> state * bool **)
 
   let write_side_contribution st fr target input =
@@ -1645,13 +1645,13 @@ module FirstDiscoveryAlgorithm =
     let changed = negb (equivalent (aggregate st3 target) old_aggregate) in
     (st3, changed)
 
-  (** val publish_targets : state -> frame -> state **)
+  (* val publish_targets : state -> frame -> state **)
 
   let publish_targets st fr =
     with_last_targets st
       (M.update st.last_targets fr.frame_owner fr.frame_current_targets)
 
-  (** val set_value : state -> frame -> D.t -> state * frame **)
+  (* val set_value : state -> frame -> D.t -> state * frame **)
 
   let set_value st fr direct =
     let owner = fr.frame_owner in
@@ -1676,7 +1676,7 @@ module FirstDiscoveryAlgorithm =
               in
               (st3, fr1)
 
-  (** val requeue_changed_controlled_owner :
+  (* val requeue_changed_controlled_owner :
       state -> state -> V.t -> state **)
 
   let requeue_changed_controlled_owner before after owner =
@@ -1709,7 +1709,7 @@ module FirstDiscoveryAlgorithm =
   | KDead of frame * D.t * V.t list * continuation
   | KDrain of frame * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -1727,7 +1727,7 @@ module FirstDiscoveryAlgorithm =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -1745,7 +1745,7 @@ module FirstDiscoveryAlgorithm =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -1766,7 +1766,7 @@ module FirstDiscoveryAlgorithm =
     f4 f6 t0 l c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
   | KDrain (f6, c0) -> f5 f6 c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -1789,22 +1789,22 @@ module FirstDiscoveryAlgorithm =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val continue_side :
+  (* val continue_side :
       state -> frame -> V.t -> ConstraintSystem.rhs -> continuation -> bool
       -> config **)
 
@@ -1818,7 +1818,7 @@ module FirstDiscoveryAlgorithm =
            k)) }
   | false -> { cfg_state = st; cfg_control = (RunRhs (fr, next, k)) }
 
-  (** val continue_dead :
+  (* val continue_dead :
       state -> frame -> D.t -> V.t -> V.t list -> continuation -> bool ->
       config **)
 
@@ -1833,7 +1833,7 @@ module FirstDiscoveryAlgorithm =
   | false ->
     { cfg_state = st; cfg_control = (RunDead (fr, direct, remaining, k)) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -1967,7 +1967,7 @@ module FirstDiscoveryAlgorithm =
         | KDrain (fr, k') ->
           Some { cfg_state = st; cfg_control = (RunDrain (fr, k')) }))
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -1978,7 +1978,7 @@ module FirstDiscoveryAlgorithm =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -1988,13 +1988,13 @@ module FirstDiscoveryAlgorithm =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -2047,7 +2047,7 @@ module FirstDiscovery =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -2058,7 +2058,7 @@ module FirstDiscovery =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -2084,22 +2084,22 @@ module FirstDiscovery =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -2107,7 +2107,7 @@ module FirstDiscovery =
 
   type work_queue = V.t list
 
-  (** val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
+  (* val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
 
   let ranking_lt order x y =
     match Ranking.lookup order x with
@@ -2117,13 +2117,13 @@ module FirstDiscovery =
        | None -> false)
     | None -> false
 
-  (** val queue_contains : V.t -> work_queue -> bool **)
+  (* val queue_contains : V.t -> work_queue -> bool **)
 
   let rec queue_contains x = function
   | [] -> false
   | head :: rest -> if V.eq_dec x head then true else queue_contains x rest
 
-  (** val queue_insert_fresh :
+  (* val queue_insert_fresh :
       Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh order x = function
@@ -2133,12 +2133,12 @@ module FirstDiscovery =
     then x :: (head :: rest)
     else head :: (queue_insert_fresh order x rest)
 
-  (** val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
+  (* val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let queue_insert order x q =
     if queue_contains x q then q else queue_insert_fresh order x q
 
-  (** val queue_insert_all :
+  (* val queue_insert_all :
       Ranking.t -> V.t list -> work_queue -> work_queue **)
 
   let rec queue_insert_all order xs q =
@@ -2146,13 +2146,13 @@ module FirstDiscovery =
     | [] -> q
     | x :: rest -> queue_insert_all order rest (queue_insert order x q)
 
-  (** val queue_peek : work_queue -> V.t option **)
+  (* val queue_peek : work_queue -> V.t option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (V.t * work_queue) option **)
+  (* val queue_pop : work_queue -> (V.t * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -2160,12 +2160,12 @@ module FirstDiscovery =
 
   type side_cell = { side_phase : U.phase; side_reset_at : V.t option }
 
-  (** val side_phase : side_cell -> U.phase **)
+  (* val side_phase : side_cell -> U.phase **)
 
   let side_phase s =
     s.side_phase
 
-  (** val side_reset_at : side_cell -> V.t option **)
+  (* val side_reset_at : side_cell -> V.t option **)
 
   let side_reset_at s =
     s.side_reset_at
@@ -2185,59 +2185,59 @@ module FirstDiscovery =
                  side_cells : side_cell_table; reset_at_close : reset_table;
                  last_targets : target_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val side_cells : state -> side_cell_table **)
+  (* val side_cells : state -> side_cell_table **)
 
   let side_cells s =
     s.side_cells
 
-  (** val reset_at_close : state -> reset_table **)
+  (* val reset_at_close : state -> reset_table **)
 
   let reset_at_close s =
     s.reset_at_close
 
-  (** val last_targets : state -> target_table **)
+  (* val last_targets : state -> target_table **)
 
   let last_targets s =
     s.last_targets
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; readers =
       M.empty; contributions = M.empty; side_cells = M.empty;
       reset_at_close = M.empty; last_targets = M.empty; controlled = S.empty }
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; readers =
@@ -2245,7 +2245,7 @@ module FirstDiscovery =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; readers =
@@ -2253,7 +2253,7 @@ module FirstDiscovery =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; readers =
@@ -2261,7 +2261,7 @@ module FirstDiscovery =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -2269,7 +2269,7 @@ module FirstDiscovery =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -2277,7 +2277,7 @@ module FirstDiscovery =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_cells_and_resets :
+  (* val with_cells_and_resets :
       state -> side_cell_table -> reset_table -> state **)
 
   let with_cells_and_resets st cells resets =
@@ -2286,7 +2286,7 @@ module FirstDiscovery =
       reset_at_close = resets; last_targets = st.last_targets; controlled =
       st.controlled }
 
-  (** val with_last_targets : state -> target_table -> state **)
+  (* val with_last_targets : state -> target_table -> state **)
 
   let with_last_targets st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -2294,7 +2294,7 @@ module FirstDiscovery =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -2302,116 +2302,116 @@ module FirstDiscovery =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = next }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     let row = lookup_map table outer in
     M.update table outer (M.update row inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
+  (* val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
 
   let lookup_reset_ids table scope =
     match M.lookup table scope with
     | Some ids -> ids
     | None -> []
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     match M.lookup st.sigma x with
     | Some _ -> st
     | None -> with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state **)
+  (* val observe : state -> V.t -> state **)
 
   let observe st x =
     let (next, _) = Ranking.observe st.ranking x in with_ranking st next
 
-  (** val rank_lt : state -> V.t -> V.t -> bool **)
+  (* val rank_lt : state -> V.t -> V.t -> bool **)
 
   let rank_lt st x y =
     ranking_lt st.ranking x y
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     with_queue st (queue_insert st.ranking x st.queue)
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let enqueue_all st xs =
     with_queue st (queue_insert_all st.ranking xs st.queue)
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val default_side_cell : V.t -> side_cell **)
+  (* val default_side_cell : V.t -> side_cell **)
 
   let default_side_cell target =
     { side_phase = (U.initial_phase true target); side_reset_at = None }
 
-  (** val stored_side_cell : state -> V.t -> V.t -> side_cell **)
+  (* val stored_side_cell : state -> V.t -> V.t -> side_cell **)
 
   let stored_side_cell st source target =
     match M.lookup (lookup_map st.side_cells source) target with
     | Some cell -> cell
     | None -> default_side_cell target
 
-  (** val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
+  (* val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
 
   let cell_id_eq_dec left right =
     let (a, b) = left in
     let (t0, t1) = right in if V.eq_dec a t0 then V.eq_dec b t1 else false
 
-  (** val remove_cell_id :
+  (* val remove_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let rec remove_cell_id id = function
@@ -2421,25 +2421,25 @@ module FirstDiscovery =
     then remove_cell_id id rest
     else candidate :: (remove_cell_id id rest)
 
-  (** val add_cell_id :
+  (* val add_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let add_cell_id id ids =
     if in_dec cell_id_eq_dec id ids then ids else id :: ids
 
-  (** val remove_registration :
+  (* val remove_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let remove_registration resets scope id =
     M.update resets scope (remove_cell_id id (lookup_reset_ids resets scope))
 
-  (** val add_registration :
+  (* val add_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let add_registration resets scope id =
     M.update resets scope (add_cell_id id (lookup_reset_ids resets scope))
 
-  (** val same_scope : V.t option -> V.t option -> bool **)
+  (* val same_scope : V.t option -> V.t option -> bool **)
 
   let same_scope left right =
     match left with
@@ -2451,7 +2451,7 @@ module FirstDiscovery =
                | Some _ -> false
                | None -> true)
 
-  (** val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
+  (* val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
 
   let register_reset st source target scope phase0 =
     let id = (source, target) in
@@ -2482,7 +2482,7 @@ module FirstDiscovery =
     with_cells_and_resets st
       (update_map st.side_cells source target next_cell) next_resets
 
-  (** val reset_cells :
+  (* val reset_cells :
       side_cell_id list -> side_cell_table -> side_cell_table **)
 
   let rec reset_cells ids cells =
@@ -2493,7 +2493,7 @@ module FirstDiscovery =
       let fresh = default_side_cell target in
       reset_cells rest (update_map cells source target fresh)
 
-  (** val reset_registered_cells : state -> V.t -> state **)
+  (* val reset_registered_cells : state -> V.t -> state **)
 
   let reset_registered_cells st owner =
     if Features.restart_side_phases
@@ -2507,42 +2507,42 @@ module FirstDiscovery =
                  S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
-  (** val frame_owner : frame -> V.t **)
+  (* val frame_owner : frame -> V.t **)
 
   let frame_owner f =
     f.frame_owner
 
-  (** val frame_phase : frame -> U.phase **)
+  (* val frame_phase : frame -> U.phase **)
 
   let frame_phase f =
     f.frame_phase
 
-  (** val frame_local_side : frame -> D.t M.t **)
+  (* val frame_local_side : frame -> D.t M.t **)
 
   let frame_local_side f =
     f.frame_local_side
 
-  (** val frame_previous_targets : frame -> S.t **)
+  (* val frame_previous_targets : frame -> S.t **)
 
   let frame_previous_targets f =
     f.frame_previous_targets
 
-  (** val frame_current_targets : frame -> S.t **)
+  (* val frame_current_targets : frame -> S.t **)
 
   let frame_current_targets f =
     f.frame_current_targets
 
-  (** val frame_min_scope : frame -> V.t **)
+  (* val frame_min_scope : frame -> V.t **)
 
   let frame_min_scope f =
     f.frame_min_scope
 
-  (** val frame_max_read : frame -> V.t option **)
+  (* val frame_max_read : frame -> V.t option **)
 
   let frame_max_read f =
     f.frame_max_read
 
-  (** val fresh_frame : state -> V.t -> U.phase -> frame **)
+  (* val fresh_frame : state -> V.t -> U.phase -> frame **)
 
   let fresh_frame st owner phase0 =
     { frame_owner = owner; frame_phase = phase0; frame_local_side = M.empty;
@@ -2550,7 +2550,7 @@ module FirstDiscovery =
       frame_current_targets = S.empty; frame_min_scope = owner;
       frame_max_read = None }
 
-  (** val with_frame_phase : frame -> U.phase -> frame **)
+  (* val with_frame_phase : frame -> U.phase -> frame **)
 
   let with_frame_phase fr phase0 =
     { frame_owner = fr.frame_owner; frame_phase = phase0; frame_local_side =
@@ -2559,7 +2559,7 @@ module FirstDiscovery =
       fr.frame_current_targets; frame_min_scope = fr.frame_min_scope;
       frame_max_read = fr.frame_max_read }
 
-  (** val with_frame_read : frame -> V.t -> V.t option -> frame **)
+  (* val with_frame_read : frame -> V.t -> V.t option -> frame **)
 
   let with_frame_read fr minimum maximum =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -2568,7 +2568,7 @@ module FirstDiscovery =
       fr.frame_current_targets; frame_min_scope = minimum; frame_max_read =
       maximum }
 
-  (** val with_frame_side : frame -> V.t -> D.t -> frame **)
+  (* val with_frame_side : frame -> V.t -> D.t -> frame **)
 
   let with_frame_side fr target input =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -2578,12 +2578,12 @@ module FirstDiscovery =
       frame_min_scope = fr.frame_min_scope; frame_max_read =
       fr.frame_max_read }
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
+  (* val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
 
   let complete_get st fr target =
     let owner = fr.frame_owner in
@@ -2609,26 +2609,26 @@ module FirstDiscovery =
     in
     let st3 = materialize st2 target in ((st3, fr1), (sigma_value st3 target))
 
-  (** val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input fr target raw =
     match M.lookup fr.frame_local_side target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
+  (* val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
 
   let record_side_input fr target raw =
     let input = accumulated_side_input fr target raw in
     ((with_frame_side fr target input), input)
 
-  (** val promote_side_target : state -> frame -> V.t -> state **)
+  (* val promote_side_target : state -> frame -> V.t -> state **)
 
   let promote_side_target st fr target =
     let source = fr.frame_owner in
     if rank_lt st target source then st else promote_controlled st source
 
-  (** val write_side_contribution :
+  (* val write_side_contribution :
       state -> frame -> V.t -> D.t -> state * bool **)
 
   let write_side_contribution st fr target input =
@@ -2650,13 +2650,13 @@ module FirstDiscovery =
     let changed = negb (equivalent (aggregate st3 target) old_aggregate) in
     (st3, changed)
 
-  (** val publish_targets : state -> frame -> state **)
+  (* val publish_targets : state -> frame -> state **)
 
   let publish_targets st fr =
     with_last_targets st
       (M.update st.last_targets fr.frame_owner fr.frame_current_targets)
 
-  (** val set_value : state -> frame -> D.t -> state * frame **)
+  (* val set_value : state -> frame -> D.t -> state * frame **)
 
   let set_value st fr direct =
     let owner = fr.frame_owner in
@@ -2681,7 +2681,7 @@ module FirstDiscovery =
               in
               (st3, fr1)
 
-  (** val requeue_changed_controlled_owner :
+  (* val requeue_changed_controlled_owner :
       state -> state -> V.t -> state **)
 
   let requeue_changed_controlled_owner before after owner =
@@ -2714,7 +2714,7 @@ module FirstDiscovery =
   | KDead of frame * D.t * V.t list * continuation
   | KDrain of frame * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -2732,7 +2732,7 @@ module FirstDiscovery =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -2750,7 +2750,7 @@ module FirstDiscovery =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -2771,7 +2771,7 @@ module FirstDiscovery =
     f4 f6 t0 l c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
   | KDrain (f6, c0) -> f5 f6 c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -2794,22 +2794,22 @@ module FirstDiscovery =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val continue_side :
+  (* val continue_side :
       state -> frame -> V.t -> ConstraintSystem.rhs -> continuation -> bool
       -> config **)
 
@@ -2823,7 +2823,7 @@ module FirstDiscovery =
            k)) }
   | false -> { cfg_state = st; cfg_control = (RunRhs (fr, next, k)) }
 
-  (** val continue_dead :
+  (* val continue_dead :
       state -> frame -> D.t -> V.t -> V.t list -> continuation -> bool ->
       config **)
 
@@ -2838,7 +2838,7 @@ module FirstDiscovery =
   | false ->
     { cfg_state = st; cfg_control = (RunDead (fr, direct, remaining, k)) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -2972,7 +2972,7 @@ module FirstDiscovery =
         | KDrain (fr, k') ->
           Some { cfg_state = st; cfg_control = (RunDrain (fr, k')) }))
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -2983,7 +2983,7 @@ module FirstDiscovery =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -2993,13 +2993,13 @@ module FirstDiscovery =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -3055,7 +3055,7 @@ module FixedRank =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -3066,7 +3066,7 @@ module FixedRank =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -3092,22 +3092,22 @@ module FixedRank =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -3115,7 +3115,7 @@ module FixedRank =
 
   type work_queue = V.t list
 
-  (** val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
+  (* val ranking_lt : Ranking.t -> V.t -> V.t -> bool **)
 
   let ranking_lt order x y =
     match Ranking.lookup order x with
@@ -3125,13 +3125,13 @@ module FixedRank =
        | None -> false)
     | None -> false
 
-  (** val queue_contains : V.t -> work_queue -> bool **)
+  (* val queue_contains : V.t -> work_queue -> bool **)
 
   let rec queue_contains x = function
   | [] -> false
   | head :: rest -> if V.eq_dec x head then true else queue_contains x rest
 
-  (** val queue_insert_fresh :
+  (* val queue_insert_fresh :
       Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh order x = function
@@ -3141,12 +3141,12 @@ module FixedRank =
     then x :: (head :: rest)
     else head :: (queue_insert_fresh order x rest)
 
-  (** val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
+  (* val queue_insert : Ranking.t -> V.t -> work_queue -> work_queue **)
 
   let queue_insert order x q =
     if queue_contains x q then q else queue_insert_fresh order x q
 
-  (** val queue_insert_all :
+  (* val queue_insert_all :
       Ranking.t -> V.t list -> work_queue -> work_queue **)
 
   let rec queue_insert_all order xs q =
@@ -3154,13 +3154,13 @@ module FixedRank =
     | [] -> q
     | x :: rest -> queue_insert_all order rest (queue_insert order x q)
 
-  (** val queue_peek : work_queue -> V.t option **)
+  (* val queue_peek : work_queue -> V.t option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (V.t * work_queue) option **)
+  (* val queue_pop : work_queue -> (V.t * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -3168,12 +3168,12 @@ module FixedRank =
 
   type side_cell = { side_phase : U.phase; side_reset_at : V.t option }
 
-  (** val side_phase : side_cell -> U.phase **)
+  (* val side_phase : side_cell -> U.phase **)
 
   let side_phase s =
     s.side_phase
 
-  (** val side_reset_at : side_cell -> V.t option **)
+  (* val side_reset_at : side_cell -> V.t option **)
 
   let side_reset_at s =
     s.side_reset_at
@@ -3193,59 +3193,59 @@ module FixedRank =
                  side_cells : side_cell_table; reset_at_close : reset_table;
                  last_targets : target_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val side_cells : state -> side_cell_table **)
+  (* val side_cells : state -> side_cell_table **)
 
   let side_cells s =
     s.side_cells
 
-  (** val reset_at_close : state -> reset_table **)
+  (* val reset_at_close : state -> reset_table **)
 
   let reset_at_close s =
     s.reset_at_close
 
-  (** val last_targets : state -> target_table **)
+  (* val last_targets : state -> target_table **)
 
   let last_targets s =
     s.last_targets
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; readers =
       M.empty; contributions = M.empty; side_cells = M.empty;
       reset_at_close = M.empty; last_targets = M.empty; controlled = S.empty }
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; readers =
@@ -3253,7 +3253,7 @@ module FixedRank =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; readers =
@@ -3261,7 +3261,7 @@ module FixedRank =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; readers =
@@ -3269,7 +3269,7 @@ module FixedRank =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -3277,7 +3277,7 @@ module FixedRank =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -3285,7 +3285,7 @@ module FixedRank =
       reset_at_close = st.reset_at_close; last_targets = st.last_targets;
       controlled = st.controlled }
 
-  (** val with_cells_and_resets :
+  (* val with_cells_and_resets :
       state -> side_cell_table -> reset_table -> state **)
 
   let with_cells_and_resets st cells resets =
@@ -3294,7 +3294,7 @@ module FixedRank =
       reset_at_close = resets; last_targets = st.last_targets; controlled =
       st.controlled }
 
-  (** val with_last_targets : state -> target_table -> state **)
+  (* val with_last_targets : state -> target_table -> state **)
 
   let with_last_targets st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -3302,7 +3302,7 @@ module FixedRank =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; readers =
@@ -3310,116 +3310,116 @@ module FixedRank =
       st.side_cells; reset_at_close = st.reset_at_close; last_targets =
       st.last_targets; controlled = next }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     let row = lookup_map table outer in
     M.update table outer (M.update row inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
+  (* val lookup_reset_ids : reset_table -> V.t -> side_cell_id list **)
 
   let lookup_reset_ids table scope =
     match M.lookup table scope with
     | Some ids -> ids
     | None -> []
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     match M.lookup st.sigma x with
     | Some _ -> st
     | None -> with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state **)
+  (* val observe : state -> V.t -> state **)
 
   let observe st x =
     let (next, _) = Ranking.observe st.ranking x in with_ranking st next
 
-  (** val rank_lt : state -> V.t -> V.t -> bool **)
+  (* val rank_lt : state -> V.t -> V.t -> bool **)
 
   let rank_lt st x y =
     ranking_lt st.ranking x y
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     with_queue st (queue_insert st.ranking x st.queue)
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let enqueue_all st xs =
     with_queue st (queue_insert_all st.ranking xs st.queue)
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val default_side_cell : V.t -> side_cell **)
+  (* val default_side_cell : V.t -> side_cell **)
 
   let default_side_cell target =
     { side_phase = (U.initial_phase true target); side_reset_at = None }
 
-  (** val stored_side_cell : state -> V.t -> V.t -> side_cell **)
+  (* val stored_side_cell : state -> V.t -> V.t -> side_cell **)
 
   let stored_side_cell st source target =
     match M.lookup (lookup_map st.side_cells source) target with
     | Some cell -> cell
     | None -> default_side_cell target
 
-  (** val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
+  (* val cell_id_eq_dec : side_cell_id -> side_cell_id -> bool **)
 
   let cell_id_eq_dec left right =
     let (a, b) = left in
     let (t0, t1) = right in if V.eq_dec a t0 then V.eq_dec b t1 else false
 
-  (** val remove_cell_id :
+  (* val remove_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let rec remove_cell_id id = function
@@ -3429,25 +3429,25 @@ module FixedRank =
     then remove_cell_id id rest
     else candidate :: (remove_cell_id id rest)
 
-  (** val add_cell_id :
+  (* val add_cell_id :
       side_cell_id -> side_cell_id list -> side_cell_id list **)
 
   let add_cell_id id ids =
     if in_dec cell_id_eq_dec id ids then ids else id :: ids
 
-  (** val remove_registration :
+  (* val remove_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let remove_registration resets scope id =
     M.update resets scope (remove_cell_id id (lookup_reset_ids resets scope))
 
-  (** val add_registration :
+  (* val add_registration :
       reset_table -> V.t -> side_cell_id -> reset_table **)
 
   let add_registration resets scope id =
     M.update resets scope (add_cell_id id (lookup_reset_ids resets scope))
 
-  (** val same_scope : V.t option -> V.t option -> bool **)
+  (* val same_scope : V.t option -> V.t option -> bool **)
 
   let same_scope left right =
     match left with
@@ -3459,7 +3459,7 @@ module FixedRank =
                | Some _ -> false
                | None -> true)
 
-  (** val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
+  (* val register_reset : state -> V.t -> V.t -> V.t -> U.phase -> state **)
 
   let register_reset st source target scope phase0 =
     let id = (source, target) in
@@ -3490,7 +3490,7 @@ module FixedRank =
     with_cells_and_resets st
       (update_map st.side_cells source target next_cell) next_resets
 
-  (** val reset_cells :
+  (* val reset_cells :
       side_cell_id list -> side_cell_table -> side_cell_table **)
 
   let rec reset_cells ids cells =
@@ -3501,7 +3501,7 @@ module FixedRank =
       let fresh = default_side_cell target in
       reset_cells rest (update_map cells source target fresh)
 
-  (** val reset_registered_cells : state -> V.t -> state **)
+  (* val reset_registered_cells : state -> V.t -> state **)
 
   let reset_registered_cells st owner =
     if Features.restart_side_phases
@@ -3515,42 +3515,42 @@ module FixedRank =
                  S.t; frame_current_targets : S.t; frame_min_scope :
                  V.t; frame_max_read : V.t option }
 
-  (** val frame_owner : frame -> V.t **)
+  (* val frame_owner : frame -> V.t **)
 
   let frame_owner f =
     f.frame_owner
 
-  (** val frame_phase : frame -> U.phase **)
+  (* val frame_phase : frame -> U.phase **)
 
   let frame_phase f =
     f.frame_phase
 
-  (** val frame_local_side : frame -> D.t M.t **)
+  (* val frame_local_side : frame -> D.t M.t **)
 
   let frame_local_side f =
     f.frame_local_side
 
-  (** val frame_previous_targets : frame -> S.t **)
+  (* val frame_previous_targets : frame -> S.t **)
 
   let frame_previous_targets f =
     f.frame_previous_targets
 
-  (** val frame_current_targets : frame -> S.t **)
+  (* val frame_current_targets : frame -> S.t **)
 
   let frame_current_targets f =
     f.frame_current_targets
 
-  (** val frame_min_scope : frame -> V.t **)
+  (* val frame_min_scope : frame -> V.t **)
 
   let frame_min_scope f =
     f.frame_min_scope
 
-  (** val frame_max_read : frame -> V.t option **)
+  (* val frame_max_read : frame -> V.t option **)
 
   let frame_max_read f =
     f.frame_max_read
 
-  (** val fresh_frame : state -> V.t -> U.phase -> frame **)
+  (* val fresh_frame : state -> V.t -> U.phase -> frame **)
 
   let fresh_frame st owner phase0 =
     { frame_owner = owner; frame_phase = phase0; frame_local_side = M.empty;
@@ -3558,7 +3558,7 @@ module FixedRank =
       frame_current_targets = S.empty; frame_min_scope = owner;
       frame_max_read = None }
 
-  (** val with_frame_phase : frame -> U.phase -> frame **)
+  (* val with_frame_phase : frame -> U.phase -> frame **)
 
   let with_frame_phase fr phase0 =
     { frame_owner = fr.frame_owner; frame_phase = phase0; frame_local_side =
@@ -3567,7 +3567,7 @@ module FixedRank =
       fr.frame_current_targets; frame_min_scope = fr.frame_min_scope;
       frame_max_read = fr.frame_max_read }
 
-  (** val with_frame_read : frame -> V.t -> V.t option -> frame **)
+  (* val with_frame_read : frame -> V.t -> V.t option -> frame **)
 
   let with_frame_read fr minimum maximum =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -3576,7 +3576,7 @@ module FixedRank =
       fr.frame_current_targets; frame_min_scope = minimum; frame_max_read =
       maximum }
 
-  (** val with_frame_side : frame -> V.t -> D.t -> frame **)
+  (* val with_frame_side : frame -> V.t -> D.t -> frame **)
 
   let with_frame_side fr target input =
     { frame_owner = fr.frame_owner; frame_phase = fr.frame_phase;
@@ -3586,12 +3586,12 @@ module FixedRank =
       frame_min_scope = fr.frame_min_scope; frame_max_read =
       fr.frame_max_read }
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
+  (* val complete_get : state -> frame -> V.t -> (state * frame) * D.t **)
 
   let complete_get st fr target =
     let owner = fr.frame_owner in
@@ -3617,26 +3617,26 @@ module FixedRank =
     in
     let st3 = materialize st2 target in ((st3, fr1), (sigma_value st3 target))
 
-  (** val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : frame -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input fr target raw =
     match M.lookup fr.frame_local_side target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
+  (* val record_side_input : frame -> V.t -> D.t -> frame * D.t **)
 
   let record_side_input fr target raw =
     let input = accumulated_side_input fr target raw in
     ((with_frame_side fr target input), input)
 
-  (** val promote_side_target : state -> frame -> V.t -> state **)
+  (* val promote_side_target : state -> frame -> V.t -> state **)
 
   let promote_side_target st fr target =
     let source = fr.frame_owner in
     if rank_lt st target source then st else promote_controlled st source
 
-  (** val write_side_contribution :
+  (* val write_side_contribution :
       state -> frame -> V.t -> D.t -> state * bool **)
 
   let write_side_contribution st fr target input =
@@ -3658,13 +3658,13 @@ module FixedRank =
     let changed = negb (equivalent (aggregate st3 target) old_aggregate) in
     (st3, changed)
 
-  (** val publish_targets : state -> frame -> state **)
+  (* val publish_targets : state -> frame -> state **)
 
   let publish_targets st fr =
     with_last_targets st
       (M.update st.last_targets fr.frame_owner fr.frame_current_targets)
 
-  (** val set_value : state -> frame -> D.t -> state * frame **)
+  (* val set_value : state -> frame -> D.t -> state * frame **)
 
   let set_value st fr direct =
     let owner = fr.frame_owner in
@@ -3689,7 +3689,7 @@ module FixedRank =
               in
               (st3, fr1)
 
-  (** val requeue_changed_controlled_owner :
+  (* val requeue_changed_controlled_owner :
       state -> state -> V.t -> state **)
 
   let requeue_changed_controlled_owner before after owner =
@@ -3722,7 +3722,7 @@ module FixedRank =
   | KDead of frame * D.t * V.t list * continuation
   | KDrain of frame * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -3740,7 +3740,7 @@ module FixedRank =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (V.t -> continuation
       -> 'a1) -> (frame -> ConstraintSystem.rhs -> continuation -> 'a1) ->
       (frame -> D.t -> V.t list -> continuation -> 'a1) -> (frame -> D.t ->
@@ -3758,7 +3758,7 @@ module FixedRank =
   | RunDrain (f8, c0) -> f6 f8 c0
   | Return c0 -> f7 c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -3779,7 +3779,7 @@ module FixedRank =
     f4 f6 t0 l c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
   | KDrain (f6, c0) -> f5 f6 c0 (continuation_rect f f0 f1 f2 f3 f4 f5 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (frame -> V.t -> (D.t ->
       ConstraintSystem.rhs) -> continuation -> 'a1 -> 'a1) -> (frame ->
       ConstraintSystem.rhs -> continuation -> 'a1 -> 'a1) -> (frame ->
@@ -3802,22 +3802,22 @@ module FixedRank =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val continue_side :
+  (* val continue_side :
       state -> frame -> V.t -> ConstraintSystem.rhs -> continuation -> bool
       -> config **)
 
@@ -3831,7 +3831,7 @@ module FixedRank =
            k)) }
   | false -> { cfg_state = st; cfg_control = (RunRhs (fr, next, k)) }
 
-  (** val continue_dead :
+  (* val continue_dead :
       state -> frame -> D.t -> V.t -> V.t list -> continuation -> bool ->
       config **)
 
@@ -3846,7 +3846,7 @@ module FixedRank =
   | false ->
     { cfg_state = st; cfg_control = (RunDead (fr, direct, remaining, k)) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -3980,7 +3980,7 @@ module FixedRank =
         | KDrain (fr, k') ->
           Some { cfg_state = st; cfg_control = (RunDrain (fr, k')) }))
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -3991,7 +3991,7 @@ module FixedRank =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -4001,13 +4001,13 @@ module FixedRank =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =

@@ -8,7 +8,7 @@ type ('v, 'd, 'monad) transfer =
 
 type ('v, 'd, 'monad) system = 'v -> ('v, 'd, 'monad) transfer option
 
-(** val eval_transfer :
+(* val eval_transfer :
     ('a1 -> 'a3) -> ('a1 -> 'a2 -> 'a3) -> ('a1 -> 'a3) -> ('a1, 'a2, 'a3)
     transfer -> 'a3 **)
 
@@ -24,35 +24,35 @@ type ('v, 'd, 'monad) owner_operations = { begin_evaluation : ('v -> 'monad);
                                            commit_value : ('v -> 'd -> 'monad);
                                            drain_owner : ('v -> 'monad) }
 
-(** val begin_evaluation : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a3 **)
+(* val begin_evaluation : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a3 **)
 
 let begin_evaluation o =
   o.begin_evaluation
 
-(** val read_value : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a1 -> 'a3 **)
+(* val read_value : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a1 -> 'a3 **)
 
 let read_value o =
   o.read_value
 
-(** val emit_side_effect :
+(* val emit_side_effect :
     ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a1 -> 'a2 -> 'a3 **)
 
 let emit_side_effect o =
   o.emit_side_effect
 
-(** val spawn_variable :
+(* val spawn_variable :
     ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a1 -> 'a3 **)
 
 let spawn_variable o =
   o.spawn_variable
 
-(** val commit_value :
+(* val commit_value :
     ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a2 -> 'a3 **)
 
 let commit_value o =
   o.commit_value
 
-(** val drain_owner : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a3 **)
+(* val drain_owner : ('a1, 'a2, 'a3) owner_operations -> 'a1 -> 'a3 **)
 
 let drain_owner o =
   o.drain_owner
@@ -61,13 +61,13 @@ type solve_result =
 | Solved
 | OutOfFuel
 
-(** val solve_result_rect : 'a1 -> 'a1 -> solve_result -> 'a1 **)
+(* val solve_result_rect : 'a1 -> 'a1 -> solve_result -> 'a1 **)
 
 let solve_result_rect f f0 = function
 | Solved -> f
 | OutOfFuel -> f0
 
-(** val solve_result_rec : 'a1 -> 'a1 -> solve_result -> 'a1 **)
+(* val solve_result_rec : 'a1 -> 'a1 -> solve_result -> 'a1 **)
 
 let solve_result_rec f f0 = function
 | Solved -> f
@@ -77,19 +77,19 @@ type seeded_result =
 | SeedsSolved of int
 | SeedsOutOfFuel
 
-(** val seeded_result_rect : (int -> 'a1) -> 'a1 -> seeded_result -> 'a1 **)
+(* val seeded_result_rect : (int -> 'a1) -> 'a1 -> seeded_result -> 'a1 **)
 
 let seeded_result_rect f f0 = function
 | SeedsSolved n -> f n
 | SeedsOutOfFuel -> f0
 
-(** val seeded_result_rec : (int -> 'a1) -> 'a1 -> seeded_result -> 'a1 **)
+(* val seeded_result_rec : (int -> 'a1) -> 'a1 -> seeded_result -> 'a1 **)
 
 let seeded_result_rec f f0 = function
 | SeedsSolved n -> f n
 | SeedsOutOfFuel -> f0
 
-(** val solve_owner :
+(* val solve_owner :
     (__ -> __ -> 'a3) -> (__ -> __ -> 'a3 -> (__ -> 'a3) -> 'a3) -> 'a2 ->
     ('a1, 'a2, 'a3) owner_operations -> ('a1, 'a2, 'a3) system -> 'a1 -> 'a3 **)
 
@@ -106,7 +106,7 @@ let solve_owner ret bind bottom operations constraint_system owner =
       bind __ __ (operations.commit_value owner direct) (fun _ ->
         operations.drain_owner owner)))
 
-(** val solve_worklist :
+(* val solve_worklist :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     (unit -> 'a2) -> ('a1 -> 'a2) -> 'a2 **)
 
@@ -122,7 +122,7 @@ let rec solve_worklist ret bind fuel pop_owner solve_queued_owner =
       | None -> Obj.magic ret __ Solved))
     fuel
 
-(** val solve_with_fuel :
+(* val solve_with_fuel :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     ('a1 list -> 'a2) -> (unit -> 'a2) -> ('a1 -> 'a2) -> 'a1 list -> 'a2 **)
 
@@ -130,7 +130,7 @@ let solve_with_fuel ret bind fuel initialize_roots pop_owner solve_queued_owner 
   bind __ __ (initialize_roots roots) (fun _ ->
     solve_worklist ret bind fuel pop_owner solve_queued_owner)
 
-(** val drain_with_fuel :
+(* val drain_with_fuel :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     (unit -> 'a2) -> ('a1 -> 'a2) -> 'a2 **)
 
@@ -146,7 +146,7 @@ let rec drain_with_fuel ret bind fuel pop_owner solve_queued_owner =
          fuel)
     | None -> Obj.magic ret __ (SeedsSolved fuel))
 
-(** val solve_seeds_with_fuel :
+(* val solve_seeds_with_fuel :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     ('a1 -> 'a2) -> (unit -> 'a2) -> ('a1 -> 'a2) -> 'a1 list -> 'a2 **)
 

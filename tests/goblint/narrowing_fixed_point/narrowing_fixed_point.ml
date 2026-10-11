@@ -1,4 +1,4 @@
-(** Differential execution of the generated Goblint adapter and full extracted
+(* Differential execution of the generated Goblint adapter and full extracted
     machine. The callback adapter is not asserted to be a proved refinement. *)
 type rhs = Ret of int | Get of int * (int -> rhs)
          | Spawn of int * rhs | Side of int * int * rhs

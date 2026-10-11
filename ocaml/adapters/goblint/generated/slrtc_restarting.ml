@@ -6,7 +6,7 @@
    Rank worklist: bitmap
    Adapter: ocaml/adapters/goblint/goblint_slrtc_restarting.ml.in
    Regenerate with: make goblint-solvers *)
-(**
+(*
    Goblint callback adapter for SLR-TC Restarting.
 
    This is a mutable implementation of the algorithm in
@@ -42,7 +42,7 @@ module Control = struct
   | SeedsSolved of int
   | SeedsOutOfFuel
 
-  (** val drain_with_fuel :
+  (* val drain_with_fuel :
       (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
       (unit -> 'a2) -> ('a1 -> 'a2) -> 'a2 **)
 
@@ -58,7 +58,7 @@ module Control = struct
            fuel)
       | None -> Obj.magic ret0 __ (SeedsSolved fuel))
 
-  (** val solve_seeds_with_fuel :
+  (* val solve_seeds_with_fuel :
       (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
       ('a1 -> 'a2) -> (unit -> 'a2) -> ('a1 -> 'a2) -> 'a1 list -> 'a2 **)
 
@@ -86,26 +86,26 @@ module Control = struct
 
   type 'a m = 'a
 
-  (** val ret : 'a1 -> 'a1 m **)
+  (* val ret : 'a1 -> 'a1 m **)
 
   let ret value =
     value
 
-  (** val bind : 'a1 m -> ('a1 -> 'a2 m) -> 'a2 m **)
+  (* val bind : 'a1 m -> ('a1 -> 'a2 m) -> 'a2 m **)
 
   let bind computation next =
     next computation
 
   type ('v, 'd) callback = ('v, 'd, __ m) system
 
-  (** val eval_rhs :
+  (* val eval_rhs :
       ('a1 -> 'a2 m) -> ('a1 -> 'a2 -> unit m) -> ('a1 -> unit m) -> ('a1, 'a2,
       __ m) transfer -> 'a2 m **)
 
   let[@inline always] eval_rhs get side spawn body =
     Obj.magic body get side spawn
 
-  (** val solve_one :
+  (* val solve_one :
       'a2 -> ('a1 -> unit m) -> ('a1 -> 'a1 -> 'a2 m) -> ('a1 -> 'a1 -> 'a2 ->
       unit m) -> ('a1 -> 'a1 -> unit m) -> ('a1 -> 'a2 -> unit m) -> ('a1 ->
       unit m) -> ('a1, 'a2) callback -> 'a1 -> unit m **)
@@ -119,7 +119,7 @@ module Control = struct
         (fun direct ->
         bind (set_value owner direct) (fun _ -> drain_owner owner)))
 
-  (** val solve_loop_fuel :
+  (* val solve_loop_fuel :
       int -> (unit -> 'a1 option m) -> ('a1 -> unit m) -> bool m **)
 
   let rec solve_loop_fuel fuel pop_owner solve_owner =
@@ -134,7 +134,7 @@ module Control = struct
         | None -> ret true))
       fuel
 
-  (** val solve_all :
+  (* val solve_all :
       int -> ('a1 list -> unit m) -> (unit -> 'a1 option m) -> ('a1 -> unit m)
       -> 'a1 list -> bool m **)
 
@@ -142,14 +142,14 @@ module Control = struct
     bind (initialize roots) (fun _ ->
       solve_loop_fuel fuel pop_owner solve_owner)
 
-  (** val drain_with_fuel0 :
+  (* val drain_with_fuel0 :
       int -> (unit -> 'a1 option m) -> ('a1 -> unit m) -> seeded_result m **)
 
   let drain_with_fuel0 fuel pop_owner solve_owner =
     drain_with_fuel (Obj.magic (fun _ -> ret)) (Obj.magic (fun _ _ -> bind))
       fuel (Obj.magic pop_owner) (Obj.magic solve_owner)
 
-  (** val solve_seeds_with_fuel0 :
+  (* val solve_seeds_with_fuel0 :
       int -> ('a1 -> bool m) -> (unit -> 'a1 option m) -> ('a1 -> unit m) ->
       'a1 list -> seeded_result m **)
 
@@ -196,7 +196,7 @@ module type CONTROL = sig
 end
 
 module Features = struct
-  (** The three compile-time policies exposed by the proved Restarting solver.
+  (* The three compile-time policies exposed by the proved Restarting solver.
       The Goblint adapter default enables side reset and dead-side elimination,
       and disables controlled-owner recomputation. *)
 
@@ -373,7 +373,7 @@ module Make
     type side_cell_row = side_cell VH.t
     type reset_sources = set VH.t
 
-    (** Target-local state lives beside its dense rank so callbacks hash a
+    (* Target-local state lives beside its dense rank so callbacks hash a
         variable only once, when obtaining that rank. *)
     type rank_info = {
       mutable queued : bool;
@@ -396,11 +396,11 @@ module Make
         contributions = None;
       }
 
-    (** Default online order for callback-based solvers. Variables receive
+    (* Default online order for callback-based solvers. Variables receive
         dense, increasing ranks when first encountered. Existing ranks never
         change, and the work queue always selects the greatest queued rank. *)
     module RankQueue = struct
-      (** A hierarchical bitmap for distinct dense nonnegative ranks. Each level
+      (* A hierarchical bitmap for distinct dense nonnegative ranks. Each level
           summarizes the nonempty words of the level below it. Native OCaml integer
           words avoid the allocation incurred by boxed [int64] operations. *)
 
@@ -471,7 +471,7 @@ module Make
         if offset = word_mask then -1
         else (1 lsl (offset + 1)) - 1
 
-      (** Find the greatest set index strictly below [limit] at [level], or [-1].
+      (* Find the greatest set index strictly below [limit] at [level], or [-1].
           The sentinel keeps maximum removal allocation-free. *)
       let rec find_before queue level limit =
         if limit <= 0 then -1
@@ -549,7 +549,7 @@ module Make
         trace_node queue.trace result variable;
         result
 
-    (** Queue ranks are nonnegative, so [-1] denotes an empty heap without
+    (* Queue ranks are nonnegative, so [-1] denotes an empty heap without
         allocating an [option] in the episode-draining hot path. *)
     let[@inline always] queue_max_rank queue =
       if RankQueue.is_empty queue.heap
@@ -612,7 +612,7 @@ module Make
       | Some variable_rank ->
         (Dynarray.get queue.infos variable_rank).started
 
-    (** Roots are discovered one at a time. Work reached from one seed is
+    (* Roots are discovered one at a time. Work reached from one seed is
         drained before the next seed can receive a rank. Starting-state
         variables which were not reached from a root are seeded afterward. *)
     let solve_initial queue solve_episode roots starts =
@@ -655,7 +655,7 @@ module Make
       mutable local_side : side_row option;
       mutable previous_targets : set option;
       mutable current_targets : set option;
-      (** Minimum-ranked owner or dependency read in this evaluation. *)
+      (* Minimum-ranked owner or dependency read in this evaluation. *)
       mutable min_scope : S.v * int;
     }
 

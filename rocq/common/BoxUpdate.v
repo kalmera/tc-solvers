@@ -138,3 +138,10 @@ Module OneBoxUpdate
   Qed.
 
 End OneBoxUpdate.
+
+(** Preserve the concrete OneBox operations while accepting an existing
+    instance. Its phase type must be shared with the update-law module. *)
+Module Type ONE_BOX_UPDATE
+  (V : VAR) (D : DOMAIN) (WN : WIDEN_NARROW D).
+  Include OneBoxUpdate V D WN.
+End ONE_BOX_UPDATE.

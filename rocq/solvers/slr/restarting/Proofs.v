@@ -1,8 +1,8 @@
 From Stdlib Require Import List Bool Lia Arith.PeanoNat Sorting.Permutation Sorting.Sorted Arith.Wf_nat Relations.Relation_Operators Wellfounded.Inverse_Image Wellfounded.Lexicographic_Product.
 From TcSolvers Require Import common.Assumptions common.ConstraintSemantics
-  common.SolverSpecifications common.SourceStrictness
+  common.SolverSpecifications common.SourceStrictness common.SolverContracts
   solvers.slr.common.DiscoveryOrderLaws
-  solvers.slr.restarting.Restarting.
+  solvers.slr.restarting.RestartingInterface.
 
 Import ListNotations.
 Set Implicit Arguments.
@@ -17,44 +17,14 @@ Module Make (V : VAR) (D : DOMAIN) (U : UPDATE V D)
   (DL : DOMAIN_LAWS D) (UL : UPDATE_LAWS V D U)
   (SL : SET_LAWS V S) (ML : MAP_LAWS V M).
 
-Module R := Restarting.Make V D U S M Ranks Features.
-Module Syntax.
-  Definition rhs := R.ConstraintSystem.rhs.
-  Definition Ret := R.ConstraintSystem.Ret.
-  Definition Get := R.ConstraintSystem.Get.
-  Definition Side := R.ConstraintSystem.Side.
-  Definition Spawn := R.ConstraintSystem.Spawn.
-  Definition system := V.t -> rhs.
-End Syntax.
-Module Sem := ConstraintSemantics.Make V D Syntax.
-Module Transfer.
-  Definition rhs := Syntax.rhs.
-  Definition observation := Sem.observation.
-  Definition observed_sides := Sem.observed_sides.
-  Definition observed_spawns := Sem.observed_spawns.
-  Definition observes_at := Sem.observes_at.
-  Definition rhs_observes := Sem.rhs_observes.
-  Definition rhs_eval_with := Sem.rhs_eval_with.
-  Definition rhs_dependencies_monotone := Sem.rhs_dependencies_monotone.
-  Definition rhs_effects_monotone := Sem.rhs_effects_monotone.
-End Transfer.
-Module Store.
-  Definition state := R.state.
-  Definition sigma := R.sigma.
-  Definition sigma_value := R.sigma_value.
-End Store.
-Module Spec := SolverSpecifications.Make V D M Transfer Store.
+Module Solver := RestartingInterface.Make V D U S M Ranks Features.
+Module R := Solver.R.
+Module Syntax := Solver.Syntax.
+Module Sem := Solver.TransferSemantics.
+Module Spec := SolverSpecifications.Make V D Solver.Sem Solver.View.
 Include Spec.
 
-Definition step tf before after := R.next_config tf before = Some after.
-Inductive steps tf : R.config -> R.config -> Prop :=
-| steps_refl c : steps tf c c
-| steps_cons before next after :
-    step tf before next -> steps tf next after -> steps tf before after.
-
-Definition quiescent st := R.queue st = [].
-Definition terminal st : R.config :=
-  {| R.cfg_state := st; R.cfg_control := R.RunLoop |}.
+Include Solver.ExecutionSemantics.
 Definition terminates_to tf roots final :=
   steps tf (R.initial_config roots) (terminal final) /\ quiescent final.
 
@@ -1925,13 +1895,13 @@ Proof.
   unfold R.materialize; destruct (M.lookup (R.sigma st) x); [intros y Hy; exact Hy |].
   intros y [value Hlookup]; destruct (V.eq_dec y x) as [-> |Hneq].
   - exists D.bottom; cbn; apply ML.lookup_update_same.
-  - exists value; cbn; rewrite ML.lookup_update_other; auto.
+  - exists value; change (M.lookup (M.update (R.sigma st) x D.bottom) y = Some value); rewrite ML.lookup_update_other; auto.
 Qed.
 Lemma preserves_live_update st x value : preserves_live st (R.with_sigma st (M.update (R.sigma st) x value)).
 Proof.
   intros y [old Hlookup]; destruct (V.eq_dec y x) as [-> |Hneq].
   - exists value; cbn; apply ML.lookup_update_same.
-  - exists old; cbn; rewrite ML.lookup_update_other; auto.
+  - exists old; change (M.lookup (M.update (R.sigma st) x value) y = Some old); rewrite ML.lookup_update_other; auto.
 Qed.
 Lemma preserves_live_get st fr target next next_fr value : R.complete_get st fr target = (next,next_fr,value) ->
   preserves_live st next /\ solved next target.
@@ -4308,7 +4278,7 @@ Qed.
 
 Lemma materialized_iff_solved st x : R.is_materialized st x = true <-> solved st x.
 Proof.
-  split; [apply materialized_solved |intros [value Hvalue]; unfold Store.sigma in Hvalue; unfold R.is_materialized; rewrite Hvalue; reflexivity].
+  split; [apply materialized_solved |intros [value Hvalue]; change (M.lookup (R.sigma st) x = Some value) in Hvalue; unfold R.is_materialized; rewrite Hvalue; reflexivity].
 Qed.
 Definition missing_count support st := sum_over (fun x => if R.is_materialized st x then 0 else 1) support.
 Lemma missing_count_mono support before after : preserves_live before after -> missing_count support after <= missing_count support before.
@@ -6701,4 +6671,52 @@ End OrdinaryFixedness.
 End OrdinaryPhases.
 End OrdinaryDiscovery.
 
+
 End Make.
+
+(** OneBox precision over a common parameter bundle. *)
+Module OrdinaryFixedPoint (P : ORDINARY_FIXED_POINT_PARAMETERS).
+  Module U := P.FixedU.
+  Module Ranks := ListDiscoveryOrder P.V.
+  Module RL := ListDiscoveryOrderLaws P.V.
+  Module RF := ListFiniteDiscoveryOrderLaws P.V.
+  Module Core := Make P.V P.D U P.S P.M Ranks P.Features RL RF
+    P.DL P.FixedUL P.SL P.ML.
+  Module Internal := Core.
+      Definition discovery : Internal.first_discovery_laws.
+      Proof.
+        constructor.
+        - intros order target next rank variable Hobserve [variable_rank Hlookup].
+          unfold Ranks.observe in Hobserve; destruct (Ranks.lookup order target) eqn:Htarget; inversion Hobserve; subst next rank.
+          + right; exists variable_rank; exact Hlookup.
+          + cbn in Hlookup; destruct (P.V.eq_dec variable target) as [Heq|Hneq].
+            * left; exact Heq.
+            * right; exists variable_rank; exact Hlookup.
+        - intros order target next rank owner old_rank Hvalid Hfresh Howner Hobserve.
+          destruct (@RL.observe_fresh order target next rank Hfresh Hobserve) as [-> _].
+          exact (@RL.lookup_bound order owner old_rank Hvalid Howner).
+      Qed.
+      Definition phases : Internal.ordinary_phase_laws.
+      Proof.
+        refine {| Internal.phase_safe := U.avoids_fallback;
+          Internal.phase_narrowing := fun phase => phase = U.BoxN |}.
+        - apply U.initial_avoids_fallback.
+        - intros owner Hnarrow; discriminate.
+        - intros owner phase old input Hsafe Hinput;
+            exact (@U.admissible_update_avoids_fallback false owner phase old input Hsafe Hinput).
+        - intros owner phase old input Hsafe Hnarrow; destruct phase;
+            cbn [U.update] in Hnarrow; destruct (P.D.leq input old) eqn:Hle; try discriminate; reflexivity.
+        - intros owner phase old input Hsafe Hinput; destruct phase; [| |exfalso; apply Hsafe; reflexivity];
+            cbn [U.update]; rewrite Hinput; apply P.WNL.narrow_upper; exact Hinput.
+      Defined.
+      Lemma update_narrow owner phase old input : Internal.phase_safe phases phase ->
+        P.D.leq input old = true -> snd (U.update false owner phase old input) = P.WN.narrow old input.
+      Proof.
+        intros Hsafe Hinput; destruct phase; [| |exfalso; apply Hsafe; reflexivity];
+          cbn [U.update]; rewrite Hinput; reflexivity.
+      Qed.
+  Definition control_avoids_fallback := Core.control_avoids_fallback phases.
+  Definition ordinary_avoids_fallback := @Core.ordinary_avoids_fallback discovery phases.
+  Definition successful_run_fixed := @Core.successful_run_fixed discovery phases P.WN.narrow
+    P.WNL.narrow_lower P.WNL.narrow_upper update_narrow.
+End OrdinaryFixedPoint.

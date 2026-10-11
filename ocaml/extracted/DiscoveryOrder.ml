@@ -30,24 +30,24 @@ module FixedRankDiscoveryOrder =
  struct
   type t = V.t list
 
-  (** val empty : t **)
+  (* val empty : t **)
 
   let empty =
     []
 
-  (** val lookup : t -> V.t -> int option **)
+  (* val lookup : t -> V.t -> int option **)
 
   let rec lookup seen x =
     match seen with
     | [] -> None
     | y :: rest -> if V.eq_dec x y then Some (Fixed.rank x) else lookup rest x
 
-  (** val size : t -> int **)
+  (* val size : t -> int **)
 
   let size =
     length
 
-  (** val observe : t -> V.t -> t * int **)
+  (* val observe : t -> V.t -> t * int **)
 
   let observe seen x =
     match lookup seen x with
@@ -60,12 +60,12 @@ module ListDiscoveryOrder =
  struct
   type t = V.t list
 
-  (** val empty : t **)
+  (* val empty : t **)
 
   let empty =
     []
 
-  (** val lookup : t -> V.t -> int option **)
+  (* val lookup : t -> V.t -> int option **)
 
   let rec lookup order x =
     match order with
@@ -73,12 +73,12 @@ module ListDiscoveryOrder =
     | y :: older ->
       if V.eq_dec x y then Some (length older) else lookup older x
 
-  (** val size : t -> int **)
+  (* val size : t -> int **)
 
   let size =
     length
 
-  (** val observe : t -> V.t -> t * int **)
+  (* val observe : t -> V.t -> t * int **)
 
   let observe order x =
     match lookup order x with

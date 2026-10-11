@@ -13,27 +13,27 @@ module Nat =
  struct
   type t = int
 
-  (** val zero : int **)
+  (* val zero : int **)
 
   let zero =
     0
 
-  (** val one : int **)
+  (* val one : int **)
 
   let one =
     Stdlib.Int.succ 0
 
-  (** val two : int **)
+  (* val two : int **)
 
   let two =
     Stdlib.Int.succ (Stdlib.Int.succ 0)
 
-  (** val succ : int -> int **)
+  (* val succ : int -> int **)
 
   let succ x =
     Stdlib.Int.succ x
 
-  (** val pred : int -> int **)
+  (* val pred : int -> int **)
 
   let pred n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -41,7 +41,7 @@ module Nat =
       (fun u -> u)
       n
 
-  (** val add : int -> int -> int **)
+  (* val add : int -> int -> int **)
 
   let rec add n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -49,12 +49,12 @@ module Nat =
       (fun p -> Stdlib.Int.succ (add p m))
       n
 
-  (** val double : int -> int **)
+  (* val double : int -> int **)
 
   let double n =
     add n n
 
-  (** val mul : int -> int -> int **)
+  (* val mul : int -> int -> int **)
 
   let rec mul n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -62,7 +62,7 @@ module Nat =
       (fun p -> add m (mul p m))
       n
 
-  (** val sub : int -> int -> int **)
+  (* val sub : int -> int -> int **)
 
   let rec sub n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -74,16 +74,16 @@ module Nat =
         m)
       n
 
-  (** val ltb : int -> int -> bool **)
+  (* val ltb : int -> int -> bool **)
 
   let ltb n m =
     (<=) (Stdlib.Int.succ n) m
 
-  (** val compare : int -> int -> comparison **)
+  (* val compare : int -> int -> comparison **)
 
   let rec compare = fun n m -> if n=m then Eq else if n<m then Lt else Gt
 
-  (** val max : int -> int -> int **)
+  (* val max : int -> int -> int **)
 
   let rec max n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -95,7 +95,7 @@ module Nat =
         m)
       n
 
-  (** val min : int -> int -> int **)
+  (* val min : int -> int -> int **)
 
   let rec min n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -107,7 +107,7 @@ module Nat =
         m)
       n
 
-  (** val even : int -> bool **)
+  (* val even : int -> bool **)
 
   let rec even n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -119,12 +119,12 @@ module Nat =
         n0)
       n
 
-  (** val odd : int -> bool **)
+  (* val odd : int -> bool **)
 
   let odd n =
     negb (even n)
 
-  (** val pow : int -> int -> int **)
+  (* val pow : int -> int -> int **)
 
   let rec pow n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -132,7 +132,7 @@ module Nat =
       (fun m0 -> mul n (pow n m0))
       m
 
-  (** val tail_add : int -> int -> int **)
+  (* val tail_add : int -> int -> int **)
 
   let rec tail_add n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -140,7 +140,7 @@ module Nat =
       (fun n0 -> tail_add n0 (Stdlib.Int.succ m))
       n
 
-  (** val tail_addmul : int -> int -> int -> int **)
+  (* val tail_addmul : int -> int -> int -> int **)
 
   let rec tail_addmul r n m =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -148,12 +148,12 @@ module Nat =
       (fun n0 -> tail_addmul (tail_add m r) n0 m)
       n
 
-  (** val tail_mul : int -> int -> int **)
+  (* val tail_mul : int -> int -> int **)
 
   let tail_mul n m =
     tail_addmul 0 n m
 
-  (** val of_uint_acc : Decimal.uint -> int -> int **)
+  (* val of_uint_acc : Decimal.uint -> int -> int **)
 
   let rec of_uint_acc d acc =
     match d with
@@ -217,12 +217,12 @@ module Nat =
           (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ
           (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ 0)))))))))) acc))))))))))
 
-  (** val of_uint : Decimal.uint -> int **)
+  (* val of_uint : Decimal.uint -> int **)
 
   let of_uint d =
     of_uint_acc d 0
 
-  (** val of_hex_uint_acc : Hexadecimal.uint -> int -> int **)
+  (* val of_hex_uint_acc : Hexadecimal.uint -> int -> int **)
 
   let rec of_hex_uint_acc d acc =
     match d with
@@ -364,18 +364,18 @@ module Nat =
           (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ (Stdlib.Int.succ
           (Stdlib.Int.succ 0)))))))))))))))) acc))))))))))))))))
 
-  (** val of_hex_uint : Hexadecimal.uint -> int **)
+  (* val of_hex_uint : Hexadecimal.uint -> int **)
 
   let of_hex_uint d =
     of_hex_uint_acc d 0
 
-  (** val of_num_uint : uint -> int **)
+  (* val of_num_uint : uint -> int **)
 
   let of_num_uint = function
   | UIntDecimal d0 -> of_uint d0
   | UIntHexadecimal d0 -> of_hex_uint d0
 
-  (** val to_little_uint : int -> Decimal.uint -> Decimal.uint **)
+  (* val to_little_uint : int -> Decimal.uint -> Decimal.uint **)
 
   let rec to_little_uint n acc =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -383,12 +383,12 @@ module Nat =
       (fun n0 -> to_little_uint n0 (Decimal.Little.succ acc))
       n
 
-  (** val to_uint : int -> Decimal.uint **)
+  (* val to_uint : int -> Decimal.uint **)
 
   let to_uint n =
     Decimal.rev (to_little_uint n (Decimal.D0 Decimal.Nil))
 
-  (** val to_little_hex_uint : int -> Hexadecimal.uint -> Hexadecimal.uint **)
+  (* val to_little_hex_uint : int -> Hexadecimal.uint -> Hexadecimal.uint **)
 
   let rec to_little_hex_uint n acc =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -396,57 +396,57 @@ module Nat =
       (fun n0 -> to_little_hex_uint n0 (Little.succ acc))
       n
 
-  (** val to_hex_uint : int -> Hexadecimal.uint **)
+  (* val to_hex_uint : int -> Hexadecimal.uint **)
 
   let to_hex_uint n =
     rev (to_little_hex_uint n (D0 Nil))
 
-  (** val to_num_uint : int -> uint **)
+  (* val to_num_uint : int -> uint **)
 
   let to_num_uint n =
     UIntDecimal (to_uint n)
 
-  (** val to_num_hex_uint : int -> uint **)
+  (* val to_num_hex_uint : int -> uint **)
 
   let to_num_hex_uint n =
     UIntHexadecimal (to_hex_uint n)
 
-  (** val of_int : Decimal.signed_int -> int option **)
+  (* val of_int : Decimal.signed_int -> int option **)
 
   let of_int d =
     match Decimal.norm d with
     | Decimal.Pos u -> Some (of_uint u)
     | Decimal.Neg _ -> None
 
-  (** val of_hex_int : Hexadecimal.signed_int -> int option **)
+  (* val of_hex_int : Hexadecimal.signed_int -> int option **)
 
   let of_hex_int d =
     match norm d with
     | Pos u -> Some (of_hex_uint u)
     | Neg _ -> None
 
-  (** val of_num_int : signed_int -> int option **)
+  (* val of_num_int : signed_int -> int option **)
 
   let of_num_int = function
   | IntDecimal d0 -> of_int d0
   | IntHexadecimal d0 -> of_hex_int d0
 
-  (** val to_int : int -> Decimal.signed_int **)
+  (* val to_int : int -> Decimal.signed_int **)
 
   let to_int n =
     Decimal.Pos (to_uint n)
 
-  (** val to_hex_int : int -> Hexadecimal.signed_int **)
+  (* val to_hex_int : int -> Hexadecimal.signed_int **)
 
   let to_hex_int n =
     Pos (to_hex_uint n)
 
-  (** val to_num_int : int -> signed_int **)
+  (* val to_num_int : int -> signed_int **)
 
   let to_num_int n =
     IntDecimal (to_int n)
 
-  (** val divmod : int -> int -> int -> int -> int * int **)
+  (* val divmod : int -> int -> int -> int -> int * int **)
 
   let rec divmod x y q u =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -458,7 +458,7 @@ module Nat =
         u)
       x
 
-  (** val div : int -> int -> int **)
+  (* val div : int -> int -> int **)
 
   let div x y =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -466,7 +466,7 @@ module Nat =
       (fun y' -> fst (divmod x y' 0 y'))
       y
 
-  (** val modulo : int -> int -> int **)
+  (* val modulo : int -> int -> int **)
 
   let modulo x y =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -474,7 +474,7 @@ module Nat =
       (fun y' -> sub y' (snd (divmod x y' 0 y')))
       y
 
-  (** val gcd : int -> int -> int **)
+  (* val gcd : int -> int -> int **)
 
   let rec gcd a b =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -482,12 +482,12 @@ module Nat =
       (fun a' -> gcd (modulo b (Stdlib.Int.succ a')) (Stdlib.Int.succ a'))
       a
 
-  (** val square : int -> int **)
+  (* val square : int -> int **)
 
   let square n =
     mul n n
 
-  (** val sqrt_iter : int -> int -> int -> int -> int **)
+  (* val sqrt_iter : int -> int -> int -> int -> int **)
 
   let rec sqrt_iter k p q r =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -501,12 +501,12 @@ module Nat =
         r)
       k
 
-  (** val sqrt : int -> int **)
+  (* val sqrt : int -> int **)
 
   let sqrt n =
     sqrt_iter n 0 0 0
 
-  (** val log2_iter : int -> int -> int -> int -> int **)
+  (* val log2_iter : int -> int -> int -> int -> int **)
 
   let rec log2_iter k p q r =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -519,12 +519,12 @@ module Nat =
         r)
       k
 
-  (** val log2 : int -> int **)
+  (* val log2 : int -> int **)
 
   let log2 n =
     log2_iter (pred n) 0 (Stdlib.Int.succ 0) 0
 
-  (** val iter : int -> ('a1 -> 'a1) -> 'a1 -> 'a1 **)
+  (* val iter : int -> ('a1 -> 'a1) -> 'a1 -> 'a1 **)
 
   let rec iter n f x =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -532,11 +532,11 @@ module Nat =
       (fun n0 -> f (iter n0 f x))
       n
 
-  (** val div2 : int -> int **)
+  (* val div2 : int -> int **)
 
   let rec div2 = fun n -> n/2
 
-  (** val testbit : int -> int -> bool **)
+  (* val testbit : int -> int -> bool **)
 
   let rec testbit a n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -544,7 +544,7 @@ module Nat =
       (fun n0 -> testbit (div2 a) n0)
       n
 
-  (** val shiftl : int -> int -> int **)
+  (* val shiftl : int -> int -> int **)
 
   let rec shiftl a n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -552,7 +552,7 @@ module Nat =
       (fun n0 -> double (shiftl a n0))
       n
 
-  (** val shiftr : int -> int -> int **)
+  (* val shiftr : int -> int -> int **)
 
   let rec shiftr a n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -560,7 +560,7 @@ module Nat =
       (fun n0 -> div2 (shiftr a n0))
       n
 
-  (** val bitwise : (bool -> bool -> bool) -> int -> int -> int -> int **)
+  (* val bitwise : (bool -> bool -> bool) -> int -> int -> int -> int **)
 
   let rec bitwise op n a b =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -571,27 +571,27 @@ module Nat =
           (bitwise op n' (div2 a) (div2 b))))
       n
 
-  (** val coq_land : int -> int -> int **)
+  (* val coq_land : int -> int -> int **)
 
   let coq_land a b =
     bitwise (&&) a a b
 
-  (** val coq_lor : int -> int -> int **)
+  (* val coq_lor : int -> int -> int **)
 
   let coq_lor a b =
     bitwise (||) (max a b) a b
 
-  (** val ldiff : int -> int -> int **)
+  (* val ldiff : int -> int -> int **)
 
   let ldiff a b =
     bitwise (fun b0 b' -> (&&) b0 (negb b')) a a b
 
-  (** val coq_lxor : int -> int -> int **)
+  (* val coq_lxor : int -> int -> int **)
 
   let coq_lxor a b =
     bitwise xorb (max a b) a b
 
-  (** val recursion : 'a1 -> (int -> 'a1 -> 'a1) -> int -> 'a1 **)
+  (* val recursion : 'a1 -> (int -> 'a1 -> 'a1) -> int -> 'a1 **)
 
   let rec recursion x f0 n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -599,22 +599,22 @@ module Nat =
       (fun n0 -> f0 n0 (recursion x f0 n0))
       n
 
-  (** val coq_Decidable_eq_nat : int -> int -> coq_Decidable **)
+  (* val coq_Decidable_eq_nat : int -> int -> coq_Decidable **)
 
   let coq_Decidable_eq_nat =
     (=)
 
-  (** val coq_Decidable_le_nat : int -> int -> coq_Decidable **)
+  (* val coq_Decidable_le_nat : int -> int -> coq_Decidable **)
 
   let coq_Decidable_le_nat =
     (<=)
 
-  (** val leb_spec0 : int -> int -> reflect **)
+  (* val leb_spec0 : int -> int -> reflect **)
 
   let leb_spec0 x y =
     iff_reflect ((<=) x y)
 
-  (** val ltb_spec0 : int -> int -> reflect **)
+  (* val ltb_spec0 : int -> int -> reflect **)
 
   let ltb_spec0 x y =
     iff_reflect (ltb x y)
@@ -630,7 +630,7 @@ module Nat =
      end
    end
 
-  (** val measure_right_induction :
+  (* val measure_right_induction :
       ('a1 -> int) -> int -> ('a1 -> __ -> ('a1 -> __ -> 'a2) -> 'a2) -> 'a1
       -> 'a2 **)
 
@@ -640,7 +640,7 @@ module Nat =
       iH y __ (fun y' _ -> let y0 = f y' in f0 y0 y')
     in f0 t0 x
 
-  (** val measure_left_induction :
+  (* val measure_left_induction :
       ('a1 -> int) -> int -> ('a1 -> __ -> ('a1 -> __ -> 'a2) -> 'a2) -> 'a1
       -> 'a2 **)
 
@@ -650,7 +650,7 @@ module Nat =
       iH y __ (fun y' _ -> let y0 = f y' in f0 y0 y')
     in f0 t0 x
 
-  (** val measure_induction :
+  (* val measure_induction :
       ('a1 -> int) -> ('a1 -> ('a1 -> __ -> 'a2) -> 'a2) -> 'a1 -> 'a2 **)
 
   let measure_induction f iH x =
@@ -663,7 +663,7 @@ module Nat =
 
   module Private_Dec =
    struct
-    (** val max_case_strong :
+    (* val max_case_strong :
         int -> int -> (int -> int -> __ -> 'a1 -> 'a1) -> (__ -> 'a1) -> (__
         -> 'a1) -> 'a1 **)
 
@@ -673,18 +673,18 @@ module Nat =
        | CompGtT -> compat n (max n m) __ (hl __)
        | _ -> compat m (max n m) __ (hr __))
 
-    (** val max_case :
+    (* val max_case :
         int -> int -> (int -> int -> __ -> 'a1 -> 'a1) -> 'a1 -> 'a1 -> 'a1 **)
 
     let max_case n m x x0 x1 =
       max_case_strong n m x (fun _ -> x0) (fun _ -> x1)
 
-    (** val max_dec : int -> int -> bool **)
+    (* val max_dec : int -> int -> bool **)
 
     let max_dec n m =
       max_case n m (fun _ _ _ h0 -> h0) true false
 
-    (** val min_case_strong :
+    (* val min_case_strong :
         int -> int -> (int -> int -> __ -> 'a1 -> 'a1) -> (__ -> 'a1) -> (__
         -> 'a1) -> 'a1 **)
 
@@ -694,46 +694,46 @@ module Nat =
        | CompGtT -> compat m (min n m) __ (hr __)
        | _ -> compat n (min n m) __ (hl __))
 
-    (** val min_case :
+    (* val min_case :
         int -> int -> (int -> int -> __ -> 'a1 -> 'a1) -> 'a1 -> 'a1 -> 'a1 **)
 
     let min_case n m x x0 x1 =
       min_case_strong n m x (fun _ -> x0) (fun _ -> x1)
 
-    (** val min_dec : int -> int -> bool **)
+    (* val min_dec : int -> int -> bool **)
 
     let min_dec n m =
       min_case n m (fun _ _ _ h0 -> h0) true false
    end
 
-  (** val max_case_strong :
+  (* val max_case_strong :
       int -> int -> (__ -> 'a1) -> (__ -> 'a1) -> 'a1 **)
 
   let max_case_strong n m x x0 =
     Private_Dec.max_case_strong n m (fun _ _ _ x1 -> x1) x x0
 
-  (** val max_case : int -> int -> 'a1 -> 'a1 -> 'a1 **)
+  (* val max_case : int -> int -> 'a1 -> 'a1 -> 'a1 **)
 
   let max_case n m x x0 =
     max_case_strong n m (fun _ -> x) (fun _ -> x0)
 
-  (** val max_dec : int -> int -> bool **)
+  (* val max_dec : int -> int -> bool **)
 
   let max_dec =
     Private_Dec.max_dec
 
-  (** val min_case_strong :
+  (* val min_case_strong :
       int -> int -> (__ -> 'a1) -> (__ -> 'a1) -> 'a1 **)
 
   let min_case_strong n m x x0 =
     Private_Dec.min_case_strong n m (fun _ _ _ x1 -> x1) x x0
 
-  (** val min_case : int -> int -> 'a1 -> 'a1 -> 'a1 **)
+  (* val min_case : int -> int -> 'a1 -> 'a1 -> 'a1 **)
 
   let min_case n m x x0 =
     min_case_strong n m (fun _ -> x) (fun _ -> x0)
 
-  (** val min_dec : int -> int -> bool **)
+  (* val min_dec : int -> int -> bool **)
 
   let min_dec =
     Private_Dec.min_dec
@@ -742,7 +742,7 @@ module Nat =
    struct
    end
 
-  (** val iter_rect :
+  (* val iter_rect :
       ('a1 -> 'a1) -> 'a1 -> 'a2 -> (int -> 'a1 -> 'a2 -> 'a2) -> int -> 'a2 **)
 
   let rec iter_rect f a h0 hS n =
@@ -765,97 +765,97 @@ module Nat =
 
   module PrivateImplementsBitwiseSpec =
    struct
-    (** val div2_double : __ **)
+    (* val div2_double : __ **)
 
     let div2_double =
       __
 
-    (** val div2_succ_double : __ **)
+    (* val div2_succ_double : __ **)
 
     let div2_succ_double =
       __
 
-    (** val testbit_odd_0 : __ **)
+    (* val testbit_odd_0 : __ **)
 
     let testbit_odd_0 =
       __
 
-    (** val testbit_even_0 : __ **)
+    (* val testbit_even_0 : __ **)
 
     let testbit_even_0 =
       __
 
-    (** val shiftl_spec_low : __ **)
+    (* val shiftl_spec_low : __ **)
 
     let shiftl_spec_low =
       __
 
-    (** val div2_bitwise : __ **)
+    (* val div2_bitwise : __ **)
 
     let div2_bitwise =
       __
 
-    (** val odd_bitwise : __ **)
+    (* val odd_bitwise : __ **)
 
     let odd_bitwise =
       __
 
-    (** val testbit_bitwise_1 : __ **)
+    (* val testbit_bitwise_1 : __ **)
 
     let testbit_bitwise_1 =
       __
 
-    (** val testbit_bitwise_2 : __ **)
+    (* val testbit_bitwise_2 : __ **)
 
     let testbit_bitwise_2 =
       __
 
-    (** val land_spec : __ **)
+    (* val land_spec : __ **)
 
     let land_spec =
       __
 
-    (** val ldiff_spec : __ **)
+    (* val ldiff_spec : __ **)
 
     let ldiff_spec =
       __
 
-    (** val lor_spec : __ **)
+    (* val lor_spec : __ **)
 
     let lor_spec =
       __
 
-    (** val lxor_spec : __ **)
+    (* val lxor_spec : __ **)
 
     let lxor_spec =
       __
 
-    (** val div2_spec : __ **)
+    (* val div2_spec : __ **)
 
     let div2_spec =
       __
 
-    (** val testbit_odd_succ : __ **)
+    (* val testbit_odd_succ : __ **)
 
     let testbit_odd_succ =
       __
 
-    (** val testbit_even_succ : __ **)
+    (* val testbit_even_succ : __ **)
 
     let testbit_even_succ =
       __
 
-    (** val testbit_neg_r : __ **)
+    (* val testbit_neg_r : __ **)
 
     let testbit_neg_r =
       __
 
-    (** val shiftl_spec_high : __ **)
+    (* val shiftl_spec_high : __ **)
 
     let shiftl_spec_high =
       __
 
-    (** val shiftr_spec : __ **)
+    (* val shiftr_spec : __ **)
 
     let shiftr_spec =
       __
@@ -869,14 +869,14 @@ module Nat =
    struct
    end
 
-  (** val sqrt_up : int -> int **)
+  (* val sqrt_up : int -> int **)
 
   let sqrt_up a =
     match compare 0 a with
     | Lt -> Stdlib.Int.succ (sqrt (pred a))
     | _ -> 0
 
-  (** val log2_up : int -> int **)
+  (* val log2_up : int -> int **)
 
   let log2_up a =
     match compare (Stdlib.Int.succ 0) a with
@@ -900,13 +900,13 @@ module Nat =
 
   module Private_NLcmProp =
    struct
-    (** val lcm : int -> int -> int **)
+    (* val lcm : int -> int -> int **)
 
     let lcm a b =
       mul a (div b (gcd a b))
    end
 
-  (** val lcm : int -> int -> int **)
+  (* val lcm : int -> int -> int **)
 
   let lcm a b =
     mul a (div b (gcd a b))
@@ -915,38 +915,38 @@ module Nat =
    struct
    end
 
-  (** val eqb_spec : int -> int -> reflect **)
+  (* val eqb_spec : int -> int -> reflect **)
 
   let eqb_spec x y =
     iff_reflect ((=) x y)
 
-  (** val b2n : bool -> int **)
+  (* val b2n : bool -> int **)
 
   let b2n = function
   | true -> Stdlib.Int.succ 0
   | false -> 0
 
-  (** val setbit : int -> int -> int **)
+  (* val setbit : int -> int -> int **)
 
   let setbit a n =
     coq_lor a (shiftl (Stdlib.Int.succ 0) n)
 
-  (** val clearbit : int -> int -> int **)
+  (* val clearbit : int -> int -> int **)
 
   let clearbit a n =
     ldiff a (shiftl (Stdlib.Int.succ 0) n)
 
-  (** val ones : int -> int **)
+  (* val ones : int -> int **)
 
   let ones n =
     pred (shiftl (Stdlib.Int.succ 0) n)
 
-  (** val lnot : int -> int -> int **)
+  (* val lnot : int -> int -> int **)
 
   let lnot a n =
     coq_lxor a (ones n)
 
-  (** val coq_Even_Odd_dec : int -> bool **)
+  (* val coq_Even_Odd_dec : int -> bool **)
 
   let rec coq_Even_Odd_dec n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -958,27 +958,27 @@ module Nat =
 
   type coq_OddT = int
 
-  (** val coq_EvenT_0 : coq_EvenT **)
+  (* val coq_EvenT_0 : coq_EvenT **)
 
   let coq_EvenT_0 =
     0
 
-  (** val coq_EvenT_2 : int -> coq_EvenT -> coq_EvenT **)
+  (* val coq_EvenT_2 : int -> coq_EvenT -> coq_EvenT **)
 
   let coq_EvenT_2 _ h0 =
     Stdlib.Int.succ h0
 
-  (** val coq_OddT_1 : coq_OddT **)
+  (* val coq_OddT_1 : coq_OddT **)
 
   let coq_OddT_1 =
     0
 
-  (** val coq_OddT_2 : int -> coq_OddT -> coq_OddT **)
+  (* val coq_OddT_2 : int -> coq_OddT -> coq_OddT **)
 
   let coq_OddT_2 _ h0 =
     Stdlib.Int.succ h0
 
-  (** val coq_EvenT_S_OddT : int -> coq_EvenT -> coq_OddT **)
+  (* val coq_EvenT_S_OddT : int -> coq_EvenT -> coq_OddT **)
 
   let coq_EvenT_S_OddT _ h =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -986,12 +986,12 @@ module Nat =
       (fun n -> n)
       h
 
-  (** val coq_OddT_S_EvenT : int -> coq_OddT -> coq_EvenT **)
+  (* val coq_OddT_S_EvenT : int -> coq_OddT -> coq_EvenT **)
 
   let coq_OddT_S_EvenT _ h =
     h
 
-  (** val even_EvenT : int -> coq_EvenT **)
+  (* val even_EvenT : int -> coq_EvenT **)
 
   let rec even_EvenT n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -1003,7 +1003,7 @@ module Nat =
         n0)
       n
 
-  (** val odd_OddT : int -> coq_OddT **)
+  (* val odd_OddT : int -> coq_OddT **)
 
   let rec odd_OddT n =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -1015,22 +1015,22 @@ module Nat =
         n0)
       n
 
-  (** val coq_Even_EvenT : int -> coq_EvenT **)
+  (* val coq_Even_EvenT : int -> coq_EvenT **)
 
   let coq_Even_EvenT =
     even_EvenT
 
-  (** val coq_Odd_OddT : int -> coq_OddT **)
+  (* val coq_Odd_OddT : int -> coq_OddT **)
 
   let coq_Odd_OddT =
     odd_OddT
 
-  (** val coq_EvenT_OddT_dec : int -> (coq_EvenT, coq_OddT) sum **)
+  (* val coq_EvenT_OddT_dec : int -> (coq_EvenT, coq_OddT) sum **)
 
   let coq_EvenT_OddT_dec n =
     if even n then Coq_inl (even_EvenT n) else Coq_inr (odd_OddT n)
 
-  (** val coq_OddT_EvenT_rect :
+  (* val coq_OddT_EvenT_rect :
       (int -> coq_EvenT -> 'a2 -> 'a1) -> 'a2 -> (int -> coq_OddT -> 'a1 ->
       'a2) -> int -> coq_OddT -> 'a1 **)
 
@@ -1052,7 +1052,7 @@ module Nat =
         n)
       n0
 
-  (** val coq_EvenT_OddT_rect :
+  (* val coq_EvenT_OddT_rect :
       (int -> coq_EvenT -> 'a2 -> 'a1) -> 'a2 -> (int -> coq_OddT -> 'a1 ->
       'a2) -> int -> coq_EvenT -> 'a2 **)
 

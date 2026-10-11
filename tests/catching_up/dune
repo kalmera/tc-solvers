@@ -1,0 +1,11 @@
+(copy_files ../../ocaml/extracted/DirtyReadRestartingRuntime.ml*)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_plus_restarting.ml)
+(copy_files ../../ocaml/adapters/goblint/generated/slrtc_inlined_plus_restarting.ml)
+(rule (target slrtc_update.ml) (action (copy ../../ocaml/adapters/goblint/generated/slrtc_catching_up_update.ml %{target})))
+(copy_files ../../ocaml/extracted/PlusRestartingRuntime.ml*)
+(executable
+ (name plus_restarting)
+ (flags (:standard -w -33-39-60-67 -warn-error -A))
+ (libraries batteries yojson unix))
+(rule (alias runtest)
+ (action (setenv SLRTC_TRACE "" (run %{exe:plus_restarting.exe}))))

@@ -79,19 +79,19 @@ module Make =
 
   type handle = { handle_variable : V.t; handle_rank : int }
 
-  (** val handle_variable : handle -> V.t **)
+  (* val handle_variable : handle -> V.t **)
 
   let handle_variable h =
     h.handle_variable
 
-  (** val handle_rank : handle -> int **)
+  (* val handle_rank : handle -> int **)
 
   let handle_rank h =
     h.handle_rank
 
   type work_queue = handle list
 
-  (** val queue_contains_rank : int -> work_queue -> bool **)
+  (* val queue_contains_rank : int -> work_queue -> bool **)
 
   let rec queue_contains_rank rank0 = function
   | [] -> false
@@ -100,7 +100,7 @@ module Make =
     then true
     else queue_contains_rank rank0 rest
 
-  (** val queue_insert_fresh : handle -> work_queue -> work_queue **)
+  (* val queue_insert_fresh : handle -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh entry = function
   | [] -> entry :: []
@@ -109,20 +109,20 @@ module Make =
     then entry :: (head :: rest)
     else head :: (queue_insert_fresh entry rest)
 
-  (** val queue_insert : handle -> work_queue -> work_queue **)
+  (* val queue_insert : handle -> work_queue -> work_queue **)
 
   let queue_insert entry q =
     if queue_contains_rank entry.handle_rank q
     then q
     else queue_insert_fresh entry q
 
-  (** val queue_peek : work_queue -> handle option **)
+  (* val queue_peek : work_queue -> handle option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (handle * work_queue) option **)
+  (* val queue_pop : work_queue -> (handle * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -134,57 +134,57 @@ module Make =
                  side_phases : side_phase_table;
                  local_sides : local_side_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val started : state -> S.t **)
+  (* val started : state -> S.t **)
 
   let started s =
     s.started
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val phases : state -> phase_table **)
+  (* val phases : state -> phase_table **)
 
   let phases s =
     s.phases
 
-  (** val side_phases : state -> side_phase_table **)
+  (* val side_phases : state -> side_phase_table **)
 
   let side_phases s =
     s.side_phases
 
-  (** val local_sides : state -> local_side_table **)
+  (* val local_sides : state -> local_side_table **)
 
   let local_sides s =
     s.local_sides
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; started =
@@ -192,7 +192,7 @@ module Make =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; started =
@@ -200,7 +200,7 @@ module Make =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; started =
@@ -208,7 +208,7 @@ module Make =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_started : state -> S.t -> state **)
+  (* val with_started : state -> S.t -> state **)
 
   let with_started st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -216,7 +216,7 @@ module Make =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -224,7 +224,7 @@ module Make =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -232,7 +232,7 @@ module Make =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_phases : state -> phase_table -> state **)
+  (* val with_phases : state -> phase_table -> state **)
 
   let with_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -240,7 +240,7 @@ module Make =
       phases = next; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_side_phases : state -> side_phase_table -> state **)
+  (* val with_side_phases : state -> side_phase_table -> state **)
 
   let with_side_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -248,7 +248,7 @@ module Make =
       phases = st.phases; side_phases = next; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_local_sides : state -> local_side_table -> state **)
+  (* val with_local_sides : state -> local_side_table -> state **)
 
   let with_local_sides st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -256,7 +256,7 @@ module Make =
       phases = st.phases; side_phases = st.side_phases; local_sides = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -264,126 +264,126 @@ module Make =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = next }
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; started =
       S.empty; readers = M.empty; contributions = M.empty; phases = M.empty;
       side_phases = M.empty; local_sides = M.empty; controlled = S.empty }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     M.update table outer (M.update (lookup_map table outer) inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     if is_materialized st x
     then st
     else with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state * handle **)
+  (* val observe : state -> V.t -> state * handle **)
 
   let observe st x =
     let (next_ranking, rank0) = Ranking.observe st.ranking x in
     ((with_ranking st next_ranking), { handle_variable = x; handle_rank =
     rank0 })
 
-  (** val enqueue_handle : state -> handle -> state **)
+  (* val enqueue_handle : state -> handle -> state **)
 
   let enqueue_handle st entry =
     with_queue st (queue_insert entry st.queue)
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     let (st1, entry) = observe st x in enqueue_handle st1 entry
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let rec enqueue_all st = function
   | [] -> st
   | x :: rest -> enqueue_all (enqueue st x) rest
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val stored_phase : state -> V.t -> U.phase **)
+  (* val stored_phase : state -> V.t -> U.phase **)
 
   let stored_phase st owner =
     match M.lookup st.phases owner with
     | Some phase0 -> phase0
     | None -> U.initial_phase false owner
 
-  (** val stored_side_phase : state -> V.t -> V.t -> U.phase **)
+  (* val stored_side_phase : state -> V.t -> V.t -> U.phase **)
 
   let stored_side_phase st source target =
     match M.lookup (lookup_map st.side_phases target) source with
     | Some phase0 -> phase0
     | None -> U.initial_phase true target
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val add_reader : state -> V.t -> V.t -> state **)
+  (* val add_reader : state -> V.t -> V.t -> state **)
 
   let add_reader st target owner =
     with_readers st
       (M.update st.readers target
         (S.add owner (lookup_set st.readers target)))
 
-  (** val get_ready_state : state -> handle -> handle -> state **)
+  (* val get_ready_state : state -> handle -> handle -> state **)
 
   let get_ready_state st owner target =
     let st1 =
@@ -394,24 +394,24 @@ module Make =
     materialize (add_reader st1 target.handle_variable owner.handle_variable)
       target.handle_variable
 
-  (** val reset_local_sides : state -> V.t -> state **)
+  (* val reset_local_sides : state -> V.t -> state **)
 
   let reset_local_sides st owner =
     with_local_sides st (M.update st.local_sides owner M.empty)
 
-  (** val start_evaluation : state -> V.t -> state **)
+  (* val start_evaluation : state -> V.t -> state **)
 
   let start_evaluation st owner =
     reset_local_sides (materialize st owner) owner
 
-  (** val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input st source target raw =
     match M.lookup (lookup_map st.local_sides source) target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
+  (* val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
 
   let record_side_payload st source target raw =
     let input = accumulated_side_input st source target raw in
@@ -428,7 +428,7 @@ module Make =
     with_side_phases st2
       (update_map st2.side_phases target source (fst updated))
 
-  (** val side_ready_state : state -> handle -> handle -> D.t -> state **)
+  (* val side_ready_state : state -> handle -> handle -> D.t -> state **)
 
   let side_ready_state st source target raw =
     let st1 =
@@ -438,7 +438,7 @@ module Make =
     then st1
     else promote_controlled st1 source.handle_variable
 
-  (** val write_changed_value : state -> V.t -> D.t -> state **)
+  (* val write_changed_value : state -> V.t -> D.t -> state **)
 
   let write_changed_value st owner value =
     let invalidated = S.elements (lookup_set st.readers owner) in
@@ -446,7 +446,7 @@ module Make =
     let st2 = enqueue_all st1 invalidated in
     with_readers st2 (M.update st2.readers owner S.empty)
 
-  (** val set_value : state -> V.t -> D.t -> state **)
+  (* val set_value : state -> V.t -> D.t -> state **)
 
   let set_value st owner direct =
     let candidate = D.join direct (aggregate st owner) in
@@ -465,7 +465,7 @@ module Make =
               else write_changed_value st1 owner (snd updated)
          else write_changed_value st owner candidate
 
-  (** val owner_may_still_be_queued : state -> handle -> bool **)
+  (* val owner_may_still_be_queued : state -> handle -> bool **)
 
   let owner_may_still_be_queued st owner =
     match queue_peek st.queue with
@@ -494,7 +494,7 @@ module Make =
   | KAfterSide of handle * ConstraintSystem.rhs * continuation
   | KAfterSpawn of handle * ConstraintSystem.rhs * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -513,7 +513,7 @@ module Make =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -532,7 +532,7 @@ module Make =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -549,7 +549,7 @@ module Make =
   | KAfterSpawn (h, r, c0) ->
     f4 h r c0 (continuation_rect f f0 f1 f2 f3 f4 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -565,7 +565,7 @@ module Make =
   | KAfterSide (h, r, c0) -> f3 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
   | KAfterSpawn (h, r, c0) -> f4 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
 
-  (** val continue : continuation -> control **)
+  (* val continue : continuation -> control **)
 
   let continue = function
   | KLoop -> RunLoop
@@ -578,22 +578,22 @@ module Make =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -701,7 +701,7 @@ module Make =
      | AfterSpawn (owner, next, k) ->
        Some { cfg_state = st; cfg_control = (RunRhs (owner, next, k)) })
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -712,7 +712,7 @@ module Make =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -722,13 +722,13 @@ module Make =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -762,7 +762,7 @@ module FirstDiscoveryAlgorithm =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -773,7 +773,7 @@ module FirstDiscoveryAlgorithm =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -809,22 +809,22 @@ module FirstDiscoveryAlgorithm =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -832,19 +832,19 @@ module FirstDiscoveryAlgorithm =
 
   type handle = { handle_variable : V.t; handle_rank : int }
 
-  (** val handle_variable : handle -> V.t **)
+  (* val handle_variable : handle -> V.t **)
 
   let handle_variable h =
     h.handle_variable
 
-  (** val handle_rank : handle -> int **)
+  (* val handle_rank : handle -> int **)
 
   let handle_rank h =
     h.handle_rank
 
   type work_queue = handle list
 
-  (** val queue_contains_rank : int -> work_queue -> bool **)
+  (* val queue_contains_rank : int -> work_queue -> bool **)
 
   let rec queue_contains_rank rank0 = function
   | [] -> false
@@ -853,7 +853,7 @@ module FirstDiscoveryAlgorithm =
     then true
     else queue_contains_rank rank0 rest
 
-  (** val queue_insert_fresh : handle -> work_queue -> work_queue **)
+  (* val queue_insert_fresh : handle -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh entry = function
   | [] -> entry :: []
@@ -862,20 +862,20 @@ module FirstDiscoveryAlgorithm =
     then entry :: (head :: rest)
     else head :: (queue_insert_fresh entry rest)
 
-  (** val queue_insert : handle -> work_queue -> work_queue **)
+  (* val queue_insert : handle -> work_queue -> work_queue **)
 
   let queue_insert entry q =
     if queue_contains_rank entry.handle_rank q
     then q
     else queue_insert_fresh entry q
 
-  (** val queue_peek : work_queue -> handle option **)
+  (* val queue_peek : work_queue -> handle option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (handle * work_queue) option **)
+  (* val queue_pop : work_queue -> (handle * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -887,57 +887,57 @@ module FirstDiscoveryAlgorithm =
                  side_phases : side_phase_table;
                  local_sides : local_side_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val started : state -> S.t **)
+  (* val started : state -> S.t **)
 
   let started s =
     s.started
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val phases : state -> phase_table **)
+  (* val phases : state -> phase_table **)
 
   let phases s =
     s.phases
 
-  (** val side_phases : state -> side_phase_table **)
+  (* val side_phases : state -> side_phase_table **)
 
   let side_phases s =
     s.side_phases
 
-  (** val local_sides : state -> local_side_table **)
+  (* val local_sides : state -> local_side_table **)
 
   let local_sides s =
     s.local_sides
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; started =
@@ -945,7 +945,7 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; started =
@@ -953,7 +953,7 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; started =
@@ -961,7 +961,7 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_started : state -> S.t -> state **)
+  (* val with_started : state -> S.t -> state **)
 
   let with_started st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -969,7 +969,7 @@ module FirstDiscoveryAlgorithm =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -977,7 +977,7 @@ module FirstDiscoveryAlgorithm =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -985,7 +985,7 @@ module FirstDiscoveryAlgorithm =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_phases : state -> phase_table -> state **)
+  (* val with_phases : state -> phase_table -> state **)
 
   let with_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -993,7 +993,7 @@ module FirstDiscoveryAlgorithm =
       phases = next; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_side_phases : state -> side_phase_table -> state **)
+  (* val with_side_phases : state -> side_phase_table -> state **)
 
   let with_side_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1001,7 +1001,7 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = next; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_local_sides : state -> local_side_table -> state **)
+  (* val with_local_sides : state -> local_side_table -> state **)
 
   let with_local_sides st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1009,7 +1009,7 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = st.side_phases; local_sides = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1017,126 +1017,126 @@ module FirstDiscoveryAlgorithm =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = next }
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; started =
       S.empty; readers = M.empty; contributions = M.empty; phases = M.empty;
       side_phases = M.empty; local_sides = M.empty; controlled = S.empty }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     M.update table outer (M.update (lookup_map table outer) inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     if is_materialized st x
     then st
     else with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state * handle **)
+  (* val observe : state -> V.t -> state * handle **)
 
   let observe st x =
     let (next_ranking, rank0) = Ranking.observe st.ranking x in
     ((with_ranking st next_ranking), { handle_variable = x; handle_rank =
     rank0 })
 
-  (** val enqueue_handle : state -> handle -> state **)
+  (* val enqueue_handle : state -> handle -> state **)
 
   let enqueue_handle st entry =
     with_queue st (queue_insert entry st.queue)
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     let (st1, entry) = observe st x in enqueue_handle st1 entry
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let rec enqueue_all st = function
   | [] -> st
   | x :: rest -> enqueue_all (enqueue st x) rest
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val stored_phase : state -> V.t -> U.phase **)
+  (* val stored_phase : state -> V.t -> U.phase **)
 
   let stored_phase st owner =
     match M.lookup st.phases owner with
     | Some phase0 -> phase0
     | None -> U.initial_phase false owner
 
-  (** val stored_side_phase : state -> V.t -> V.t -> U.phase **)
+  (* val stored_side_phase : state -> V.t -> V.t -> U.phase **)
 
   let stored_side_phase st source target =
     match M.lookup (lookup_map st.side_phases target) source with
     | Some phase0 -> phase0
     | None -> U.initial_phase true target
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val add_reader : state -> V.t -> V.t -> state **)
+  (* val add_reader : state -> V.t -> V.t -> state **)
 
   let add_reader st target owner =
     with_readers st
       (M.update st.readers target
         (S.add owner (lookup_set st.readers target)))
 
-  (** val get_ready_state : state -> handle -> handle -> state **)
+  (* val get_ready_state : state -> handle -> handle -> state **)
 
   let get_ready_state st owner target =
     let st1 =
@@ -1147,24 +1147,24 @@ module FirstDiscoveryAlgorithm =
     materialize (add_reader st1 target.handle_variable owner.handle_variable)
       target.handle_variable
 
-  (** val reset_local_sides : state -> V.t -> state **)
+  (* val reset_local_sides : state -> V.t -> state **)
 
   let reset_local_sides st owner =
     with_local_sides st (M.update st.local_sides owner M.empty)
 
-  (** val start_evaluation : state -> V.t -> state **)
+  (* val start_evaluation : state -> V.t -> state **)
 
   let start_evaluation st owner =
     reset_local_sides (materialize st owner) owner
 
-  (** val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input st source target raw =
     match M.lookup (lookup_map st.local_sides source) target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
+  (* val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
 
   let record_side_payload st source target raw =
     let input = accumulated_side_input st source target raw in
@@ -1181,7 +1181,7 @@ module FirstDiscoveryAlgorithm =
     with_side_phases st2
       (update_map st2.side_phases target source (fst updated))
 
-  (** val side_ready_state : state -> handle -> handle -> D.t -> state **)
+  (* val side_ready_state : state -> handle -> handle -> D.t -> state **)
 
   let side_ready_state st source target raw =
     let st1 =
@@ -1191,7 +1191,7 @@ module FirstDiscoveryAlgorithm =
     then st1
     else promote_controlled st1 source.handle_variable
 
-  (** val write_changed_value : state -> V.t -> D.t -> state **)
+  (* val write_changed_value : state -> V.t -> D.t -> state **)
 
   let write_changed_value st owner value =
     let invalidated = S.elements (lookup_set st.readers owner) in
@@ -1199,7 +1199,7 @@ module FirstDiscoveryAlgorithm =
     let st2 = enqueue_all st1 invalidated in
     with_readers st2 (M.update st2.readers owner S.empty)
 
-  (** val set_value : state -> V.t -> D.t -> state **)
+  (* val set_value : state -> V.t -> D.t -> state **)
 
   let set_value st owner direct =
     let candidate = D.join direct (aggregate st owner) in
@@ -1218,7 +1218,7 @@ module FirstDiscoveryAlgorithm =
               else write_changed_value st1 owner (snd updated)
          else write_changed_value st owner candidate
 
-  (** val owner_may_still_be_queued : state -> handle -> bool **)
+  (* val owner_may_still_be_queued : state -> handle -> bool **)
 
   let owner_may_still_be_queued st owner =
     match queue_peek st.queue with
@@ -1247,7 +1247,7 @@ module FirstDiscoveryAlgorithm =
   | KAfterSide of handle * ConstraintSystem.rhs * continuation
   | KAfterSpawn of handle * ConstraintSystem.rhs * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -1266,7 +1266,7 @@ module FirstDiscoveryAlgorithm =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -1285,7 +1285,7 @@ module FirstDiscoveryAlgorithm =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -1302,7 +1302,7 @@ module FirstDiscoveryAlgorithm =
   | KAfterSpawn (h, r, c0) ->
     f4 h r c0 (continuation_rect f f0 f1 f2 f3 f4 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -1318,7 +1318,7 @@ module FirstDiscoveryAlgorithm =
   | KAfterSide (h, r, c0) -> f3 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
   | KAfterSpawn (h, r, c0) -> f4 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
 
-  (** val continue : continuation -> control **)
+  (* val continue : continuation -> control **)
 
   let continue = function
   | KLoop -> RunLoop
@@ -1331,22 +1331,22 @@ module FirstDiscoveryAlgorithm =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -1454,7 +1454,7 @@ module FirstDiscoveryAlgorithm =
      | AfterSpawn (owner, next, k) ->
        Some { cfg_state = st; cfg_control = (RunRhs (owner, next, k)) })
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -1465,7 +1465,7 @@ module FirstDiscoveryAlgorithm =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -1475,13 +1475,13 @@ module FirstDiscoveryAlgorithm =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -1533,7 +1533,7 @@ module FirstDiscovery =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -1544,7 +1544,7 @@ module FirstDiscovery =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -1580,22 +1580,22 @@ module FirstDiscovery =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -1603,19 +1603,19 @@ module FirstDiscovery =
 
   type handle = { handle_variable : V.t; handle_rank : int }
 
-  (** val handle_variable : handle -> V.t **)
+  (* val handle_variable : handle -> V.t **)
 
   let handle_variable h =
     h.handle_variable
 
-  (** val handle_rank : handle -> int **)
+  (* val handle_rank : handle -> int **)
 
   let handle_rank h =
     h.handle_rank
 
   type work_queue = handle list
 
-  (** val queue_contains_rank : int -> work_queue -> bool **)
+  (* val queue_contains_rank : int -> work_queue -> bool **)
 
   let rec queue_contains_rank rank0 = function
   | [] -> false
@@ -1624,7 +1624,7 @@ module FirstDiscovery =
     then true
     else queue_contains_rank rank0 rest
 
-  (** val queue_insert_fresh : handle -> work_queue -> work_queue **)
+  (* val queue_insert_fresh : handle -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh entry = function
   | [] -> entry :: []
@@ -1633,20 +1633,20 @@ module FirstDiscovery =
     then entry :: (head :: rest)
     else head :: (queue_insert_fresh entry rest)
 
-  (** val queue_insert : handle -> work_queue -> work_queue **)
+  (* val queue_insert : handle -> work_queue -> work_queue **)
 
   let queue_insert entry q =
     if queue_contains_rank entry.handle_rank q
     then q
     else queue_insert_fresh entry q
 
-  (** val queue_peek : work_queue -> handle option **)
+  (* val queue_peek : work_queue -> handle option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (handle * work_queue) option **)
+  (* val queue_pop : work_queue -> (handle * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -1658,57 +1658,57 @@ module FirstDiscovery =
                  side_phases : side_phase_table;
                  local_sides : local_side_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val started : state -> S.t **)
+  (* val started : state -> S.t **)
 
   let started s =
     s.started
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val phases : state -> phase_table **)
+  (* val phases : state -> phase_table **)
 
   let phases s =
     s.phases
 
-  (** val side_phases : state -> side_phase_table **)
+  (* val side_phases : state -> side_phase_table **)
 
   let side_phases s =
     s.side_phases
 
-  (** val local_sides : state -> local_side_table **)
+  (* val local_sides : state -> local_side_table **)
 
   let local_sides s =
     s.local_sides
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; started =
@@ -1716,7 +1716,7 @@ module FirstDiscovery =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; started =
@@ -1724,7 +1724,7 @@ module FirstDiscovery =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; started =
@@ -1732,7 +1732,7 @@ module FirstDiscovery =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_started : state -> S.t -> state **)
+  (* val with_started : state -> S.t -> state **)
 
   let with_started st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1740,7 +1740,7 @@ module FirstDiscovery =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1748,7 +1748,7 @@ module FirstDiscovery =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1756,7 +1756,7 @@ module FirstDiscovery =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_phases : state -> phase_table -> state **)
+  (* val with_phases : state -> phase_table -> state **)
 
   let with_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1764,7 +1764,7 @@ module FirstDiscovery =
       phases = next; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_side_phases : state -> side_phase_table -> state **)
+  (* val with_side_phases : state -> side_phase_table -> state **)
 
   let with_side_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1772,7 +1772,7 @@ module FirstDiscovery =
       phases = st.phases; side_phases = next; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_local_sides : state -> local_side_table -> state **)
+  (* val with_local_sides : state -> local_side_table -> state **)
 
   let with_local_sides st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1780,7 +1780,7 @@ module FirstDiscovery =
       phases = st.phases; side_phases = st.side_phases; local_sides = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -1788,126 +1788,126 @@ module FirstDiscovery =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = next }
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; started =
       S.empty; readers = M.empty; contributions = M.empty; phases = M.empty;
       side_phases = M.empty; local_sides = M.empty; controlled = S.empty }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     M.update table outer (M.update (lookup_map table outer) inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     if is_materialized st x
     then st
     else with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state * handle **)
+  (* val observe : state -> V.t -> state * handle **)
 
   let observe st x =
     let (next_ranking, rank0) = Ranking.observe st.ranking x in
     ((with_ranking st next_ranking), { handle_variable = x; handle_rank =
     rank0 })
 
-  (** val enqueue_handle : state -> handle -> state **)
+  (* val enqueue_handle : state -> handle -> state **)
 
   let enqueue_handle st entry =
     with_queue st (queue_insert entry st.queue)
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     let (st1, entry) = observe st x in enqueue_handle st1 entry
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let rec enqueue_all st = function
   | [] -> st
   | x :: rest -> enqueue_all (enqueue st x) rest
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val stored_phase : state -> V.t -> U.phase **)
+  (* val stored_phase : state -> V.t -> U.phase **)
 
   let stored_phase st owner =
     match M.lookup st.phases owner with
     | Some phase0 -> phase0
     | None -> U.initial_phase false owner
 
-  (** val stored_side_phase : state -> V.t -> V.t -> U.phase **)
+  (* val stored_side_phase : state -> V.t -> V.t -> U.phase **)
 
   let stored_side_phase st source target =
     match M.lookup (lookup_map st.side_phases target) source with
     | Some phase0 -> phase0
     | None -> U.initial_phase true target
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val add_reader : state -> V.t -> V.t -> state **)
+  (* val add_reader : state -> V.t -> V.t -> state **)
 
   let add_reader st target owner =
     with_readers st
       (M.update st.readers target
         (S.add owner (lookup_set st.readers target)))
 
-  (** val get_ready_state : state -> handle -> handle -> state **)
+  (* val get_ready_state : state -> handle -> handle -> state **)
 
   let get_ready_state st owner target =
     let st1 =
@@ -1918,24 +1918,24 @@ module FirstDiscovery =
     materialize (add_reader st1 target.handle_variable owner.handle_variable)
       target.handle_variable
 
-  (** val reset_local_sides : state -> V.t -> state **)
+  (* val reset_local_sides : state -> V.t -> state **)
 
   let reset_local_sides st owner =
     with_local_sides st (M.update st.local_sides owner M.empty)
 
-  (** val start_evaluation : state -> V.t -> state **)
+  (* val start_evaluation : state -> V.t -> state **)
 
   let start_evaluation st owner =
     reset_local_sides (materialize st owner) owner
 
-  (** val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input st source target raw =
     match M.lookup (lookup_map st.local_sides source) target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
+  (* val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
 
   let record_side_payload st source target raw =
     let input = accumulated_side_input st source target raw in
@@ -1952,7 +1952,7 @@ module FirstDiscovery =
     with_side_phases st2
       (update_map st2.side_phases target source (fst updated))
 
-  (** val side_ready_state : state -> handle -> handle -> D.t -> state **)
+  (* val side_ready_state : state -> handle -> handle -> D.t -> state **)
 
   let side_ready_state st source target raw =
     let st1 =
@@ -1962,7 +1962,7 @@ module FirstDiscovery =
     then st1
     else promote_controlled st1 source.handle_variable
 
-  (** val write_changed_value : state -> V.t -> D.t -> state **)
+  (* val write_changed_value : state -> V.t -> D.t -> state **)
 
   let write_changed_value st owner value =
     let invalidated = S.elements (lookup_set st.readers owner) in
@@ -1970,7 +1970,7 @@ module FirstDiscovery =
     let st2 = enqueue_all st1 invalidated in
     with_readers st2 (M.update st2.readers owner S.empty)
 
-  (** val set_value : state -> V.t -> D.t -> state **)
+  (* val set_value : state -> V.t -> D.t -> state **)
 
   let set_value st owner direct =
     let candidate = D.join direct (aggregate st owner) in
@@ -1989,7 +1989,7 @@ module FirstDiscovery =
               else write_changed_value st1 owner (snd updated)
          else write_changed_value st owner candidate
 
-  (** val owner_may_still_be_queued : state -> handle -> bool **)
+  (* val owner_may_still_be_queued : state -> handle -> bool **)
 
   let owner_may_still_be_queued st owner =
     match queue_peek st.queue with
@@ -2018,7 +2018,7 @@ module FirstDiscovery =
   | KAfterSide of handle * ConstraintSystem.rhs * continuation
   | KAfterSpawn of handle * ConstraintSystem.rhs * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -2037,7 +2037,7 @@ module FirstDiscovery =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -2056,7 +2056,7 @@ module FirstDiscovery =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -2073,7 +2073,7 @@ module FirstDiscovery =
   | KAfterSpawn (h, r, c0) ->
     f4 h r c0 (continuation_rect f f0 f1 f2 f3 f4 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -2089,7 +2089,7 @@ module FirstDiscovery =
   | KAfterSide (h, r, c0) -> f3 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
   | KAfterSpawn (h, r, c0) -> f4 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
 
-  (** val continue : continuation -> control **)
+  (* val continue : continuation -> control **)
 
   let continue = function
   | KLoop -> RunLoop
@@ -2102,22 +2102,22 @@ module FirstDiscovery =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -2225,7 +2225,7 @@ module FirstDiscovery =
      | AfterSpawn (owner, next, k) ->
        Some { cfg_state = st; cfg_control = (RunRhs (owner, next, k)) })
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -2236,7 +2236,7 @@ module FirstDiscovery =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -2246,13 +2246,13 @@ module FirstDiscovery =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =
@@ -2307,7 +2307,7 @@ module FixedRank =
     | Side of V.t * D.t * rhs
     | Spawn of V.t * rhs
 
-    (** val rhs_rect :
+    (* val rhs_rect :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -2318,7 +2318,7 @@ module FixedRank =
     | Side (t0, t1, r0) -> f1 t0 t1 r0 (rhs_rect f f0 f1 f2 r0)
     | Spawn (t0, r0) -> f2 t0 r0 (rhs_rect f f0 f1 f2 r0)
 
-    (** val rhs_rec :
+    (* val rhs_rec :
         (D.t -> 'a1) -> (V.t -> (D.t -> rhs) -> (D.t -> 'a1) -> 'a1) -> (V.t
         -> D.t -> rhs -> 'a1 -> 'a1) -> (V.t -> rhs -> 'a1 -> 'a1) -> rhs ->
         'a1 **)
@@ -2354,22 +2354,22 @@ module FixedRank =
    struct
     type t = Rk.t
 
-    (** val empty : t **)
+    (* val empty : t **)
 
     let empty =
       Rk.empty
 
-    (** val lookup : t -> V.t -> int option **)
+    (* val lookup : t -> V.t -> int option **)
 
     let lookup =
       Rk.lookup
 
-    (** val size : t -> int **)
+    (* val size : t -> int **)
 
     let size =
       Rk.size
 
-    (** val observe : t -> V.t -> t * int **)
+    (* val observe : t -> V.t -> t * int **)
 
     let observe =
       Rk.observe
@@ -2377,19 +2377,19 @@ module FixedRank =
 
   type handle = { handle_variable : V.t; handle_rank : int }
 
-  (** val handle_variable : handle -> V.t **)
+  (* val handle_variable : handle -> V.t **)
 
   let handle_variable h =
     h.handle_variable
 
-  (** val handle_rank : handle -> int **)
+  (* val handle_rank : handle -> int **)
 
   let handle_rank h =
     h.handle_rank
 
   type work_queue = handle list
 
-  (** val queue_contains_rank : int -> work_queue -> bool **)
+  (* val queue_contains_rank : int -> work_queue -> bool **)
 
   let rec queue_contains_rank rank0 = function
   | [] -> false
@@ -2398,7 +2398,7 @@ module FixedRank =
     then true
     else queue_contains_rank rank0 rest
 
-  (** val queue_insert_fresh : handle -> work_queue -> work_queue **)
+  (* val queue_insert_fresh : handle -> work_queue -> work_queue **)
 
   let rec queue_insert_fresh entry = function
   | [] -> entry :: []
@@ -2407,20 +2407,20 @@ module FixedRank =
     then entry :: (head :: rest)
     else head :: (queue_insert_fresh entry rest)
 
-  (** val queue_insert : handle -> work_queue -> work_queue **)
+  (* val queue_insert : handle -> work_queue -> work_queue **)
 
   let queue_insert entry q =
     if queue_contains_rank entry.handle_rank q
     then q
     else queue_insert_fresh entry q
 
-  (** val queue_peek : work_queue -> handle option **)
+  (* val queue_peek : work_queue -> handle option **)
 
   let queue_peek = function
   | [] -> None
   | head :: _ -> Some head
 
-  (** val queue_pop : work_queue -> (handle * work_queue) option **)
+  (* val queue_pop : work_queue -> (handle * work_queue) option **)
 
   let queue_pop = function
   | [] -> None
@@ -2432,57 +2432,57 @@ module FixedRank =
                  side_phases : side_phase_table;
                  local_sides : local_side_table; controlled : S.t }
 
-  (** val sigma : state -> store **)
+  (* val sigma : state -> store **)
 
   let sigma s =
     s.sigma
 
-  (** val ranking : state -> Ranking.t **)
+  (* val ranking : state -> Ranking.t **)
 
   let ranking s =
     s.ranking
 
-  (** val queue : state -> work_queue **)
+  (* val queue : state -> work_queue **)
 
   let queue s =
     s.queue
 
-  (** val started : state -> S.t **)
+  (* val started : state -> S.t **)
 
   let started s =
     s.started
 
-  (** val readers : state -> readers_table **)
+  (* val readers : state -> readers_table **)
 
   let readers s =
     s.readers
 
-  (** val contributions : state -> contribution_table **)
+  (* val contributions : state -> contribution_table **)
 
   let contributions s =
     s.contributions
 
-  (** val phases : state -> phase_table **)
+  (* val phases : state -> phase_table **)
 
   let phases s =
     s.phases
 
-  (** val side_phases : state -> side_phase_table **)
+  (* val side_phases : state -> side_phase_table **)
 
   let side_phases s =
     s.side_phases
 
-  (** val local_sides : state -> local_side_table **)
+  (* val local_sides : state -> local_side_table **)
 
   let local_sides s =
     s.local_sides
 
-  (** val controlled : state -> S.t **)
+  (* val controlled : state -> S.t **)
 
   let controlled s =
     s.controlled
 
-  (** val with_sigma : state -> store -> state **)
+  (* val with_sigma : state -> store -> state **)
 
   let with_sigma st next =
     { sigma = next; ranking = st.ranking; queue = st.queue; started =
@@ -2490,7 +2490,7 @@ module FixedRank =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_ranking : state -> Ranking.t -> state **)
+  (* val with_ranking : state -> Ranking.t -> state **)
 
   let with_ranking st next =
     { sigma = st.sigma; ranking = next; queue = st.queue; started =
@@ -2498,7 +2498,7 @@ module FixedRank =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_queue : state -> work_queue -> state **)
+  (* val with_queue : state -> work_queue -> state **)
 
   let with_queue st next =
     { sigma = st.sigma; ranking = st.ranking; queue = next; started =
@@ -2506,7 +2506,7 @@ module FixedRank =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_started : state -> S.t -> state **)
+  (* val with_started : state -> S.t -> state **)
 
   let with_started st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2514,7 +2514,7 @@ module FixedRank =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_readers : state -> readers_table -> state **)
+  (* val with_readers : state -> readers_table -> state **)
 
   let with_readers st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2522,7 +2522,7 @@ module FixedRank =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_contributions : state -> contribution_table -> state **)
+  (* val with_contributions : state -> contribution_table -> state **)
 
   let with_contributions st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2530,7 +2530,7 @@ module FixedRank =
       st.phases; side_phases = st.side_phases; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_phases : state -> phase_table -> state **)
+  (* val with_phases : state -> phase_table -> state **)
 
   let with_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2538,7 +2538,7 @@ module FixedRank =
       phases = next; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = st.controlled }
 
-  (** val with_side_phases : state -> side_phase_table -> state **)
+  (* val with_side_phases : state -> side_phase_table -> state **)
 
   let with_side_phases st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2546,7 +2546,7 @@ module FixedRank =
       phases = st.phases; side_phases = next; local_sides = st.local_sides;
       controlled = st.controlled }
 
-  (** val with_local_sides : state -> local_side_table -> state **)
+  (* val with_local_sides : state -> local_side_table -> state **)
 
   let with_local_sides st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2554,7 +2554,7 @@ module FixedRank =
       phases = st.phases; side_phases = st.side_phases; local_sides = next;
       controlled = st.controlled }
 
-  (** val with_controlled : state -> S.t -> state **)
+  (* val with_controlled : state -> S.t -> state **)
 
   let with_controlled st next =
     { sigma = st.sigma; ranking = st.ranking; queue = st.queue; started =
@@ -2562,126 +2562,126 @@ module FixedRank =
       phases = st.phases; side_phases = st.side_phases; local_sides =
       st.local_sides; controlled = next }
 
-  (** val empty_state : state **)
+  (* val empty_state : state **)
 
   let empty_state =
     { sigma = M.empty; ranking = Ranking.empty; queue = []; started =
       S.empty; readers = M.empty; contributions = M.empty; phases = M.empty;
       side_phases = M.empty; local_sides = M.empty; controlled = S.empty }
 
-  (** val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
+  (* val lookup_map : 'a1 M.t M.t -> V.t -> 'a1 M.t **)
 
   let lookup_map table outer =
     match M.lookup table outer with
     | Some row -> row
     | None -> M.empty
 
-  (** val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
+  (* val update_map : 'a1 M.t M.t -> V.t -> V.t -> 'a1 -> 'a1 M.t M.t **)
 
   let update_map table outer inner value =
     M.update table outer (M.update (lookup_map table outer) inner value)
 
-  (** val lookup_set : S.t M.t -> V.t -> S.t **)
+  (* val lookup_set : S.t M.t -> V.t -> S.t **)
 
   let lookup_set table x =
     match M.lookup table x with
     | Some xs -> xs
     | None -> S.empty
 
-  (** val sigma_value : state -> V.t -> D.t **)
+  (* val sigma_value : state -> V.t -> D.t **)
 
   let sigma_value st x =
     match M.lookup st.sigma x with
     | Some value -> value
     | None -> D.bottom
 
-  (** val is_materialized : state -> V.t -> bool **)
+  (* val is_materialized : state -> V.t -> bool **)
 
   let is_materialized st x =
     match M.lookup st.sigma x with
     | Some _ -> true
     | None -> false
 
-  (** val materialize : state -> V.t -> state **)
+  (* val materialize : state -> V.t -> state **)
 
   let materialize st x =
     if is_materialized st x
     then st
     else with_sigma st (M.update st.sigma x D.bottom)
 
-  (** val observe : state -> V.t -> state * handle **)
+  (* val observe : state -> V.t -> state * handle **)
 
   let observe st x =
     let (next_ranking, rank0) = Ranking.observe st.ranking x in
     ((with_ranking st next_ranking), { handle_variable = x; handle_rank =
     rank0 })
 
-  (** val enqueue_handle : state -> handle -> state **)
+  (* val enqueue_handle : state -> handle -> state **)
 
   let enqueue_handle st entry =
     with_queue st (queue_insert entry st.queue)
 
-  (** val enqueue : state -> V.t -> state **)
+  (* val enqueue : state -> V.t -> state **)
 
   let enqueue st x =
     let (st1, entry) = observe st x in enqueue_handle st1 entry
 
-  (** val enqueue_all : state -> V.t list -> state **)
+  (* val enqueue_all : state -> V.t list -> state **)
 
   let rec enqueue_all st = function
   | [] -> st
   | x :: rest -> enqueue_all (enqueue st x) rest
 
-  (** val equivalent : D.t -> D.t -> bool **)
+  (* val equivalent : D.t -> D.t -> bool **)
 
   let equivalent left right =
     (&&) (D.leq left right) (D.leq right left)
 
-  (** val join_values : D.t list -> D.t **)
+  (* val join_values : D.t list -> D.t **)
 
   let rec join_values = function
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-  (** val aggregate : state -> V.t -> D.t **)
+  (* val aggregate : state -> V.t -> D.t **)
 
   let aggregate st target =
     join_values (M.values (lookup_map st.contributions target))
 
-  (** val stored_contribution : state -> V.t -> V.t -> D.t **)
+  (* val stored_contribution : state -> V.t -> V.t -> D.t **)
 
   let stored_contribution st source target =
     match M.lookup (lookup_map st.contributions target) source with
     | Some value -> value
     | None -> D.bottom
 
-  (** val stored_phase : state -> V.t -> U.phase **)
+  (* val stored_phase : state -> V.t -> U.phase **)
 
   let stored_phase st owner =
     match M.lookup st.phases owner with
     | Some phase0 -> phase0
     | None -> U.initial_phase false owner
 
-  (** val stored_side_phase : state -> V.t -> V.t -> U.phase **)
+  (* val stored_side_phase : state -> V.t -> V.t -> U.phase **)
 
   let stored_side_phase st source target =
     match M.lookup (lookup_map st.side_phases target) source with
     | Some phase0 -> phase0
     | None -> U.initial_phase true target
 
-  (** val promote_controlled : state -> V.t -> state **)
+  (* val promote_controlled : state -> V.t -> state **)
 
   let promote_controlled st x =
     with_controlled st (S.add x st.controlled)
 
-  (** val add_reader : state -> V.t -> V.t -> state **)
+  (* val add_reader : state -> V.t -> V.t -> state **)
 
   let add_reader st target owner =
     with_readers st
       (M.update st.readers target
         (S.add owner (lookup_set st.readers target)))
 
-  (** val get_ready_state : state -> handle -> handle -> state **)
+  (* val get_ready_state : state -> handle -> handle -> state **)
 
   let get_ready_state st owner target =
     let st1 =
@@ -2692,24 +2692,24 @@ module FixedRank =
     materialize (add_reader st1 target.handle_variable owner.handle_variable)
       target.handle_variable
 
-  (** val reset_local_sides : state -> V.t -> state **)
+  (* val reset_local_sides : state -> V.t -> state **)
 
   let reset_local_sides st owner =
     with_local_sides st (M.update st.local_sides owner M.empty)
 
-  (** val start_evaluation : state -> V.t -> state **)
+  (* val start_evaluation : state -> V.t -> state **)
 
   let start_evaluation st owner =
     reset_local_sides (materialize st owner) owner
 
-  (** val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
+  (* val accumulated_side_input : state -> V.t -> V.t -> D.t -> D.t **)
 
   let accumulated_side_input st source target raw =
     match M.lookup (lookup_map st.local_sides source) target with
     | Some previous -> D.join previous raw
     | None -> raw
 
-  (** val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
+  (* val record_side_payload : state -> V.t -> V.t -> D.t -> state **)
 
   let record_side_payload st source target raw =
     let input = accumulated_side_input st source target raw in
@@ -2726,7 +2726,7 @@ module FixedRank =
     with_side_phases st2
       (update_map st2.side_phases target source (fst updated))
 
-  (** val side_ready_state : state -> handle -> handle -> D.t -> state **)
+  (* val side_ready_state : state -> handle -> handle -> D.t -> state **)
 
   let side_ready_state st source target raw =
     let st1 =
@@ -2736,7 +2736,7 @@ module FixedRank =
     then st1
     else promote_controlled st1 source.handle_variable
 
-  (** val write_changed_value : state -> V.t -> D.t -> state **)
+  (* val write_changed_value : state -> V.t -> D.t -> state **)
 
   let write_changed_value st owner value =
     let invalidated = S.elements (lookup_set st.readers owner) in
@@ -2744,7 +2744,7 @@ module FixedRank =
     let st2 = enqueue_all st1 invalidated in
     with_readers st2 (M.update st2.readers owner S.empty)
 
-  (** val set_value : state -> V.t -> D.t -> state **)
+  (* val set_value : state -> V.t -> D.t -> state **)
 
   let set_value st owner direct =
     let candidate = D.join direct (aggregate st owner) in
@@ -2763,7 +2763,7 @@ module FixedRank =
               else write_changed_value st1 owner (snd updated)
          else write_changed_value st owner candidate
 
-  (** val owner_may_still_be_queued : state -> handle -> bool **)
+  (* val owner_may_still_be_queued : state -> handle -> bool **)
 
   let owner_may_still_be_queued st owner =
     match queue_peek st.queue with
@@ -2792,7 +2792,7 @@ module FixedRank =
   | KAfterSide of handle * ConstraintSystem.rhs * continuation
   | KAfterSpawn of handle * ConstraintSystem.rhs * continuation
 
-  (** val control_rect :
+  (* val control_rect :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -2811,7 +2811,7 @@ module FixedRank =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val control_rec :
+  (* val control_rec :
       'a1 -> (V.t list -> 'a1) -> (V.t list -> 'a1) -> (handle ->
       continuation -> 'a1) -> (handle -> continuation -> 'a1) -> (handle ->
       ConstraintSystem.rhs -> continuation -> 'a1) -> (handle -> handle ->
@@ -2830,7 +2830,7 @@ module FixedRank =
   | AfterSide (h, r, c0) -> f6 h r c0
   | AfterSpawn (h, r, c0) -> f7 h r c0
 
-  (** val continuation_rect :
+  (* val continuation_rect :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -2847,7 +2847,7 @@ module FixedRank =
   | KAfterSpawn (h, r, c0) ->
     f4 h r c0 (continuation_rect f f0 f1 f2 f3 f4 c0)
 
-  (** val continuation_rec :
+  (* val continuation_rec :
       'a1 -> (V.t list -> 'a1) -> (handle -> continuation -> 'a1 -> 'a1) ->
       (handle -> handle -> (D.t -> ConstraintSystem.rhs) -> continuation ->
       'a1 -> 'a1) -> (handle -> ConstraintSystem.rhs -> continuation -> 'a1
@@ -2863,7 +2863,7 @@ module FixedRank =
   | KAfterSide (h, r, c0) -> f3 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
   | KAfterSpawn (h, r, c0) -> f4 h r c0 (continuation_rec f f0 f1 f2 f3 f4 c0)
 
-  (** val continue : continuation -> control **)
+  (* val continue : continuation -> control **)
 
   let continue = function
   | KLoop -> RunLoop
@@ -2876,22 +2876,22 @@ module FixedRank =
 
   type config = { cfg_state : state; cfg_control : control }
 
-  (** val cfg_state : config -> state **)
+  (* val cfg_state : config -> state **)
 
   let cfg_state c =
     c.cfg_state
 
-  (** val cfg_control : config -> control **)
+  (* val cfg_control : config -> control **)
 
   let cfg_control c =
     c.cfg_control
 
-  (** val initial_config : V.t list -> config **)
+  (* val initial_config : V.t list -> config **)
 
   let initial_config initial =
     { cfg_state = empty_state; cfg_control = (RunSeeds initial) }
 
-  (** val next_config : ConstraintSystem.system -> config -> config option **)
+  (* val next_config : ConstraintSystem.system -> config -> config option **)
 
   let next_config tf c =
     let st = c.cfg_state in
@@ -2999,7 +2999,7 @@ module FixedRank =
      | AfterSpawn (owner, next, k) ->
        Some { cfg_state = st; cfg_control = (RunRhs (owner, next, k)) })
 
-  (** val run_fuel : int -> ConstraintSystem.system -> config -> config **)
+  (* val run_fuel : int -> ConstraintSystem.system -> config -> config **)
 
   let rec run_fuel fuel tf c =
     (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -3010,7 +3010,7 @@ module FixedRank =
       | None -> c)
       fuel
 
-  (** val terminal_state : config -> state option **)
+  (* val terminal_state : config -> state option **)
 
   let terminal_state c =
     match c.cfg_control with
@@ -3020,13 +3020,13 @@ module FixedRank =
        | None -> Some c.cfg_state)
     | _ -> None
 
-  (** val solve_fuel :
+  (* val solve_fuel :
       int -> ConstraintSystem.system -> V.t list -> state option **)
 
   let solve_fuel fuel tf initial =
     terminal_state (run_fuel fuel tf (initial_config initial))
 
-  (** val solve_values_fuel :
+  (* val solve_values_fuel :
       int -> ConstraintSystem.system -> V.t list -> store option **)
 
   let solve_values_fuel fuel tf initial =

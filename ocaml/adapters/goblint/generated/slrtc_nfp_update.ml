@@ -56,7 +56,7 @@ struct
       Widen, S.Dom.widen old input
 end
 
-(** [k = 1] performs two direct copies.  [l = 0] permits the first
+(* [k = 1] performs two direct copies.  [l = 0] permits the first
     widening/narrowing box before committing to widening when it reopens. *)
 module CopyUpdate = BoxUpdate (struct
   let k = 1
@@ -90,7 +90,7 @@ struct
   let update = M.update
 end
 
-(** Finite-height join iteration; the caller supplies the domain. *)
+(* Finite-height join iteration; the caller supplies the domain. *)
 module JoinUpdate (S : DemandEqConstrSys) = struct
   type phase = unit
   let initial_phase _ _ = ()

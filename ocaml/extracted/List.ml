@@ -11,37 +11,37 @@ module ListNotations =
  struct
  end
 
-(** val hd : 'a1 -> 'a1 list -> 'a1 **)
+(* val hd : 'a1 -> 'a1 list -> 'a1 **)
 
 let hd default = function
 | [] -> default
 | x :: _ -> x
 
-(** val hd_error : 'a1 list -> 'a1 option **)
+(* val hd_error : 'a1 list -> 'a1 option **)
 
 let hd_error = function
 | [] -> None
 | x :: _ -> Some x
 
-(** val tl : 'a1 list -> 'a1 list **)
+(* val tl : 'a1 list -> 'a1 list **)
 
 let tl = function
 | [] -> []
 | _ :: l' -> l'
 
-(** val destruct_list : 'a1 list -> ('a1, 'a1 list) sigT option **)
+(* val destruct_list : 'a1 list -> ('a1, 'a1 list) sigT option **)
 
 let destruct_list = function
 | [] -> None
 | y :: l0 -> Some (Coq_existT (y, l0))
 
-(** val in_dec : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> bool **)
+(* val in_dec : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> bool **)
 
 let rec in_dec h a = function
 | [] -> false
 | y :: l0 -> let s = h y a in if s then true else in_dec h a l0
 
-(** val nth_ok : int -> 'a1 list -> 'a1 -> bool **)
+(* val nth_ok : int -> 'a1 list -> 'a1 -> bool **)
 
 let rec nth_ok n l default =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -53,7 +53,7 @@ let rec nth_ok n l default =
               | _ :: l' -> nth_ok m l' default)
     n
 
-(** val nth_in_or_default : int -> 'a1 list -> 'a1 -> bool **)
+(* val nth_in_or_default : int -> 'a1 list -> 'a1 -> bool **)
 
 let rec nth_in_or_default n l d =
   match l with
@@ -64,7 +64,7 @@ let rec nth_in_or_default n l d =
        (fun n0 -> nth_in_or_default n0 l0 d)
        n)
 
-(** val nth_error : 'a1 list -> int -> 'a1 option **)
+(* val nth_error : 'a1 list -> int -> 'a1 option **)
 
 let rec nth_error l n =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -76,14 +76,14 @@ let rec nth_error l n =
                | _ :: l' -> nth_error l' n0)
     n
 
-(** val nth_default : 'a1 -> 'a1 list -> int -> 'a1 **)
+(* val nth_default : 'a1 -> 'a1 list -> int -> 'a1 **)
 
 let nth_default default l n =
   match nth_error l n with
   | Some x -> x
   | None -> default
 
-(** val last : 'a1 list -> 'a1 -> 'a1 **)
+(* val last : 'a1 list -> 'a1 -> 'a1 **)
 
 let rec last l d =
   match l with
@@ -92,7 +92,7 @@ let rec last l d =
                 | [] -> a
                 | _ :: _ -> last l' d)
 
-(** val removelast : 'a1 list -> 'a1 list **)
+(* val removelast : 'a1 list -> 'a1 list **)
 
 let rec removelast = function
 | [] -> []
@@ -100,7 +100,7 @@ let rec removelast = function
               | [] -> []
               | _ :: _ -> a :: (removelast l'))
 
-(** val exists_last : 'a1 list -> ('a1 list, 'a1) sigT **)
+(* val exists_last : 'a1 list -> ('a1 list, 'a1) sigT **)
 
 let rec exists_last = function
 | [] -> assert false (* absurd case *)
@@ -111,14 +111,14 @@ let rec exists_last = function
      let s = exists_last l0 in
      let Coq_existT (x, s0) = s in Coq_existT ((y :: x), s0))
 
-(** val remove : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
+(* val remove : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
 
 let rec remove eq_dec x = function
 | [] -> []
 | y :: tl0 ->
   if eq_dec x y then remove eq_dec x tl0 else y :: (remove eq_dec x tl0)
 
-(** val count_occ : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 -> int **)
+(* val count_occ : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 -> int **)
 
 let rec count_occ eq_dec l x =
   match l with
@@ -127,31 +127,31 @@ let rec count_occ eq_dec l x =
     let n = count_occ eq_dec tl0 x in
     if eq_dec y x then Stdlib.Int.succ n else n
 
-(** val rev : 'a1 list -> 'a1 list **)
+(* val rev : 'a1 list -> 'a1 list **)
 
 let rec rev = function
 | [] -> []
 | x :: l' -> app (rev l') (x :: [])
 
-(** val rev_append : 'a1 list -> 'a1 list -> 'a1 list **)
+(* val rev_append : 'a1 list -> 'a1 list -> 'a1 list **)
 
 let rec rev_append l l' =
   match l with
   | [] -> l'
   | a :: l0 -> rev_append l0 (a :: l')
 
-(** val rev' : 'a1 list -> 'a1 list **)
+(* val rev' : 'a1 list -> 'a1 list **)
 
 let rev' l =
   rev_append l []
 
-(** val concat : 'a1 list list -> 'a1 list **)
+(* val concat : 'a1 list list -> 'a1 list **)
 
 let rec concat = function
 | [] -> []
 | x :: l0 -> app x (concat l0)
 
-(** val list_eq_dec : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list -> bool **)
+(* val list_eq_dec : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list -> bool **)
 
 let rec list_eq_dec eq_dec l l' =
   match l with
@@ -163,26 +163,26 @@ let rec list_eq_dec eq_dec l l' =
      | [] -> false
      | a :: l1 -> if eq_dec y a then list_eq_dec eq_dec l0 l1 else false)
 
-(** val flat_map : ('a1 -> 'a2 list) -> 'a1 list -> 'a2 list **)
+(* val flat_map : ('a1 -> 'a2 list) -> 'a1 list -> 'a2 list **)
 
 let rec flat_map f = function
 | [] -> []
 | x :: l0 -> app (f x) (flat_map f l0)
 
-(** val fold_left : ('a1 -> 'a2 -> 'a1) -> 'a2 list -> 'a1 -> 'a1 **)
+(* val fold_left : ('a1 -> 'a2 -> 'a1) -> 'a2 list -> 'a1 -> 'a1 **)
 
 let rec fold_left f l a0 =
   match l with
   | [] -> a0
   | b :: l0 -> fold_left f l0 (f a0 b)
 
-(** val fold_right : ('a2 -> 'a1 -> 'a1) -> 'a1 -> 'a2 list -> 'a1 **)
+(* val fold_right : ('a2 -> 'a1 -> 'a1) -> 'a1 -> 'a2 list -> 'a1 **)
 
 let rec fold_right f a0 = function
 | [] -> a0
 | b :: l0 -> f b (fold_right f a0 l0)
 
-(** val list_power : 'a1 list -> 'a2 list -> ('a1 * 'a2) list list **)
+(* val list_power : 'a1 list -> 'a2 list -> ('a1 * 'a2) list list **)
 
 let rec list_power l l' =
   match l with
@@ -190,48 +190,48 @@ let rec list_power l l' =
   | x :: l0 ->
     flat_map (fun f -> map (fun y -> (x, y) :: f) l') (list_power l0 l')
 
-(** val existsb : ('a1 -> bool) -> 'a1 list -> bool **)
+(* val existsb : ('a1 -> bool) -> 'a1 list -> bool **)
 
 let rec existsb f = function
 | [] -> false
 | a :: l0 -> (||) (f a) (existsb f l0)
 
-(** val forallb : ('a1 -> bool) -> 'a1 list -> bool **)
+(* val forallb : ('a1 -> bool) -> 'a1 list -> bool **)
 
 let rec forallb f = function
 | [] -> true
 | a :: l0 -> (&&) (f a) (forallb f l0)
 
-(** val filter : ('a1 -> bool) -> 'a1 list -> 'a1 list **)
+(* val filter : ('a1 -> bool) -> 'a1 list -> 'a1 list **)
 
 let rec filter f = function
 | [] -> []
 | x :: l0 -> if f x then x :: (filter f l0) else filter f l0
 
-(** val find : ('a1 -> bool) -> 'a1 list -> 'a1 option **)
+(* val find : ('a1 -> bool) -> 'a1 list -> 'a1 option **)
 
 let rec find f = function
 | [] -> None
 | x :: tl0 -> if f x then Some x else find f tl0
 
-(** val partition : ('a1 -> bool) -> 'a1 list -> 'a1 list * 'a1 list **)
+(* val partition : ('a1 -> bool) -> 'a1 list -> 'a1 list * 'a1 list **)
 
 let rec partition f = function
 | [] -> ([], [])
 | x :: tl0 ->
   let (g, d) = partition f tl0 in if f x then ((x :: g), d) else (g, (x :: d))
 
-(** val remove' : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
+(* val remove' : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
 
 let remove' eq_dec x =
   filter (fun y -> if eq_dec x y then false else true)
 
-(** val count_occ' : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 -> int **)
+(* val count_occ' : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 -> int **)
 
 let count_occ' eq_dec l x =
   length (filter (fun y -> if eq_dec y x then true else false) l)
 
-(** val split : ('a1 * 'a2) list -> 'a1 list * 'a2 list **)
+(* val split : ('a1 * 'a2) list -> 'a1 list * 'a2 list **)
 
 let rec split = function
 | [] -> ([], [])
@@ -239,7 +239,7 @@ let rec split = function
   let (x, y) = p in
   let (left, right) = split tl0 in ((x :: left), (y :: right))
 
-(** val combine : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
+(* val combine : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
 
 let rec combine l l' =
   match l with
@@ -249,50 +249,50 @@ let rec combine l l' =
      | [] -> []
      | y :: tl' -> (x, y) :: (combine tl0 tl'))
 
-(** val list_prod : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
+(* val list_prod : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
 
 let rec list_prod l l' =
   match l with
   | [] -> []
   | x :: t -> app (map (fun y -> (x, y)) l') (list_prod t l')
 
-(** val nodup : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list **)
+(* val nodup : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list **)
 
 let rec nodup decA = function
 | [] -> []
 | x :: xs -> if in_dec decA x xs then nodup decA xs else x :: (nodup decA xs)
 
-(** val coq_Exists_dec : 'a1 list -> ('a1 -> bool) -> bool **)
+(* val coq_Exists_dec : 'a1 list -> ('a1 -> bool) -> bool **)
 
 let rec coq_Exists_dec l pdec =
   match l with
   | [] -> false
   | y :: l0 -> if coq_Exists_dec l0 pdec then true else pdec y
 
-(** val coq_Forall_rect :
+(* val coq_Forall_rect :
     'a2 -> ('a1 -> 'a1 list -> __ -> 'a2) -> 'a1 list -> 'a2 **)
 
 let coq_Forall_rect h h' = function
 | [] -> h
 | y :: l0 -> h' y l0 __
 
-(** val coq_Forall_dec : ('a1 -> bool) -> 'a1 list -> bool **)
+(* val coq_Forall_dec : ('a1 -> bool) -> 'a1 list -> bool **)
 
 let rec coq_Forall_dec pdec = function
 | [] -> true
 | y :: l0 -> if coq_Forall_dec pdec l0 then pdec y else false
 
-(** val coq_Forall_Exists_dec : ('a1 -> bool) -> 'a1 list -> bool **)
+(* val coq_Forall_Exists_dec : ('a1 -> bool) -> 'a1 list -> bool **)
 
 let coq_Forall_Exists_dec =
   coq_Forall_dec
 
-(** val list_sum : int list -> int **)
+(* val list_sum : int list -> int **)
 
 let list_sum l =
   fold_right add 0 l
 
-(** val list_max : int list -> int **)
+(* val list_max : int list -> int **)
 
 let list_max l =
   fold_right Stdlib.max 0 l

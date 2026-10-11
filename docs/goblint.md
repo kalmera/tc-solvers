@@ -41,3 +41,22 @@ they introduce no extra registered solver names. Restore the default with
 `make goblint-adapters RANK_WORKLIST=bitmap` before committing generated sources.
 
 These adapters must satisfy the additional [implementation assumptions](extraction.md).
+
+## Catching-up Plus Restarting (SLR-TC+) registrations
+
+The catching-up registrations use `Slrtc_catching_up_update.DefaultUpdate`.
+`slrtc_plus_restarting_no_side_reset_keep_dead_default` uses FIFO spawning
+with controlled-owner recomputation disabled. The `_immediate` registration
+disables FIFO spawning while preserving the other settings.
+`slrtc_plus_restarting_no_side_reset_keep_dead_default_recompute_controlled` enables it
+with FIFO-deferred spawning, side reset disabled, and dead-side elimination
+disabled. The formal ordinary fixedness theorem uses OneBox updates; it does
+not assert that this DefaultUpdate registration satisfies the OneBox theorem.
+
+The historical `slrtc_dfr_...` identifiers remain compatibility aliases;
+existing benchmark configurations and saved records keep their original names.
+
+The Plus Restarting adapters expose `recompute_controlled` in their `FEATURES`
+interface. Enabled adapters queue changed controlled owners for reevaluation
+with the returned update phase, including when their RHS has no self-read.
+Both extracted and inlined control forms implement the option.

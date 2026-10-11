@@ -241,7 +241,7 @@ end''' + source[b:]
 for inline in (False, True):
     generate(inline)
 update = (extraction / 'goblint_slrtc_update.ml').read_text()
-update += '''\n(** Finite-height join iteration; the caller supplies the domain. *)
+update += '''\n(* Finite-height join iteration; the caller supplies the domain. *)
 module JoinUpdate (S : DemandEqConstrSys) = struct
   type phase = unit
   let initial_phase _ _ = ()

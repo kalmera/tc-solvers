@@ -1,0 +1,611 @@
+(*
+   Goblint callback adapter template for Dormant Simple.
+
+   A freshly demanded variable is probed before discovery.  If its transfer
+   returns bottom without calling get, side or spawn, it is remembered as a
+   rankless dormant bottom instead of being entered into sigma.  The first
+   effectful evaluation or incoming side effect promotes it permanently into
+   the ordinary first-discovery order.
+
+   The reference machine is rocq/solvers/slr/dormant_simple/DormantSimple.v.
+   Check both adapter forms with make test-dormant-adapters.
+
+   Speculative probing remains local; scheduler control is injected at build
+   time from either Rocq extraction or the inlined reference implementation.
+*)
+
+open Batteries
+open Goblint_constraint.ConstrSys
+open Goblint_constraint.SolverTypes
+
+open Slrtc_update
+
+module type SIDE_POLICY = sig
+  val reluctant : bool
+  val stats_name : string
+end
+
+module ReluctantSidePolicy : SIDE_POLICY = struct
+  let reluctant = true
+  let stats_name = "dormant_simple_reluctant"
+end
+
+module StandardSidePolicy : SIDE_POLICY = struct
+  let reluctant = false
+  let stats_name = "dormant_simple_standard"
+end
+
+(* @@CONTROL@@ *)
+module type CONTROL = sig
+  type seeded_result = SeedsSolved of int | SeedsOutOfFuel
+
+  val solve_one :
+    'd ->
+    ('v -> unit) ->
+    ('v -> 'v -> 'd) ->
+    ('v -> 'v -> 'd -> unit) ->
+    ('v -> 'v -> unit) ->
+    ('v -> 'd -> unit) ->
+    ('v -> unit) ->
+    ('v ->
+      (('v -> 'd) ->
+       ('v -> 'd -> unit) ->
+       ('v -> unit) ->
+       'd) option) ->
+    'v ->
+    unit
+
+  val solve_seeds_with_fuel :
+    int ->
+    ('v -> bool) ->
+    (unit -> 'v option) ->
+    ('v -> unit) ->
+    'v list ->
+    seeded_result
+end
+
+module Make
+    (Control : CONTROL)
+    (SidePolicy : SIDE_POLICY)
+    (Update : UPDATE) : DemandEqIncrSolver =
+  functor (Arg : IncrSolverArg)
+    (S : DemandEqConstrSys)
+    (VH : Hashtbl.S with type key = S.v) ->
+  struct
+    module U = Update (S)
+
+    type marshal = unit
+
+    let copy_marshal () = ()
+    let relift_marshal () = ()
+
+    let bottom = S.Dom.bot ()
+
+    type set = unit VH.t
+    type local_side = S.d VH.t
+
+    type side_cell = {
+      mutable phase : U.phase;
+      mutable contribution : S.d;
+    }
+
+    type side_row = side_cell VH.t
+
+    type rank_info = {
+      mutable queued : bool;
+      mutable started : bool;
+      mutable variable : S.v;
+      mutable controlled : bool;
+      mutable normal_phase : U.phase option;
+      mutable readers : set option;
+      mutable side_aggregate : S.d;
+      mutable side_cells : side_row option;
+    }
+
+    let[@inline always] make_rank_info variable =
+      {
+        queued = false;
+        started = false;
+        variable;
+        controlled = false;
+        normal_phase = None;
+        readers = None;
+        side_aggregate = bottom;
+        side_cells = None;
+      }
+
+    (* @@RANK_WORKLIST@@ *)
+
+    (* @@READER_WAKE_QUEUE@@ *)
+
+    (* A dormant row is also the reverse-reader set accumulated before the
+        variable receives a rank.  Membership certifies that its RHS was an
+        immediate pure return equivalent to bottom. *)
+    type dormant_table = set VH.t
+
+    type unranked_result =
+      | Dormant of set
+      | Promoted
+
+    type state = {
+      sigma : S.d VH.t;
+      starts : S.d VH.t;
+      dormant_bottom : dormant_table;
+      queue : queue;
+    }
+
+    type episode = {
+      owner : S.v;
+      owner_rank : int;
+      owner_info : rank_info;
+      mutable owner_phase : U.phase;
+      mutable local_side : local_side option;
+    }
+
+    let[@inline always] create_state () =
+      {
+        sigma = VH.create 32;
+        starts = VH.create 16;
+        dormant_bottom = VH.create 16;
+        queue = create_queue ();
+      }
+
+    let[@inline always] start_value state variable =
+      VH.find_default state.starts variable bottom
+
+    let[@inline always] materialize state variable =
+      if not (VH.mem state.sigma variable) then
+        VH.replace state.sigma variable bottom
+
+    let[@inline always] lattice_equal left right =
+      S.Dom.equal left right
+
+    let[@inline always] side_update
+        target phase old input aggregate =
+      let next_phase, next = U.update true target phase old input in
+      if not SidePolicy.reluctant || S.Dom.leq input old then
+        next_phase, next
+      else if S.Dom.leq input aggregate then
+        next_phase, S.Dom.join old input
+      else
+        next_phase, next
+
+    let[@inline always] recompute_aggregate cells =
+      VH.fold
+        (fun _ cell result -> S.Dom.join cell.contribution result)
+        cells bottom
+
+    let[@inline always] readers_of_info info =
+      match info.readers with
+      | Some readers -> readers
+      | None ->
+        let readers = VH.create 4 in
+        info.readers <- Some readers;
+        readers
+
+    (* Promotion transfers every reader collected by the rankless dormant
+        representation into the ordinary rank-local information. *)
+    let[@inline always] activate_rank state variable =
+      match VH.find_option state.queue.ranks variable with
+      | Some variable_rank ->
+        variable_rank,
+        Dynarray.get state.queue.infos variable_rank,
+        false
+      | None ->
+        let dormant_readers =
+          VH.find_option state.dormant_bottom variable
+        in
+        let variable_rank = fresh_rank state.queue variable in
+        let info = Dynarray.get state.queue.infos variable_rank in
+        begin match dormant_readers with
+        | None -> variable_rank, info, false
+        | Some readers ->
+          VH.remove state.dormant_bottom variable;
+          info.readers <- Some readers;
+          variable_rank, info, true
+        end
+
+    let[@inline always] enqueue state variable =
+      queue_insert state.queue variable
+
+    let[@inline always] mark_controlled
+        dependent_info dependent_rank dependency_rank =
+      if dependency_rank >= dependent_rank then
+        dependent_info.controlled <- true
+
+    let[@inline always] write_changed_value
+        state owner_rank owner_info owner value =
+      VH.replace state.sigma owner value;
+      begin match owner_info.readers with
+      | None -> ()
+      | Some readers ->
+        queue_insert_readers state.queue owner_rank readers;
+        VH.clear readers
+      end
+
+    let[@inline always] set_value state frame direct =
+      let owner = frame.owner in
+      let owner_info = frame.owner_info in
+      let candidate =
+        S.Dom.join direct
+          (S.Dom.join (start_value state owner) owner_info.side_aggregate)
+      in
+      let old = VH.find state.sigma owner in
+      let () =
+        if not (lattice_equal candidate old) then
+          if owner_info.controlled then begin
+            let next_phase, next =
+              U.update false owner frame.owner_phase old candidate
+            in
+            frame.owner_phase <- next_phase;
+            if not (lattice_equal next old) then
+              write_changed_value
+                state frame.owner_rank owner_info owner next
+          end else
+            write_changed_value
+              state frame.owner_rank owner_info owner candidate
+      in
+      queue_clear_side_dirty state.queue frame.owner_rank
+
+    let solve xs roots _old_data =
+      let state = create_state () in
+      let dormant_stats_enabled =
+        match Stdlib.Sys.getenv_opt "QSOLVER_DORMANT_STATS" with
+        | None | Some "" -> false
+        | Some _ -> true
+      in
+      let probes = ref 0 in
+      let dormant_created = ref 0 in
+      let effectful_promotions = ref 0 in
+      let dormant_hits = ref 0 in
+      let dormant_promotions = ref 0 in
+      let[@inline always] bump counter =
+        if dormant_stats_enabled then incr counter
+      in
+
+      (* A policy-selected dirty variable with no RHS has an exact candidate
+          without transfer evaluation. A read may commit that candidate early
+          only when the configured update remains nondecreasing. *)
+      let[@inline always] try_dirty_read
+          owner_rank target_rank target_info target =
+        if not (queue_can_flush_dirty_read
+            state.queue owner_rank target_rank)
+        then None
+        else
+          match S.system target with
+          | Some _ -> None
+          | None ->
+            materialize state target;
+            let old = VH.find state.sigma target in
+            let candidate =
+              S.Dom.join (start_value state target)
+                target_info.side_aggregate
+            in
+            (* @@DIRTY_READ_COMMIT@@ *)
+      in
+
+      let rec solve_episode owner =
+        queue_enter_episode state.queue;
+        let owner_rank, owner_info, _ = activate_rank state owner in
+        owner_info.started <- true;
+        let owner_system = S.system owner in
+        let owner_phase =
+          match owner_info.normal_phase with
+          | Some phase -> phase
+          | None -> U.initial_phase false owner
+        in
+        let frame =
+          {
+            owner;
+            owner_rank;
+            owner_info;
+            owner_phase;
+            local_side = None;
+          }
+        in
+        materialize state owner;
+        evaluate_frame frame owner_system;
+        if owner_info.controlled then
+          owner_info.normal_phase <- Some frame.owner_phase;
+        queue_leave_episode state.queue
+
+      and evaluate_frame frame owner_system =
+        let owner_system_lookup _ =
+          match owner_system with
+          | None -> None
+          | Some body -> incr SolverStats.evals; Some body
+        in
+        Control.solve_one bottom
+          (fun _ ->
+            queue_note_evaluation state.queue frame.owner_rank;
+            match frame.local_side with
+            | Some local_side -> VH.clear local_side
+            | None -> ())
+          (fun _ -> get frame)
+          (fun _ -> side frame)
+          (fun _ -> spawn frame)
+          (fun _ direct -> set_value state frame direct)
+          (fun _ -> drain_frame frame owner_system)
+          owner_system_lookup frame.owner
+
+      and drain_frame frame owner_system =
+        let next_rank = queue_max_rank state.queue in
+        if frame.owner_rank <= next_rank then
+          let next = queue_remove_max state.queue next_rank in
+          if next_rank = frame.owner_rank then begin
+            evaluate_frame frame owner_system
+          end else begin
+            solve_episode next;
+            drain_frame frame owner_system
+          end
+
+      (* A pure nonbottom probe is a complete first evaluation.  It can be
+          committed without executing the transfer a second time. *)
+      and publish_probe_value variable direct =
+        let variable_rank, info, _ = activate_rank state variable in
+        info.started <- true;
+        materialize state variable;
+        let frame =
+          {
+            owner = variable;
+            owner_rank = variable_rank;
+            owner_info = info;
+            owner_phase = U.initial_phase false variable;
+            local_side = None;
+          }
+        in
+        queue_note_evaluation state.queue variable_rank;
+        set_value state frame direct
+
+      and request_unranked variable =
+        match VH.find_option state.dormant_bottom variable with
+        | Some readers ->
+          bump dormant_hits;
+          Dormant readers
+        | None ->
+          bump probes;
+          begin match S.system variable with
+          | None ->
+            bump dormant_created;
+            let readers = VH.create 4 in
+            VH.replace state.dormant_bottom variable readers;
+            Dormant readers
+          | Some body ->
+            incr SolverStats.evals;
+            let promoted = ref None in
+            let promote () =
+              match !promoted with
+              | Some frame -> frame
+              | None ->
+                bump effectful_promotions;
+                let owner_rank, owner_info, _ =
+                  activate_rank state variable
+                in
+                owner_info.started <- true;
+                materialize state variable;
+                let frame =
+                  {
+                    owner = variable;
+                    owner_rank;
+                    owner_info;
+                    owner_phase = U.initial_phase false variable;
+                    local_side = None;
+                  }
+                in
+                queue_note_evaluation state.queue owner_rank;
+                promoted := Some frame;
+                frame
+            in
+            let direct =
+              body
+                (fun target -> get (promote ()) target)
+                (fun target raw -> side (promote ()) target raw)
+                (fun target -> spawn (promote ()) target)
+            in
+            begin match !promoted with
+            | None ->
+              if lattice_equal direct bottom then begin
+                bump dormant_created;
+                let readers = VH.create 4 in
+                VH.replace state.dormant_bottom variable readers;
+                Dormant readers
+              end else begin
+                publish_probe_value variable direct;
+                Promoted
+              end
+            | Some frame ->
+              set_value state frame direct;
+              drain_frame frame (Some body);
+              if frame.owner_info.controlled then
+                frame.owner_info.normal_phase <- Some frame.owner_phase;
+              Promoted
+            end
+          end
+
+      and get frame target =
+        let owner = frame.owner in
+        let owner_rank = frame.owner_rank in
+        match VH.find_option state.queue.ranks target with
+        | None when not (VH.mem state.sigma target) ->
+          begin match request_unranked target with
+          | Dormant readers ->
+            VH.replace readers owner ();
+            bottom
+          | Promoted -> get frame target
+          end
+        | possible_rank ->
+          let target_rank, target_info =
+            match possible_rank with
+            | Some target_rank ->
+              target_rank, Dynarray.get state.queue.infos target_rank
+            | None ->
+              let target_rank, target_info, _ = activate_rank state target in
+              target_rank, target_info
+          in
+          mark_controlled target_info target_rank owner_rank;
+          let value =
+            match try_dirty_read
+                owner_rank target_rank target_info target
+            with
+            | Some value -> value
+            | None ->
+              try VH.find state.sigma target with Not_found ->
+                if owner_rank < target_rank then begin
+                  solve_episode target;
+                  VH.find state.sigma target
+                end else begin
+                  enqueue state target;
+                  materialize state target;
+                  bottom
+                end
+          in
+          VH.replace (readers_of_info target_info) owner ();
+          value
+
+      and side frame target raw =
+        let local_side =
+          match frame.local_side with
+          | Some local_side -> local_side
+          | None ->
+            let local_side = VH.create 4 in
+            frame.local_side <- Some local_side;
+            local_side
+        in
+        let input =
+          match VH.find_option local_side target with
+          | Some previous -> S.Dom.join previous raw
+          | None -> raw
+        in
+        VH.replace local_side target input;
+        write_side_contribution frame target input
+
+      and write_side_contribution frame target input =
+        let source = frame.owner in
+        let source_rank = frame.owner_rank in
+        let target_rank, target_info, was_dormant =
+          activate_rank state target
+        in
+        if was_dormant then bump dormant_promotions;
+        mark_controlled frame.owner_info source_rank target_rank;
+        let old_aggregate = target_info.side_aggregate in
+        let cells =
+          match target_info.side_cells with
+          | Some cells -> cells
+          | None ->
+            let cells = VH.create 4 in
+            target_info.side_cells <- Some cells;
+            cells
+        in
+        let cell =
+          try VH.find cells source with Not_found ->
+            let fresh =
+              {
+                phase = U.initial_phase true target;
+                contribution = bottom;
+              }
+            in
+            VH.replace cells source fresh;
+            fresh
+        in
+        let old_contribution = cell.contribution in
+        let next_phase, next_contribution =
+          side_update target cell.phase old_contribution input old_aggregate
+        in
+        cell.phase <- next_phase;
+        cell.contribution <- next_contribution;
+        let next_aggregate, aggregate_changed =
+          if S.Dom.leq old_contribution next_contribution then
+            if S.Dom.leq next_contribution old_aggregate
+            then old_aggregate, false
+            else S.Dom.join old_aggregate next_contribution, true
+          else begin
+            let next_aggregate = recompute_aggregate cells in
+            next_aggregate,
+              not (lattice_equal next_aggregate old_aggregate)
+          end
+        in
+        if aggregate_changed then
+          target_info.side_aggregate <- next_aggregate;
+        if was_dormant then begin
+          (* The dormant certificate says the direct RHS is exactly bottom,
+              so publishing the aggregate completes the target without a
+              redundant transfer evaluation. *)
+          target_info.started <- true;
+          materialize state target;
+          if aggregate_changed then
+            write_changed_value
+              state target_rank target_info target next_aggregate
+        end else if aggregate_changed then begin
+          queue_note_side_change state.queue source_rank target_rank;
+          if source_rank < target_rank
+             && not (VH.mem state.sigma target)
+          then
+            solve_episode target
+          else
+            enqueue state target
+        end
+
+      and spawn frame target =
+        let owner_rank = frame.owner_rank in
+        match VH.find_option state.queue.ranks target with
+        | None when not (VH.mem state.sigma target) ->
+          ignore (request_unranked target)
+        | possible_rank ->
+          let target_rank =
+            match possible_rank with
+            | Some target_rank -> target_rank
+            | None -> let target_rank, _, _ = activate_rank state target in target_rank
+          in
+          if not (VH.mem state.sigma target) then
+            if owner_rank < target_rank then
+              solve_episode target
+            else begin
+              enqueue state target;
+              materialize state target
+            end
+      in
+
+      let is_started variable =
+        match VH.find_option state.dormant_bottom variable with
+        | Some _ -> true
+        | None ->
+          match VH.find_option state.queue.ranks variable with
+          | None -> false
+          | Some variable_rank ->
+            (Dynarray.get state.queue.infos variable_rank).started
+      in
+      let solve_requested variable =
+        match VH.find_option state.queue.ranks variable with
+        | Some _ -> solve_episode variable
+        | None when VH.mem state.sigma variable -> solve_episode variable
+        | None -> ignore (request_unranked variable)
+      in
+
+      List.iter
+        (fun (variable, input) ->
+          let start = S.Dom.join (start_value state variable) input in
+          VH.replace state.starts variable start;
+          VH.replace state.sigma variable start)
+        xs;
+      begin match
+        Control.solve_seeds_with_fuel Stdlib.max_int
+          is_started
+          (fun () -> queue_pop state.queue)
+          solve_requested
+          (roots @ List.map fst xs)
+      with
+      | Control.SeedsSolved _ -> ()
+      | Control.SeedsOutOfFuel ->
+        failwith "Dormant Simple: exhausted max_int seed fuel"
+      end;
+      if dormant_stats_enabled then
+        Stdlib.Printf.eprintf
+          "%s probes=%d dormant=%d effectful=%d hits=%d promotions=%d remaining=%d\n%!"
+          SidePolicy.stats_name !probes !dormant_created
+          !effectful_promotions !dormant_hits
+          !dormant_promotions (VH.length state.dormant_bottom);
+      SolverStats.vars := !SolverStats.vars + VH.length state.sigma;
+      state.sigma, ()
+  end
+module SLRTC = Make (Control) (ReluctantSidePolicy)
+module StandardQSolver = Make (Control) (StandardSidePolicy)

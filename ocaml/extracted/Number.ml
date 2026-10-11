@@ -14,7 +14,7 @@ type number =
 | Decimal of decimal
 | Hexadecimal of hexadecimal
 
-(** val uint_beq : uint -> uint -> bool **)
+(* val uint_beq : uint -> uint -> bool **)
 
 let uint_beq x y =
   match x with
@@ -27,12 +27,12 @@ let uint_beq x y =
      | UIntDecimal _ -> false
      | UIntHexadecimal u0 -> uint_beq u u0)
 
-(** val uint_eq_dec : uint -> uint -> bool **)
+(* val uint_eq_dec : uint -> uint -> bool **)
 
 let uint_eq_dec x y =
   let b = uint_beq x y in if b then true else false
 
-(** val signed_int_beq : signed_int -> signed_int -> bool **)
+(* val signed_int_beq : signed_int -> signed_int -> bool **)
 
 let signed_int_beq x y =
   match x with
@@ -45,12 +45,12 @@ let signed_int_beq x y =
      | IntDecimal _ -> false
      | IntHexadecimal i0 -> signed_int_beq i i0)
 
-(** val signed_int_eq_dec : signed_int -> signed_int -> bool **)
+(* val signed_int_eq_dec : signed_int -> signed_int -> bool **)
 
 let signed_int_eq_dec x y =
   let b = signed_int_beq x y in if b then true else false
 
-(** val number_beq : number -> number -> bool **)
+(* val number_beq : number -> number -> bool **)
 
 let number_beq x y =
   match x with
@@ -63,17 +63,17 @@ let number_beq x y =
      | Decimal _ -> false
      | Hexadecimal h0 -> hexadecimal_beq h h0)
 
-(** val number_eq_dec : number -> number -> bool **)
+(* val number_eq_dec : number -> number -> bool **)
 
 let number_eq_dec x y =
   let b = number_beq x y in if b then true else false
 
-(** val uint_of_uint : uint -> uint **)
+(* val uint_of_uint : uint -> uint **)
 
 let uint_of_uint i =
   i
 
-(** val int_of_int : signed_int -> signed_int **)
+(* val int_of_int : signed_int -> signed_int **)
 
 let int_of_int i =
   i

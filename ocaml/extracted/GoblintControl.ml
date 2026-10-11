@@ -12,7 +12,7 @@ type seeded_result =
 | SeedsSolved of int
 | SeedsOutOfFuel
 
-(** val drain_with_fuel :
+(* val drain_with_fuel :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     (unit -> 'a2) -> ('a1 -> 'a2) -> 'a2 **)
 
@@ -28,7 +28,7 @@ let rec drain_with_fuel ret0 bind0 fuel pop_owner solve_queued_owner =
          fuel)
     | None -> Obj.magic ret0 __ (SeedsSolved fuel))
 
-(** val solve_seeds_with_fuel :
+(* val solve_seeds_with_fuel :
     (__ -> __ -> 'a2) -> (__ -> __ -> 'a2 -> (__ -> 'a2) -> 'a2) -> int ->
     ('a1 -> 'a2) -> (unit -> 'a2) -> ('a1 -> 'a2) -> 'a1 list -> 'a2 **)
 
@@ -56,26 +56,26 @@ let rec solve_seeds_with_fuel ret0 bind0 fuel is_started pop_owner solve_owner =
 
 type 'a m = 'a
 
-(** val ret : 'a1 -> 'a1 m **)
+(* val ret : 'a1 -> 'a1 m **)
 
 let ret value =
   value
 
-(** val bind : 'a1 m -> ('a1 -> 'a2 m) -> 'a2 m **)
+(* val bind : 'a1 m -> ('a1 -> 'a2 m) -> 'a2 m **)
 
 let bind computation next =
   next computation
 
 type ('v, 'd) callback = ('v, 'd, __ m) system
 
-(** val eval_rhs :
+(* val eval_rhs :
     ('a1 -> 'a2 m) -> ('a1 -> 'a2 -> unit m) -> ('a1 -> unit m) -> ('a1, 'a2,
     __ m) transfer -> 'a2 m **)
 
 let eval_rhs get side spawn body =
   Obj.magic body get side spawn
 
-(** val solve_one :
+(* val solve_one :
     'a2 -> ('a1 -> unit m) -> ('a1 -> 'a1 -> 'a2 m) -> ('a1 -> 'a1 -> 'a2 ->
     unit m) -> ('a1 -> 'a1 -> unit m) -> ('a1 -> 'a2 -> unit m) -> ('a1 ->
     unit m) -> ('a1, 'a2) callback -> 'a1 -> unit m **)
@@ -89,7 +89,7 @@ let solve_one bottom start_evaluation get side spawn set_value drain_owner syste
       (fun direct ->
       bind (set_value owner direct) (fun _ -> drain_owner owner)))
 
-(** val solve_loop_fuel :
+(* val solve_loop_fuel :
     int -> (unit -> 'a1 option m) -> ('a1 -> unit m) -> bool m **)
 
 let rec solve_loop_fuel fuel pop_owner solve_owner =
@@ -104,7 +104,7 @@ let rec solve_loop_fuel fuel pop_owner solve_owner =
       | None -> ret true))
     fuel
 
-(** val solve_all :
+(* val solve_all :
     int -> ('a1 list -> unit m) -> (unit -> 'a1 option m) -> ('a1 -> unit m)
     -> 'a1 list -> bool m **)
 
@@ -112,14 +112,14 @@ let solve_all fuel initialize pop_owner solve_owner roots =
   bind (initialize roots) (fun _ ->
     solve_loop_fuel fuel pop_owner solve_owner)
 
-(** val drain_with_fuel0 :
+(* val drain_with_fuel0 :
     int -> (unit -> 'a1 option m) -> ('a1 -> unit m) -> seeded_result m **)
 
 let drain_with_fuel0 fuel pop_owner solve_owner =
   drain_with_fuel (Obj.magic (fun _ -> ret)) (Obj.magic (fun _ _ -> bind))
     fuel (Obj.magic pop_owner) (Obj.magic solve_owner)
 
-(** val solve_seeds_with_fuel0 :
+(* val solve_seeds_with_fuel0 :
     int -> ('a1 -> bool m) -> (unit -> 'a1 option m) -> ('a1 -> unit m) ->
     'a1 list -> seeded_result m **)
 

@@ -1,4 +1,4 @@
-(** Minimal frontend signatures for running the unchanged generated adapters.
+(* Minimal frontend signatures for running the unchanged generated adapters.
     The real Goblint build separately checks its complete interfaces. *)
 open Batteries
 

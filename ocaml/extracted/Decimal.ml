@@ -13,7 +13,7 @@ type uint =
 | D8 of uint
 | D9 of uint
 
-(** val uint_rect :
+(* val uint_rect :
     'a1 -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
     'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
     'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
@@ -32,7 +32,7 @@ let rec uint_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 = function
 | D8 u0 -> f8 u0 (uint_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 u0)
 | D9 u0 -> f9 u0 (uint_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 u0)
 
-(** val uint_rec :
+(* val uint_rec :
     'a1 -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
     'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
     'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 -> 'a1) -> (uint -> 'a1 ->
@@ -59,7 +59,7 @@ type decimal =
 | Decimal of signed_int * uint
 | DecimalExp of signed_int * uint * signed_int
 
-(** val uint_beq : uint -> uint -> bool **)
+(* val uint_beq : uint -> uint -> bool **)
 
 let rec uint_beq x y =
   match x with
@@ -97,12 +97,12 @@ let rec uint_beq x y =
               | D9 x1 -> uint_beq x0 x1
               | _ -> false)
 
-(** val uint_eq_dec : uint -> uint -> bool **)
+(* val uint_eq_dec : uint -> uint -> bool **)
 
 let uint_eq_dec x y =
   let b = uint_beq x y in if b then true else false
 
-(** val signed_int_beq : signed_int -> signed_int -> bool **)
+(* val signed_int_beq : signed_int -> signed_int -> bool **)
 
 let signed_int_beq x y =
   match x with
@@ -113,12 +113,12 @@ let signed_int_beq x y =
               | Pos _ -> false
               | Neg d0 -> uint_beq d d0)
 
-(** val signed_int_eq_dec : signed_int -> signed_int -> bool **)
+(* val signed_int_eq_dec : signed_int -> signed_int -> bool **)
 
 let signed_int_eq_dec x y =
   let b = signed_int_beq x y in if b then true else false
 
-(** val decimal_beq : decimal -> decimal -> bool **)
+(* val decimal_beq : decimal -> decimal -> bool **)
 
 let decimal_beq x y =
   match x with
@@ -132,12 +132,12 @@ let decimal_beq x y =
      | DecimalExp (i0, f0, e0) ->
        (&&) (signed_int_beq i i0) ((&&) (uint_beq f f0) (signed_int_beq e e0)))
 
-(** val decimal_eq_dec : decimal -> decimal -> bool **)
+(* val decimal_eq_dec : decimal -> decimal -> bool **)
 
 let decimal_eq_dec x y =
   let b = decimal_beq x y in if b then true else false
 
-(** val nb_digits : uint -> int **)
+(* val nb_digits : uint -> int **)
 
 let rec nb_digits = function
 | Nil -> 0
@@ -152,20 +152,20 @@ let rec nb_digits = function
 | D8 d0 -> Stdlib.Int.succ (nb_digits d0)
 | D9 d0 -> Stdlib.Int.succ (nb_digits d0)
 
-(** val nzhead : uint -> uint **)
+(* val nzhead : uint -> uint **)
 
 let rec nzhead d = match d with
 | D0 d0 -> nzhead d0
 | _ -> d
 
-(** val unorm : uint -> uint **)
+(* val unorm : uint -> uint **)
 
 let unorm d =
   match nzhead d with
   | Nil -> D0 Nil
   | x -> x
 
-(** val norm : signed_int -> signed_int **)
+(* val norm : signed_int -> signed_int **)
 
 let norm = function
 | Pos d0 -> Pos (unorm d0)
@@ -173,19 +173,19 @@ let norm = function
              | Nil -> Pos (D0 Nil)
              | x -> Neg x)
 
-(** val opp : signed_int -> signed_int **)
+(* val opp : signed_int -> signed_int **)
 
 let opp = function
 | Pos d0 -> Neg d0
 | Neg d0 -> Pos d0
 
-(** val abs : signed_int -> uint **)
+(* val abs : signed_int -> uint **)
 
 let abs = function
 | Pos d0 -> d0
 | Neg d0 -> d0
 
-(** val revapp : uint -> uint -> uint **)
+(* val revapp : uint -> uint -> uint **)
 
 let rec revapp d d' =
   match d with
@@ -201,24 +201,24 @@ let rec revapp d d' =
   | D8 d0 -> revapp d0 (D8 d')
   | D9 d0 -> revapp d0 (D9 d')
 
-(** val rev : uint -> uint **)
+(* val rev : uint -> uint **)
 
 let rev d =
   revapp d Nil
 
-(** val app : uint -> uint -> uint **)
+(* val app : uint -> uint -> uint **)
 
 let app d d' =
   revapp (rev d) d'
 
-(** val app_int : signed_int -> uint -> signed_int **)
+(* val app_int : signed_int -> uint -> signed_int **)
 
 let app_int d1 d2 =
   match d1 with
   | Pos d3 -> Pos (app d3 d2)
   | Neg d3 -> Neg (app d3 d2)
 
-(** val nztail : uint -> uint * int **)
+(* val nztail : uint -> uint * int **)
 
 let nztail d =
   let aux =
@@ -229,13 +229,13 @@ let nztail d =
   in
   let (r, n) = aux (rev d) in ((rev r), n)
 
-(** val nztail_int : signed_int -> signed_int * int **)
+(* val nztail_int : signed_int -> signed_int * int **)
 
 let nztail_int = function
 | Pos d0 -> let (r, n) = nztail d0 in ((Pos r), n)
 | Neg d0 -> let (r, n) = nztail d0 in ((Neg r), n)
 
-(** val del_head : int -> uint -> uint **)
+(* val del_head : int -> uint -> uint **)
 
 let rec del_head n d =
   (fun fO fS n -> if n=0 then fO () else fS (n-1))
@@ -255,18 +255,18 @@ let rec del_head n d =
     | D9 d0 -> del_head n0 d0)
     n
 
-(** val del_head_int : int -> signed_int -> uint **)
+(* val del_head_int : int -> signed_int -> uint **)
 
 let del_head_int n = function
 | Pos d0 -> del_head n d0
 | Neg d0 -> del_head n d0
 
-(** val del_tail : int -> uint -> uint **)
+(* val del_tail : int -> uint -> uint **)
 
 let del_tail n d =
   rev (del_head n (rev d))
 
-(** val del_tail_int : int -> signed_int -> signed_int **)
+(* val del_tail_int : int -> signed_int -> signed_int **)
 
 let del_tail_int n = function
 | Pos d0 -> Pos (del_tail n d0)
@@ -274,7 +274,7 @@ let del_tail_int n = function
 
 module Little =
  struct
-  (** val succ : uint -> uint **)
+  (* val succ : uint -> uint **)
 
   let rec succ = function
   | Nil -> D1 Nil
@@ -289,7 +289,7 @@ module Little =
   | D8 d0 -> D9 d0
   | D9 d0 -> D0 (succ d0)
 
-  (** val double : uint -> uint **)
+  (* val double : uint -> uint **)
 
   let rec double = function
   | Nil -> Nil
@@ -304,7 +304,7 @@ module Little =
   | D8 d0 -> D6 (succ_double d0)
   | D9 d0 -> D8 (succ_double d0)
 
-  (** val succ_double : uint -> uint **)
+  (* val succ_double : uint -> uint **)
 
   and succ_double = function
   | Nil -> D1 Nil
@@ -320,12 +320,12 @@ module Little =
   | D9 d0 -> D9 (succ_double d0)
  end
 
-(** val uint_of_uint : uint -> uint **)
+(* val uint_of_uint : uint -> uint **)
 
 let uint_of_uint i =
   i
 
-(** val int_of_int : signed_int -> signed_int **)
+(* val int_of_int : signed_int -> signed_int **)
 
 let int_of_int i =
   i
