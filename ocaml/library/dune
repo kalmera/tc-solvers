@@ -2,5 +2,5 @@
 (library
  (name tc_solvers)
  (public_name tc-solvers)
- (private_modules Core_common Core_simple Core_restarting Core_narrowing_fixed_point)
+ (private_modules Core_common Core_simple Core_restarting Core_narrowing_fixed_point Core_plus_restarting)
  (flags (:standard -w -32-33-34-37-39-60-67)))

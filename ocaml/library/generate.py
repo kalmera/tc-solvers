@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Derive generic cores from unchanged generated callback adapters.
+"""Derive standalone generic cores from the existing solver sources.
 
 Only frontend plumbing changes here. Algorithm edits belong in the original
-Rocq control / adapter templates. Every transformation checks its boundaries.
+Rocq control / adapter templates for those families. Plus retains the reference
+control with specialized ranks, worklists, FIFO storage and observation sites.
+Every transformation checks its boundaries.
 """
 from pathlib import Path
 
@@ -73,6 +75,224 @@ def transform(source, variant, bitmap):
     return HEADER + source
 
 
+
+def transform_plus(source, bitmap):
+    """Keep the Plus reference control; specialize only its runtime collections.
+
+    Mutable ranks/worklists are solve-private. No configuration escapes the
+    public wrapper. Ordered persistent maps retain the reference's fold order.
+    """
+    def once(old, new):
+        nonlocal source
+        if source.count(old) != 1:
+            raise ValueError(f'plus_restarting: expected one {old!r}')
+        source = source.replace(old, new)
+
+    def region(start, end, replacement):
+        nonlocal source
+        if source.count(start) != 1 or source.count(end) != 1:
+            raise ValueError(f'plus_restarting: changed region {start!r} / {end!r}')
+        a, b = source.index(start), source.index(end)
+        if a >= b:
+            raise ValueError('plus_restarting: reversed region')
+        source = source[:a] + replacement + source[b:]
+
+    once(HEADER, '')
+    region('(* val leb :', '(* val in_dec :',
+           'let ltb x y = x < y\n\n')
+    once('  val eq_dec : t -> t -> bool',
+         '  val eq_dec : t -> t -> bool\n\n  val hash : t -> int')
+    region('module ListDiscoveryOrder =', 'module type FEATURES =', r"""module RankQueue = struct
+""" + bitmap + r"""
+let mem queue rank =
+  let index = rank lsr word_shift in
+  let words = queue.levels.(0) in
+  index < Array.length words && words.(index) land (1 lsl (rank land word_mask)) <> 0
+
+let remove queue rank =
+  if mem queue rank then begin
+    clear_index queue 0 rank;
+    if queue.maximum = rank then queue.maximum <- find_before queue 0 rank
+  end
+end
+
+module ListDiscoveryOrder (V : VAR) = struct
+  module H = Hashtbl.Make (struct
+    type t = V.t
+    let equal = V.eq_dec
+    let hash = V.hash
+  end)
+  type t = { ranks : int H.t; variables : V.t Dynarray.t; mutable count : int }
+  let empty = { ranks = H.create 32; variables = Dynarray.create (); count = 0 }
+  let lookup order variable = H.find_opt order.ranks variable
+  let size order = order.count
+  let variable order rank = Dynarray.get order.variables rank
+  let observe order variable =
+    match lookup order variable with
+    | Some rank -> order, rank
+    | None ->
+      let rank = order.count in
+      if rank = max_int then failwith "SLR-TC+: discovery rank overflow";
+      H.add order.ranks variable rank;
+      Dynarray.add_last order.variables variable;
+      order.count <- rank + 1;
+      order, rank
+end
+
+""")
+    once(' functor (Features:FEATURES) ->\n struct',
+         ' functor (Features:FEATURES) ->\n'
+         ' functor (Observe : sig\n'
+         '   val enabled : bool\n'
+         '   val emit : (V.t, D.t) Interfaces.event -> unit\n'
+         ' end) ->\n struct\n'
+         '  let evaluations = ref 0\n'
+         '  let[@inline always] notify make =\n'
+         '    if Observe.enabled then Observe.emit (make ())\n'
+         '  let evaluation_start owner =\n'
+         '    incr evaluations; notify (fun () -> Interfaces.Evaluation_start owner)\n')
+    region('  type work_queue =', '  type side_cell =', r"""  type work_queue = {
+    heap : RankQueue.t;
+    mutable order : Ranking.t option;
+  }
+  let empty_queue () = { heap = RankQueue.create (); order = None }
+  let ranking_lt order x y =
+    match Ranking.lookup order x, Ranking.lookup order y with
+    | Some a, Some b -> a < b
+    | _ -> false
+  let queue_contains x queue =
+    match queue.order with
+    | None -> false
+    | Some order ->
+      match Ranking.lookup order x with
+      | None -> false
+      | Some rank -> RankQueue.mem queue.heap rank
+  let queue_insert order x queue =
+    match Ranking.lookup order x with
+    | None -> invalid_arg "SLR-TC+: unranked queue insertion"
+    | Some rank ->
+      queue.order <- Some order;
+      RankQueue.add queue.heap rank;
+      queue
+  let queue_insert_fresh = queue_insert
+  let queue_insert_all order xs queue =
+    List.iter (fun x -> ignore (queue_insert order x queue)) xs; queue
+  let queue_peek queue =
+    match queue.order with
+    | None -> None
+    | Some order ->
+      if RankQueue.is_empty queue.heap then None
+      else Some (Rk.variable order (RankQueue.get_max_elt queue.heap))
+  let queue_pop queue =
+    match queue_peek queue with
+    | None -> None
+    | Some variable -> RankQueue.remove_max queue.heap; Some (variable, queue)
+  let queue_remove x queue =
+    begin match queue.order with
+    | None -> ()
+    | Some order ->
+      match Ranking.lookup order x with
+      | None -> ()
+      | Some rank -> RankQueue.remove queue.heap rank
+    end;
+    queue
+  let queue_take_all queue =
+    let rec take acc =
+      match queue_pop queue with
+      | None -> List.rev acc
+      | Some (x, _) -> take (x :: acc)
+    in take []
+
+""")
+    once('pending_spawns : V.t list;', 'pending_spawns : V.t Stdlib.Queue.t;')
+    once('queue = [];', 'queue = empty_queue ();')
+    once('deferred_wakes = []; pending_spawns = [];',
+         'deferred_wakes = empty_queue (); pending_spawns = Stdlib.Queue.create ();')
+    once('else with_spawns st (app st.pending_spawns (target :: []))\n'
+         '           (S.add target st.requested_spawns)',
+         'else begin\n'
+         '      Stdlib.Queue.add target st.pending_spawns;\n'
+         '      with_spawns st st.pending_spawns (S.add target st.requested_spawns)\n'
+         '    end')
+    once('with_deferred_wakes (enqueue_all st st.deferred_wakes) []',
+         'with_deferred_wakes (enqueue_all st (queue_take_all st.deferred_wakes))\n'
+         '      (empty_queue ())')
+    once('(match st.pending_spawns with\n'
+         '           | [] -> None\n'
+         '           | target :: rest ->\n'
+         '             Some { cfg_state = (with_spawns st rest st.requested_spawns);',
+         '(match Stdlib.Queue.take_opt st.pending_spawns with\n'
+         '           | None -> None\n'
+         '           | Some target ->\n'
+         '             Some { cfg_state = st;')
+    once('(match c.cfg_state.pending_spawns with\n'
+         '             | [] -> Some c.cfg_state\n'
+         '             | _ :: _ -> None)',
+         '(if Stdlib.Queue.is_empty c.cfg_state.pending_spawns\n'
+         '             then Some c.cfg_state else None)')
+    once('let (next, _) = Ranking.observe st.ranking x in with_ranking st next',
+         'let count = Ranking.size st.ranking in\n'
+         '    let (next, rank) = Ranking.observe st.ranking x in\n'
+         '    if Ranking.size next <> count then\n'
+         '      notify (fun () -> Interfaces.Discover { variable = x; rank });\n'
+         '    with_ranking st next')
+    once('| None -> with_sigma st (M.update st.sigma x D.bottom)',
+         '| None ->\n'
+         '      notify (fun () -> Interfaces.Materialize { variable = x; value = D.bottom });\n'
+         '      with_sigma st (M.update st.sigma x D.bottom)')
+    # Known publication sites already performed the algorithm's equivalence test.
+    # Deliver deltas here without another comparison or a store traversal.
+    once('  let write_dirty_value st target value =',
+         '  let publish_value st variable value =\n'
+         '    notify (fun () -> Interfaces.Value_change {\n'
+         '      variable; old_value = sigma_value st variable; value });\n'
+         '    with_sigma st (M.update st.sigma variable value)\n\n'
+         '  let read_result fr target continuation value =\n'
+         '    notify (fun () -> Interfaces.Read { owner = fr.frame_owner; target; value });\n'
+         '    continuation value\n\n'
+         '  let write_dirty_value st target value =')
+    once('let st1 = with_sigma st (M.update st.sigma target value) in',
+         'let st1 = publish_value st target value in')
+    once('let st2 = with_sigma st1 (M.update st1.sigma target value) in',
+         'let st2 = publish_value st1 target value in')
+    once('else let st1 = with_sigma st (M.update st.sigma owner value) in',
+         'else let st1 = publish_value st owner value in')
+    once('let next_contribution = snd updated in',
+         'let next_contribution = snd updated in\n'
+         '    notify (fun () -> Interfaces.Side_update { source; target; input;\n'
+         '      old_value = stored_contribution st1 source target; value = next_contribution });')
+    once('let phase0 = U.initial_phase false owner in',
+         'let phase0 = U.initial_phase false owner in\n'
+         '       evaluation_start owner;')
+    once('| ConstraintSystem.Ret direct ->\n          Some',
+         '| ConstraintSystem.Ret direct ->\n'
+         '          notify (fun () -> Interfaces.Evaluation_result (fr.frame_owner, direct));\n          Some')
+    once('| ConstraintSystem.Get (target, kget) ->\n          if is_dormant st target',
+         '| ConstraintSystem.Get (target, kget) ->\n'
+         '          notify (fun () -> Interfaces.Read_request { owner = fr.frame_owner; target });\n'
+         '          if is_dormant st target')
+    once('| ConstraintSystem.Side (target, raw, next) ->\n          let was_dormant',
+         '| ConstraintSystem.Side (target, raw, next) ->\n'
+         '          notify (fun () -> Interfaces.Side { owner = fr.frame_owner; target; value = raw });\n'
+         '          let was_dormant')
+    once('| ConstraintSystem.Spawn (target, next) ->\n          if Features.defer_spawns',
+         '| ConstraintSystem.Spawn (target, next) ->\n'
+         '          notify (fun () -> Interfaces.Spawn { owner = fr.frame_owner; target });\n'
+         '          if Features.defer_spawns')
+    once('clear_side_dirty (with_queue st rest) fr.frame_owner\n                  in\n                  Some',
+         'clear_side_dirty (with_queue st rest) fr.frame_owner\n                  in\n'
+         '                  evaluation_start fr.frame_owner;\n                  Some')
+    for old, new in [('(kget D.bottom)', '(read_result fr target kget D.bottom)'),
+                     ('(kget value)', '(read_result fr1 target kget value)')]:
+        if source.count(old) != (2 if 'bottom' in old else 4):
+            raise ValueError(f'plus_restarting: read continuations changed: {old}')
+        source = source.replace(old, new)
+    # Drop extraction signature comments: the private collection types changed.
+    import re
+    source = re.sub(r'\(\* val .*?\*\*\)\n\n', '', source, flags=re.S)
+    return HEADER + '(* Plus reference control with solve-private optimized collections. *)\n' + source
+
+
 def main():
     output = ROOT / 'ocaml/library/generated'
     output.mkdir(exist_ok=True)
@@ -80,6 +300,9 @@ def main():
     for variant in ('simple', 'restarting', 'narrowing_fixed_point'):
         source = (ROOT / f'ocaml/adapters/goblint/generated/slrtc_{variant}.ml').read_text()
         (output / f'core_{variant}.ml').write_text(transform(source, variant, bitmap))
+
+    plus = (ROOT / 'ocaml/extracted/PlusRestartingRuntime.ml').read_text()
+    (output / 'core_plus_restarting.ml').write_text(transform_plus(plus, bitmap))
 
 
 if __name__ == '__main__':

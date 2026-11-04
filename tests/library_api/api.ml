@@ -97,3 +97,197 @@ let () =
   check_equivalence (module ES);
   check_equivalence (module ER);
   check_equivalence (module EN)
+
+(* The practical Plus API exposes typed variables/events, not machine records. *)
+module PV = struct
+  type t = { identity : int; display : string }
+  let compare a b = Int.compare a.identity b.identity
+  let equal a b = compare a b = 0
+  let hash v = Hashtbl.hash v.identity
+end
+module PD = struct
+  include D
+  let comparisons = ref 0
+  let leq a b = incr comparisons; a <= b
+end
+module PU = Tc_solvers.Update.Join (PV) (PD)
+module PSU = Tc_solvers.Update.SideJoin (PV) (PD)
+module Plus = Tc_solvers.Slr.Plus_restarting.Make (PV) (PD) (PU) (PSU)
+let pv identity = PV.{ identity; display = "same presentation" }
+let plus_system variable =
+  match variable.PV.identity with
+  | 0 -> Plus.Spawn (pv 3, Plus.Get (pv 1, fun v ->
+      Plus.Side (pv 2, v, Plus.Side (pv 2, 2, Plus.Ret v))))
+  | 1 -> Plus.Ret 1
+  | 3 -> Plus.Ret 3
+  | _ -> Plus.Ret 0
+let () =
+  assert ((pv 0).PV.display = (pv 1).PV.display && not (PV.equal (pv 0) (pv 1)));
+  let events = ref [] and live = ref 0 in
+  PD.comparisons := 0;
+  let plain = Plus.solve plus_system [pv 0] in
+  let comparisons = !(PD.comparisons) in
+  PD.comparisons := 0;
+  let observed = Plus.solve ~on_event:(fun e ->
+    incr live;
+    if List.length !events < 2 then events := e :: !events)
+    plus_system [pv 0] in
+  assert (!(PD.comparisons) = comparisons);
+  assert (!live > 2 && List.length !events = 2);
+  assert (Plus.bindings plain = Plus.bindings observed);
+  assert (Plus.statistics plain = Plus.statistics observed);
+  assert (Plus.value observed (pv 0) = 1 && Plus.value observed (pv 2) = 2);
+  assert (Plus.value observed (pv 3) = 3);
+  let saved = Plus.bindings observed in
+  let changes = ref [] and discoveries = ref [] in
+  ignore (Plus.solve ~on_event:(fun { Tc_solvers.event; _ } -> match event with
+    | Tc_solvers.Value_change change ->
+      changes := (change.variable.PV.identity, change.old_value, change.value) :: !changes
+    | Tc_solvers.Discover discovery ->
+      discoveries := (discovery.variable.PV.identity, discovery.rank) :: !discoveries
+    | _ -> ()) plus_system [pv 0]);
+  assert (List.rev !discoveries = [0,0;1,1;2,2;3,3]);
+  assert (List.mem (2,0,1) !changes && List.mem (2,1,2) !changes);
+  let bad_observer = Plus.solve ~on_event:(fun _ -> failwith "observer") plus_system [pv 0] in
+  assert (Plus.bindings bad_observer = saved);
+  assert ((Plus.statistics bad_observer).observer_errors = !live);
+  let partial = Plus.solve ~max_steps:0 plus_system [pv 0] in
+  assert (Plus.completion partial = Tc_solvers.Step_limit);
+  assert (Plus.bindings partial = [] && (Plus.statistics partial).steps = 0);
+  let empty = Plus.solve (fun _ -> Plus.Ret 0) [] in
+  assert (Plus.completion empty = Tc_solvers.Complete);
+  assert (Plus.bindings observed = saved && Plus.bindings empty = []);
+  let nested = ref false in
+  ignore (Plus.solve ~on_event:(fun _ ->
+    if not !nested then begin
+      nested := true;
+      let inner = Plus.solve (fun _ -> Plus.Ret 4) [pv 9] in
+      assert (Plus.value inner (pv 9) = 4)
+    end) plus_system [pv 0]);
+  assert !nested;
+  let exception Client_failure in
+  (try ignore (Plus.solve (fun _ -> raise Client_failure) [pv 0]); assert false
+   with Client_failure -> ());
+  print_endline "Plus library API: typed identity, observations, deltas, isolation and stable results passed"
+
+(* Policies must advance even when they return an equivalent value. *)
+module PhasePolicy = struct
+  type variable = int
+  type value = int
+  type phase = int
+  let calls = ref []
+  let initial_phase _ _ = 0
+  let update _ owner phase old _input =
+    calls := (owner,phase) :: !calls;
+    phase + 1, if phase = 0 then old else 2
+end
+module PhaseSide = struct
+  type variable = int
+  type value = int
+  type phase = int
+  let calls = ref []
+  let initial_phase _ _ = 0
+  let update source target phase old input _aggregate =
+    calls := (source,target,phase) :: !calls;
+    phase + 1, max old input
+end
+module IV = struct include V let compare = Int.compare end
+module PhasePlus = Tc_solvers.Slr.Plus_restarting.Make (IV) (D) (PhasePolicy) (PhaseSide)
+let () =
+  let solution = PhasePlus.solve (function
+    | 0 -> PhasePlus.Side (1,1,PhasePlus.Side (1,1,
+        PhasePlus.Get (1,fun _ -> PhasePlus.Ret 1)))
+    | 1 -> PhasePlus.Side (0,1,PhasePlus.Ret 1)
+    | _ -> PhasePlus.Ret 0) [0] in
+  assert (PhasePlus.completion solution = Tc_solvers.Complete);
+  assert (List.mem (0,1,1) !(PhaseSide.calls));
+  assert (List.exists (fun (_,phase) -> phase > 0) !(PhasePolicy.calls));
+  print_endline "Plus library API: equivalent ordinary/side results retain policy phases"
+
+module EquivalentSide = struct
+  type variable = int
+  type value = Equivalent.t
+  type phase = int
+  let initial_phase _ _ = 0
+  let phases = ref []
+  let update _ _ phase old input _aggregate =
+    phases := phase :: !phases;
+    phase+1, Equivalent.join old input
+end
+module EquivalentPlus = Tc_solvers.Slr.Plus_restarting.Make (IV) (Equivalent) (EJ) (EquivalentSide)
+let () =
+  let equal_side_updates = ref 0 and stored = ref None in
+  let result = EquivalentPlus.solve ~on_event:(fun { Tc_solvers.event; _ } -> match event with
+    | Tc_solvers.Side_update { old_value; value; _ }
+      when old_value.Equivalent.level = value.Equivalent.level && old_value.stamp <> value.stamp ->
+        incr equal_side_updates
+    | Tc_solvers.Value_change { variable = 1; value; _ } -> stored := Some value
+    | _ -> ())
+    (function
+      | 0 -> EquivalentPlus.Side (1,Equivalent.fresh 1,
+          EquivalentPlus.Side (1,Equivalent.fresh 1,
+            EquivalentPlus.Get (0,fun _ -> EquivalentPlus.Ret (Equivalent.fresh 1))))
+      | _ -> EquivalentPlus.Ret Equivalent.bottom) [0] in
+  assert (EquivalentPlus.completion result = Tc_solvers.Complete);
+  assert (!equal_side_updates > 0 && List.mem 1 !(EquivalentSide.phases));
+  assert (Some (EquivalentPlus.value result 1) = !stored);
+  print_endline "Plus library API: equivalent representatives retain contributions, phases and stored values"
+
+(* Requests survive a budget boundary while recursive callees are pending. *)
+let nested_reads variable =
+  match variable.PV.identity with
+  | 0 -> Plus.Get (pv 0,fun _ -> Plus.Get (pv 0,fun _ ->
+      Plus.Spawn (pv 90,Plus.Spawn (pv 91,Plus.Get (pv 1,fun v -> Plus.Ret v)))))
+  | x when x < 12 -> Plus.Get (pv (x+1),fun v -> Plus.Ret v)
+  | _ -> Plus.Ret 1
+let () =
+  let retained = ref [] in
+  let partial = Plus.solve ~max_steps:20 ~on_event:(fun event -> retained := event :: !retained)
+    nested_reads [pv 0] in
+  let events = List.rev !retained in
+  let requests = List.filter (fun { Tc_solvers.event; _ } ->
+    match event with Tc_solvers.Read_request _ -> true | _ -> false) events in
+  let reads = List.filter (fun { Tc_solvers.event; _ } ->
+    match event with Tc_solvers.Read _ -> true | _ -> false) events in
+  assert (Plus.completion partial = Tc_solvers.Step_limit);
+  assert ((Plus.statistics partial).steps = 20);
+  assert (List.length requests = 9 && List.length reads = 2);
+  List.iter (fun { Tc_solvers.transition; _ } -> assert (transition >= 0 && transition < 20)) events;
+  (* Immediate self-reads request and complete in one transition. *)
+  assert (List.map (fun { Tc_solvers.transition; _ } -> transition) reads = [2;3]);
+  let rec requests_precede_completions pending = function
+    | [] -> ()
+    | { Tc_solvers.transition; event } :: rest ->
+      match event with
+      | Tc_solvers.Read_request { owner; target } ->
+        requests_precede_completions ((owner,target,transition) :: pending) rest
+      | Tc_solvers.Read { owner; target; _ } ->
+        let _,_,requested = List.find (fun (o,t,_) -> PV.equal owner o && PV.equal target t) pending in
+        assert (requested <= transition);
+        requests_precede_completions pending rest
+      | _ -> requests_precede_completions pending rest
+  in
+  requests_precede_completions [] events;
+  let complete_events = ref [] in
+  let complete = Plus.solve ~on_event:(fun event -> complete_events := event :: !complete_events)
+    nested_reads [pv 0] in
+  assert (Plus.completion complete = Tc_solvers.Complete);
+  let prefix = List.filter (fun { Tc_solvers.transition; _ } -> transition < 20)
+    (List.rev !complete_events) in
+  assert (prefix = events);
+  (* Nested solves have independent counters; the outer envelope is immutable. *)
+  let first = ref true and outer_events = ref [] in
+  let nested = Plus.solve ~max_steps:20 ~on_event:(fun envelope ->
+    if !first then begin
+      first := false;
+      let inner = Plus.solve ~on_event:(fun { Tc_solvers.transition; _ } ->
+        assert (transition >= 0)) (fun _ -> Plus.Ret 1) [pv 99] in
+      assert ((Plus.statistics inner).observer_errors = 0)
+    end;
+    outer_events := envelope :: !outer_events) nested_reads [pv 0] in
+  assert ((Plus.statistics nested).observer_errors = 0);
+  assert (List.rev !outer_events = events && List.rev !retained = events);
+  let called = ref false in
+  ignore (Plus.solve ~max_steps:0 ~on_event:(fun _ -> called := true) nested_reads [pv 0]);
+  assert (not !called);
+  print_endline "Plus observations: indexed requests preserve 9 dependencies / 2 completions at 20 transitions"

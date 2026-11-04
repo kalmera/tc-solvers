@@ -10,5 +10,6 @@
  (name differential)
  (flags (:standard -w -32-33-34-37-39-60-67))
  (libraries tc_solvers batteries yojson unix tc_solvers_extracted_simple
-  tc_solvers_extracted_restarting tc_solvers_extracted_narrowing_fixed_point)
+  tc_solvers_extracted_restarting tc_solvers_extracted_narrowing_fixed_point
+  tc_solvers_extracted_plus_restarting)
  (action (setenv SLRTC_TRACE "" (run %{test}))))

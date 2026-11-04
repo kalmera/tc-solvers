@@ -30,3 +30,11 @@ module Join (V : VAR) (D : DOMAIN) = struct
   let initial_phase _ _ = ()
   let update _ _ () old input = (), D.join old input
 end
+
+module SideJoin (V : VAR) (D : DOMAIN) = struct
+  type variable = V.t
+  type value = D.t
+  type phase = unit
+  let initial_phase _ _ = ()
+  let update _ _ () old input _aggregate = (), D.join old input
+end

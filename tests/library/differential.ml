@@ -435,3 +435,180 @@ let () =
   assert (!observed_gaps = List.length reference_gaps);
   Printf.printf "library: %d differential cases match Goblint; %d documented extracted-reference gaps verified\n"
     !comparisons !observed_gaps
+
+(* Plus compares stores, every transition, discoveries, evaluation order and
+   complete policy calls against the untouched reference, in all 16 settings. *)
+module PlusV = struct include V let compare = Int.compare let hash = Hashtbl.hash end
+module OrderedMap = Stdlib.Map.Make (Int)
+module OrderedSet = Stdlib.Set.Make (Int)
+module PlusMaps = struct
+  type 'a t = 'a OrderedMap.t
+  let empty = OrderedMap.empty
+  let lookup map key = OrderedMap.find_opt key map
+  let update map key value = OrderedMap.add key value map
+  let values map = List.map snd (OrderedMap.bindings map)
+end
+module PlusSets = struct
+  type t = OrderedSet.t
+  let empty = OrderedSet.empty
+  let mem = OrderedSet.mem
+  let add = OrderedSet.add
+  let elements = OrderedSet.elements
+end
+module PlusChecks (Policy : Tc_solvers.UPDATE with type variable = int and type value = int) = struct
+  let run ?(shrinking = false) flags body roots =
+    let module F = struct
+      let recompute_controlled = flags land 1 <> 0
+      let defer_spawns = flags land 2 <> 0
+      let side_effect_phase_reset = flags land 4 <> 0
+      let dead_side_elimination = flags land 8 <> 0
+      let restart_side_phases = side_effect_phase_reset
+      let eliminate_dead_sides = dead_side_elimination
+    end in
+    let policy_calls = ref [] in
+    let initial_calls = ref [] in
+    let module P = struct
+      include Policy
+      let initial_phase side owner =
+        let phase = Policy.initial_phase side owner in
+        initial_calls := (side,owner,phase) :: !initial_calls;
+        phase
+      let update side owner phase old input =
+        let next_phase, value = Policy.update side owner phase old input in
+        policy_calls := (side,owner,phase,old,input,next_phase,value) :: !policy_calls;
+        next_phase, value
+    end in
+    let side_calls = ref [] in
+    let side_initials = ref [] in
+    let module SU = struct
+      type variable = int
+      type value = int
+      type phase = int
+      let initial_phase source target =
+        side_initials := (source,target) :: !side_initials; 0
+      let update source target phase old input aggregate =
+        side_calls := (source,target,phase,old,input,aggregate) :: !side_calls;
+        phase + 1, if shrinking then input else max old input
+    end in
+    let module L = Tc_solvers.Slr.Plus_restarting.Make_with_features (PlusV) (D) (P) (SU) (F) in
+    let module R = Tc_solvers_extracted_plus_restarting.PlusRestartingRuntime.Engine
+      (PlusV) (D) (P) (SU) (PlusSets) (PlusMaps) (F) in
+    let rec convert_l = function
+      | Ret d -> L.Ret d
+      | Get (x,k) -> L.Get (x,fun d -> convert_l (k d))
+      | Side (x,d,next) -> L.Side (x,d,convert_l next)
+      | Spawn (x,next) -> L.Spawn (x,convert_l next)
+    in
+    let reference_transition = ref 0 in
+    let reference_reads = ref [] and reference_requests = ref [] in
+    let reference_evals = ref [] and reference_ranks = ref [] in
+    let rec convert_r owner = function
+      | Ret d -> R.ConstraintSystem.Ret d
+      | Get (x,k) -> R.ConstraintSystem.Get (x,fun d ->
+          reference_reads := (!reference_transition,owner,x,d) :: !reference_reads;
+          convert_r owner (k d))
+      | Side (x,d,next) -> R.ConstraintSystem.Side (x,d,convert_r owner next)
+      | Spawn (x,next) -> R.ConstraintSystem.Spawn (x,convert_r owner next)
+    in
+    let actual_evals = ref [] and actual_ranks = ref [] in
+    let actual_requests = ref [] and actual_reads = ref [] in
+    let last_transition = ref (-1) in
+    let actual = L.solve ~max_steps:100000 ~on_event:(fun { Tc_solvers.transition; event } ->
+      assert (transition >= !last_transition);
+      last_transition := transition;
+      match event with
+      | Tc_solvers.Evaluation_start owner -> actual_evals := (transition,owner) :: !actual_evals
+      | Tc_solvers.Discover d -> actual_ranks := (transition,d.variable,d.rank) :: !actual_ranks
+      | Tc_solvers.Read_request r -> actual_requests := (transition,r.owner,r.target) :: !actual_requests
+      | Tc_solvers.Read r -> actual_reads := (transition,r.owner,r.target,r.value) :: !actual_reads
+      | _ -> ()) (fun x -> convert_l (body x)) roots in
+    let actual_calls = !policy_calls and actual_sides = !side_calls in
+    let actual_initials = !initial_calls and actual_side_initials = !side_initials in
+    policy_calls := []; side_calls := []; initial_calls := []; side_initials := [];
+    let rec run limit steps config =
+      match R.terminal_state config with
+      | Some _ -> steps, config
+      | None when steps = limit -> steps, config
+      | None ->
+        reference_transition := steps;
+        begin match config.R.cfg_control with
+        | R.RunRhs (fr,R.ConstraintSystem.Get (target,_),_) ->
+          reference_requests := (steps,fr.R.frame_owner,target) :: !reference_requests
+        | _ -> ()
+        end;
+        match R.next_config (fun x -> convert_r x (body x)) config with
+        | None -> failwith "Plus reference stuck"
+        | Some next ->
+          if R.Ranking.size next.R.cfg_state.ranking > R.Ranking.size config.R.cfg_state.ranking then
+            begin match next.R.cfg_state.ranking with
+            | x :: _ -> reference_ranks := (steps,x,R.Ranking.size next.R.cfg_state.ranking - 1) :: !reference_ranks
+            | [] -> assert false
+            end;
+          begin match next.R.cfg_control,config.R.cfg_control with
+          | R.RunRhs (fr,_,_), (R.StartEpisode _ | R.RunDrain _) ->
+            reference_evals := (steps,fr.R.frame_owner) :: !reference_evals
+          | _ -> ()
+          end;
+          run limit (steps+1) next
+    in
+    let steps, expected = run 100000 0 (R.initial_config roots) in
+    assert (Option.is_some (R.terminal_state expected));
+    assert (L.completion actual = Tc_solvers.Complete);
+    assert ((L.statistics actual).steps = steps && !last_transition < steps);
+    assert ((L.statistics actual).observer_errors = 0);
+    assert (L.bindings actual = OrderedMap.bindings expected.R.cfg_state.sigma);
+    assert (!actual_evals = !reference_evals && !actual_ranks = !reference_ranks);
+    assert (!actual_requests = !reference_requests && !actual_reads = !reference_reads);
+    assert (actual_calls = !policy_calls && actual_sides = !side_calls);
+    assert (actual_initials = !initial_calls && actual_side_initials = !side_initials);
+    (* Bounded solves retain requested dependencies before callees return. *)
+    List.iter (fun budget ->
+      let requests = ref [] and reads = ref [] in
+      let partial = L.solve ~max_steps:budget ~on_event:(fun { Tc_solvers.transition; event } ->
+        assert (transition >= 0 && transition < budget);
+        match event with
+        | Tc_solvers.Read_request r -> requests := (transition,r.owner,r.target) :: !requests
+        | Tc_solvers.Read r -> reads := (transition,r.owner,r.target,r.value) :: !reads
+        | _ -> ()) (fun x -> convert_l (body x)) roots in
+      reference_requests := []; reference_reads := [];
+      reference_evals := []; reference_ranks := [];
+      let steps, expected = run budget 0 (R.initial_config roots) in
+      assert ((L.statistics partial).steps = steps && (L.statistics partial).observer_errors = 0);
+      assert (!requests = !reference_requests && !reads = !reference_reads);
+      assert (L.bindings partial = OrderedMap.bindings expected.R.cfg_state.sigma);
+      assert (L.completion partial =
+        if Option.is_some (R.terminal_state expected) then Tc_solvers.Complete else Tc_solvers.Step_limit)
+    ) [0;1;5;17;20]
+
+  let all () =
+    let fixtures = [
+      ([], (fun _ -> Ret 0));
+      ([0;0;3], (function 0 -> Spawn (2,Spawn (1,Spawn (2,Ret 1))) | x -> Ret (min x 3)));
+      ([0], (function 0 -> Get (1,fun _ -> Ret 1) | 1 -> Get (0,fun _ -> Ret 0) | _ -> Ret 0));
+      ([0], (function 0 -> Side (1,1,Side (1,2,Get (1,fun v -> Ret v))) | _ -> Ret 0));
+      ([0;2;3], (function 2 -> Get (0,fun v -> if v=0 then Side (1,2,Ret 0) else Ret 0)
+        | 3 -> Side (0,1,Ret 0) | _ -> Ret 0));
+      ([0], (function 0 -> Get (1,fun _ -> Spawn (1,Ret 1)) | _ -> Ret 0));
+      ([0], (function 0 -> Get (1,fun _ -> Side (1,0,Ret 1)) | _ -> Ret 0));
+      ([0;3], (function 0 -> Side (2,1,Ret 1) | 3 -> Side (2,2,Get (2,fun v -> Ret v)) | _ -> Ret 0));
+      ([0], (function 0 -> Get (0,fun own -> Side (0,min 2 (own+1),Ret 0)) | _ -> Ret 0));
+      ([0], (function 0 -> Side (1,1,Side (2,1,Side (1,2,Side (2,2,
+          Get (1,fun _ -> Ret 0))))) | _ -> Ret 0));
+    ] in
+    for flags = 0 to 15 do
+      List.iter (fun (roots,body) -> run flags body roots) fixtures;
+      run ~shrinking:true flags (function
+        | 0 -> Get (0,fun own -> Side (1,(if own=0 then 2 else 1),Ret 1))
+        | _ -> Ret 0) [0]
+    done;
+    run 3 (function
+      | 0 -> Get (0,fun _ -> Get (0,fun _ -> Spawn (90,Spawn (91,Get (1,fun v -> Ret v)))))
+      | x when x < 12 -> Get (x+1,fun v -> Ret v)
+      | _ -> Ret 1) [0]
+end
+module PlusJoinChecks = PlusChecks (Join)
+module PlusCopyChecks = PlusChecks (TwoCopy)
+module PlusWNChecks = PlusChecks (WidenNarrow)
+let () =
+  PlusJoinChecks.all (); PlusCopyChecks.all (); PlusWNChecks.all ();
+  print_endline "Plus library: 531 exact reference comparisons and indexed read traces, including bounded prefixes (16 configurations, 3 policies) passed"

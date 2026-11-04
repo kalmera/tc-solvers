@@ -12,3 +12,6 @@ module WidenNarrow (V : VAR) (D : BOX_DOMAIN) :
 (* Join iteration for finite-height domains. *)
 module Join (V : VAR) (D : DOMAIN) :
   UPDATE with type variable = V.t and type value = D.t
+
+module SideJoin (V : VAR) (D : DOMAIN) :
+  SIDE_UPDATE with type variable = V.t and type value = D.t

@@ -24,6 +24,14 @@ class LibraryTests(unittest.TestCase):
                                  ('            incr SolverStats.evals', '            unknown_stats ()')]:
                     with self.assertRaises(ValueError):
                         generator.transform(source.replace(old, new), variant, bitmap)
+        source = (ROOT / 'ocaml/extracted/PlusRestartingRuntime.ml').read_text()
+        actual = generator.transform_plus(source, bitmap)
+        self.assertEqual(actual, (ROOT / 'ocaml/library/generated/core_plus_restarting.ml').read_text())
+        for marker in ('  type work_queue =', 'module ListDiscoveryOrder =',
+                       'let next_contribution = snd updated in',
+                       '| ConstraintSystem.Get (target, kget) ->\n          if is_dormant st target'):
+            with self.assertRaises(ValueError):
+                generator.transform_plus(source.replace(marker, 'changed boundary'), bitmap)
 
     def test_isolated_build_install_and_consumer(self):
         # Copy only the library: no Rocq, extracted reference libraries, adapters,
@@ -43,7 +51,7 @@ class LibraryTests(unittest.TestCase):
             run('dune', 'install', '--prefix', str(prefix), 'tc-solvers')
             lib = prefix / 'lib/tc-solvers'
             metadata = run('ocamlobjinfo', str(lib / 'tc_solvers.cma'))
-            for dependency in ('Batteries', 'Yojson', 'Goblint'):
+            for dependency in ('Batteries', 'Yojson', 'Goblint', 'Tc_solvers_extracted'):
                 self.assertNotIn(dependency, metadata)
             consumer = root / 'consumer'
             consumer.mkdir()
@@ -52,8 +60,9 @@ class LibraryTests(unittest.TestCase):
                 '-o', 'main.exe', cwd=consumer)
             run(str(consumer / 'main.exe'), cwd=consumer)
             # Internal generated cores are not part of the public namespace.
-            (consumer / 'private.ml').write_text('module Hidden = Tc_solvers.Core_simple\n')
-            result = subprocess.run(['ocamlc', '-I', str(lib), '-c', 'private.ml'], cwd=consumer,
-                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('Unbound module', result.stdout)
+            for internal in ('Core_simple', 'Core_plus_restarting'):
+                (consumer / 'private.ml').write_text(f'module Hidden = Tc_solvers.{internal}\n')
+                result = subprocess.run(['ocamlc', '-I', str(lib), '-c', 'private.ml'], cwd=consumer,
+                                        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Unbound module', result.stdout)
