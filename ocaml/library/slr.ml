@@ -127,7 +127,7 @@ module Plus_restarting = struct
     let completion solution = solution.completion
     let statistics solution = solution.statistics
 
-    let solve ?on_event ?(max_steps = max_int) system roots =
+    let solve ?(aggregate_cache = false) ?on_event ?(max_steps = max_int) system roots =
       if max_steps < 0 then invalid_arg "SLR-TC+: negative step limit";
       let observer_errors = ref 0 in
       let current_transition = ref 0 in
@@ -152,6 +152,7 @@ module Plus_restarting = struct
         let restart_side_phases = Features.side_effect_phase_reset
         let eliminate_dead_sides = Features.dead_side_elimination
       end in
+      let module Aggregate = struct let cache = aggregate_cache end in
       let module Observe = struct
         let enabled = Option.is_some on_event
         let emit event =
@@ -163,7 +164,7 @@ module Plus_restarting = struct
       end in
       (* The generative application owns every mutable rank, queue and FIFO.
          Repeated and nested solves never share these objects. *)
-      let module Engine = Core_plus_restarting.Make (Variables) (D) (U) (SU) (Sets) (Maps) (Flags) (Observe) in
+      let module Engine = Core_plus_restarting.Make (Variables) (D) (U) (SU) (Sets) (Maps) (Flags) (Observe) (Aggregate) in
       let module R = Engine.ConstraintSystem in
       let rec convert = function
         | Ret value -> R.Ret value

@@ -291,3 +291,90 @@ let () =
   ignore (Plus.solve ~max_steps:0 ~on_event:(fun _ -> called := true) nested_reads [pv 0]);
   assert (not !called);
   print_endline "Plus observations: indexed requests preserve 9 dependencies / 2 completions at 20 transitions"
+
+(* Incomparable and masked decreases, withdrawal and post-policy contributions. *)
+module Bits = struct
+  type t = int
+  let bottom = 0
+  let join = ( lor )
+  let leq a b = a land b = a
+end
+module BitsOrdinary = Tc_solvers.Update.Join (IV) (Bits)
+module BitsSide = struct
+  type variable = int
+  type value = int
+  type phase = int
+  let calls = ref []
+  let initial_phase _ _ = 0
+  let update source target phase old input aggregate =
+    calls := (source,target,phase,old,input,aggregate) :: !calls;
+    (* Source 5 demonstrates that the policy result, not raw payload, is stored. *)
+    phase+1, if source=5 then input land 1 else input
+end
+module BitsPlus = Tc_solvers.Slr.Plus_restarting.Make (IV) (Bits) (BitsOrdinary) (BitsSide)
+let bits_system = function
+  | 0 -> BitsPlus.Side (10,1,BitsPlus.Side (10,2,BitsPlus.Ret 1))
+  | 1 -> BitsPlus.Side (10,4,BitsPlus.Ret 1)
+  | 2 -> BitsPlus.Get (2,fun own -> BitsPlus.Side (10,(if own=0 then 2 else 4),BitsPlus.Ret 1))
+  | 3 -> BitsPlus.Get (3,fun own -> BitsPlus.Side (10,(if own=0 then 3 else 1),BitsPlus.Ret 1))
+  | 4 -> BitsPlus.Get (4,fun own -> if own=0 then BitsPlus.Side (10,8,BitsPlus.Ret 1) else BitsPlus.Ret 1)
+  | 5 -> BitsPlus.Side (10,2,BitsPlus.Ret 0)
+  | _ -> BitsPlus.Ret 0
+let () =
+  let solve cache =
+    BitsSide.calls := [];
+    let events = ref [] in
+    let result = BitsPlus.solve ~aggregate_cache:cache
+      ~on_event:(fun event -> events := event :: !events) bits_system [0;1;2;3;4;5] in
+    result, !events, !(BitsSide.calls)
+  in
+  let full,events,calls = solve false in
+  let cached,cached_events,cached_calls = solve true in
+  assert (BitsPlus.completion cached = Tc_solvers.Complete);
+  assert (BitsPlus.value cached 10 = 7 && BitsPlus.bindings cached = BitsPlus.bindings full);
+  assert (events = cached_events && calls = cached_calls);
+  assert (List.exists (fun { Tc_solvers.event; _ } ->
+    match event with Tc_solvers.Side_update { source=2; old_value=2; value=4; _ } -> true | _ -> false) events);
+  assert (List.exists (fun { Tc_solvers.event; _ } ->
+    match event with Tc_solvers.Side_update { source=4; old_value=8; value=0; _ } -> true | _ -> false) events);
+  assert (List.exists (fun { Tc_solvers.event; _ } ->
+    match event with Tc_solvers.Side_update { source=5; input=2; value=0; _ } -> true | _ -> false) events);
+  print_endline "Plus aggregate cache: incomparable/masked decreases, withdrawals and policy results match full folds"
+
+(* Cached and folded aggregates may have different equivalent representatives. *)
+let equivalent_event { Tc_solvers.transition; event } =
+  let level v = v.Equivalent.level in
+  let event = match event with
+    | Tc_solvers.Evaluation_start v -> Tc_solvers.Evaluation_start v
+    | Tc_solvers.Evaluation_result (v,d) -> Tc_solvers.Evaluation_result (v,level d)
+    | Tc_solvers.Read_request { owner; target } -> Tc_solvers.Read_request { owner; target }
+    | Tc_solvers.Read { owner; target; value } -> Tc_solvers.Read { owner; target; value=level value }
+    | Tc_solvers.Side { owner; target; value } -> Tc_solvers.Side { owner; target; value=level value }
+    | Tc_solvers.Spawn { owner; target } -> Tc_solvers.Spawn { owner; target }
+    | Tc_solvers.Discover { variable; rank } -> Tc_solvers.Discover { variable; rank }
+    | Tc_solvers.Materialize { variable; value } -> Tc_solvers.Materialize { variable; value=level value }
+    | Tc_solvers.Value_change { variable; old_value; value } ->
+      Tc_solvers.Value_change { variable; old_value=level old_value; value=level value }
+    | Tc_solvers.Side_update { source; target; input; old_value; value } ->
+      Tc_solvers.Side_update { source; target; input=level input; old_value=level old_value; value=level value }
+  in { Tc_solvers.transition; event }
+let () =
+  let solve cache =
+    EquivalentSide.phases := [];
+    let events = ref [] in
+    let result = EquivalentPlus.solve ~aggregate_cache:cache
+      ~on_event:(fun event -> events := equivalent_event event :: !events)
+      (function
+        | 0 -> EquivalentPlus.Side (2,Equivalent.fresh 1,EquivalentPlus.Ret (Equivalent.fresh 1))
+        | 1 -> EquivalentPlus.Side (2,Equivalent.fresh 1,EquivalentPlus.Side (2,Equivalent.fresh 1,
+            EquivalentPlus.Get (2,fun v -> EquivalentPlus.Ret v)))
+        | _ -> EquivalentPlus.Ret Equivalent.bottom) [0;1] in
+    result, !events, !(EquivalentSide.phases)
+  in
+  let full,events,phases = solve false in
+  let cached,cached_events,cached_phases = solve true in
+  assert (List.map (fun (v,d) -> v,d.Equivalent.level) (EquivalentPlus.bindings full) =
+          List.map (fun (v,d) -> v,d.Equivalent.level) (EquivalentPlus.bindings cached));
+  assert (EquivalentPlus.statistics cached = EquivalentPlus.statistics full);
+  assert (events = cached_events && phases = cached_phases);
+  print_endline "Plus aggregate cache: equivalent representatives preserve phase, scheduling and typed event semantics"

@@ -99,7 +99,13 @@ module type PLUS_SOLVER = sig
      marked partial solution. Observers run synchronously, are never retained,
      and receive every event regardless of client-side trace retention.
      Observer exceptions are counted and isolated; solver exceptions propagate. *)
-  val solve : ?on_event:(event_envelope -> unit) -> ?max_steps:int -> system -> variable list -> solution
+  (* [aggregate_cache] defaults to false. Enabling it requires a lawful join
+     semilattice modulo mutual [leq], with bottom as identity. Domain operations,
+     transfer continuations and policies (including phase transitions) must
+     respect that equivalence. Aggregate representatives and join-call counts
+     may differ from the full fold; event order and scheduling are preserved. *)
+  val solve : ?aggregate_cache:bool -> ?on_event:(event_envelope -> unit) ->
+    ?max_steps:int -> system -> variable list -> solution
   val value : solution -> variable -> value
   val mem : solution -> variable -> bool
   val iter : (variable -> value -> unit) -> solution -> unit

@@ -145,12 +145,47 @@ end
          ' functor (Observe : sig\n'
          '   val enabled : bool\n'
          '   val emit : (V.t, D.t) Interfaces.event -> unit\n'
-         ' end) ->\n struct\n'
+         ' end) ->\n'
+         ' functor (Aggregate : sig val cache : bool end) ->\n struct\n'
          '  let evaluations = ref 0\n'
          '  let[@inline always] notify make =\n'
          '    if Observe.enabled then Observe.emit (make ())\n'
          '  let evaluation_start owner =\n'
          '    incr evaluations; notify (fun () -> Interfaces.Evaluation_start owner)\n')
+    # The row and its cached side-only aggregate are persistent together. No
+    # mutation, map-identity registry or historical-map retention is needed.
+    once('  type contribution_row = D.t M.t',
+         '  type contribution_row = { contributors : D.t M.t; cached : D.t }')
+    once('  let aggregate st target =\n'
+         '    join_values (M.values (lookup_map st.contributions target))',
+         '  let empty_contribution_row = { contributors = M.empty; cached = D.bottom }\n\n'
+         '  let contribution_row st target =\n'
+         '    match M.lookup st.contributions target with\n'
+         '    | Some row -> row\n'
+         '    | None -> empty_contribution_row\n\n'
+         '  let aggregate st target =\n'
+         '    let row = contribution_row st target in\n'
+         '    if Aggregate.cache then row.cached\n'
+         '    else join_values (M.values row.contributors)')
+    once('match M.lookup (lookup_map st.contributions target) source with',
+         'match M.lookup (contribution_row st target).contributors source with')
+    once('  let default_side_cell source target =',
+         '  let replace_contribution st source target value =\n'
+         '    let before = contribution_row st target in\n'
+         '    let contributors = M.update before.contributors source value in\n'
+         '    let cached =\n'
+         '      if not Aggregate.cache then D.bottom\n'
+         '      else if D.leq (stored_contribution st source target) value\n'
+         '      then if D.leq value before.cached then before.cached\n'
+         '           else D.join before.cached value\n'
+         '      else join_values (M.values contributors)\n'
+         '    in\n'
+         '    with_contributions st\n'
+         '      (M.update st.contributions target { contributors; cached })\n\n'
+         '  let default_side_cell source target =')
+    once('with_contributions st1\n'
+         '        (update_map st1.contributions target source next_contribution)',
+         'replace_contribution st1 source target next_contribution')
     region('  type work_queue =', '  type side_cell =', r"""  type work_queue = {
     heap : RankQueue.t;
     mutable order : Ranking.t option;

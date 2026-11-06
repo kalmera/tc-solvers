@@ -108,7 +108,7 @@ rank is assigned merely by requesting a deferred spawn or probing a dormant
 bottom equation. These details preserve scheduling and widening order. Different
 reference collection traversal orders are not promised to have identical traces.
 
-`solve ?on_event ?max_steps system roots` returns an abstract solution. Its
+`solve ?aggregate_cache ?on_event ?max_steps system roots` returns an abstract solution. Its
 `completion` is `Complete` or `Step_limit`; `statistics` reports transitions,
 evaluations, discoveries and observer exceptions. A limit returns a marked
 partial store, never an unmarked successful result. `max_steps` counts Plus
@@ -116,6 +116,38 @@ reference transitions in this implementation, not elapsed time or callback
 instructions; it cannot interrupt a nonterminating client callback. No initial
 binding argument is provided by this first Plus API; clients express inputs in
 their equations. The existing solver families retain their initial-binding API.
+
+Enable the side-only incoming aggregate cache with
+`Solver.solve ~aggregate_cache:true system roots`. It defaults to false, retaining
+the existing ordered full-fold behavior. With caching enabled, each immutable
+contribution row holds its aggregate. Reads reuse that value. Replacing a stored
+contribution `old` with the policy result `next` uses `join old_aggregate next`
+when `leq old next`; absorption reuses the old aggregate if `next` is already
+below it. Otherwise a decrease or incomparable replacement recomputes the updated
+row in the original ordered fold. The target's direct RHS result is never included in this cache.
+Dead-side withdrawals pass through the same policy and replacement operation;
+they are stored contributions, not physical key deletion. Resetting phases or
+reset registrations does not change contributions or invalidate the aggregate.
+
+The old row/cache remains valid when a new row is written, including the
+before/after aggregate comparison in publication. No global memoization table or
+historical-map registry is used. Policy calls, returned phases, contribution
+writes, events and scheduling still execute when values compare equivalent.
+`SU.update` receives the pre-replacement aggregate, and the cache is updated from
+its actual returned contribution, rather than from the raw `Side` input.
+
+Enabling this option requires a join semilattice modulo mutual `leq`: join is
+associative, commutative and idempotent, bottom is an identity, and absorption
+agrees with the order. The existing Rocq `DOMAIN_LAWS` requires bottom leastness,
+join upper bounds and leastness (which imply identity, idempotency and absorption),
+and states commutativity and associativity explicitly. The OCaml `DOMAIN` type
+alone cannot enforce those laws. Merely producing an upper bound is insufficient.
+Domain operations, transfer continuations and policies must respect equivalence,
+including policies' future phase behavior. Cached representatives, join-call
+counts and grouping can differ from the full fold. For valid clients, typed event
+values correspond up to equivalence, with the same event kinds, transition
+indices, discovery order, scheduling and completion. Leave caching disabled for
+clients which depend on representatives or domain-operation counts.
 
 `on_event` receives an envelope `{ transition : int; event : event }`, rather
 than the event variant alone. `transition` is the zero-based index of the Plus
@@ -228,7 +260,13 @@ The private Plus core preserves the extracted reference control while replacing
 rank, queue and FIFO representations. Its current checks compare complete policy
 calls, discovery/evaluation order, transition counts, stores and bounded prefixes
 against the unchanged reference: 531 cases across all 16 configurations and three
-ordinary policies, with join and shrinking side updates. This is regression
+ordinary policies, with join and shrinking side updates. Each case also compares
+full-fold and aggregate-cache modes, including complete typed event streams and
+partial runs. API checks cover incomparable and masked decreases, dead-side
+withdrawals, post-policy values and equivalent representatives. An isolated test
+of the private generated source verifies pre-update policy aggregates, old-state
+reads, zero-join cached reads, phase resets and collection of replaced maps.
+These checks reuse existing test files. This is regression
 evidence, not a new runtime proof. The full runtime proof remains on hold.
 The same checks compare transition-indexed read requests/completions at partial
 budgets, including 20 transitions. An API regression records nine requests and
@@ -255,5 +293,15 @@ ordered maps/sets, the reference took 0.297 seconds and the library 0.0067 secon
 (about 44 times faster). Key-equality calls fell from 63,992,000 to 23,758; sizes
 1,000, 2,000 and 4,000 showed quadratic versus approximately linear discovery
 growth. This isolates the discovery bottleneck and is not an analysis-level
-performance claim. Ordered maps and complete aggregate folds remain in this
-first version to preserve reference traversal and domain-operation order.
+performance claim. Ordered maps remain; aggregate folding can now be replaced
+by the opt-in cache described above.
+
+A separate native-code side-aggregate benchmark uses an integer max domain,
+1,400 sources, one target and three emissions per source. Full-fold mode takes
+0.137 seconds, 8,832,460 joins and 620.22 MiB cumulative allocation; caching takes
+0.00267 seconds, 8,464 joins and 14.43 MiB allocation. Both execute 15,624
+transitions. Peak OCaml GC heap is 2.79 versus 1.15 MiB (not process RSS).
+Doubling to 2,800 sources gives 35,304,360 versus 16,864 joins, showing quadratic
+versus linear join growth for this fixture. This synthetic benchmark is not an
+RTEMS/Põder analysis result. The cached joins satisfy the same semilattice laws
+as the full-fold domain; no solver proof or extracted reference was changed.

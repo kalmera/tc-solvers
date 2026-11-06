@@ -510,10 +510,12 @@ module PlusChecks (Policy : Tc_solvers.UPDATE with type variable = int and type 
       | Side (x,d,next) -> R.ConstraintSystem.Side (x,d,convert_r owner next)
       | Spawn (x,next) -> R.ConstraintSystem.Spawn (x,convert_r owner next)
     in
+    let actual_events = ref [] in
     let actual_evals = ref [] and actual_ranks = ref [] in
     let actual_requests = ref [] and actual_reads = ref [] in
     let last_transition = ref (-1) in
     let actual = L.solve ~max_steps:100000 ~on_event:(fun { Tc_solvers.transition; event } ->
+      actual_events := { Tc_solvers.transition; event } :: !actual_events;
       assert (transition >= !last_transition);
       last_transition := transition;
       match event with
@@ -561,10 +563,22 @@ module PlusChecks (Policy : Tc_solvers.UPDATE with type variable = int and type 
     assert (!actual_requests = !reference_requests && !actual_reads = !reference_reads);
     assert (actual_calls = !policy_calls && actual_sides = !side_calls);
     assert (actual_initials = !initial_calls && actual_side_initials = !side_initials);
+    policy_calls := []; side_calls := []; initial_calls := []; side_initials := [];
+    let cached_events = ref [] in
+    let cached = L.solve ~aggregate_cache:true ~max_steps:100000
+      ~on_event:(fun event -> cached_events := event :: !cached_events)
+      (fun x -> convert_l (body x)) roots in
+    assert (L.bindings cached = L.bindings actual);
+    assert (L.completion cached = L.completion actual && L.statistics cached = L.statistics actual);
+    assert (!cached_events = !actual_events);
+    assert (actual_calls = !policy_calls && actual_sides = !side_calls);
+    assert (actual_initials = !initial_calls && actual_side_initials = !side_initials);
     (* Bounded solves retain requested dependencies before callees return. *)
     List.iter (fun budget ->
       let requests = ref [] and reads = ref [] in
+      let events = ref [] in
       let partial = L.solve ~max_steps:budget ~on_event:(fun { Tc_solvers.transition; event } ->
+        events := { Tc_solvers.transition; event } :: !events;
         assert (transition >= 0 && transition < budget);
         match event with
         | Tc_solvers.Read_request r -> requests := (transition,r.owner,r.target) :: !requests
@@ -577,7 +591,14 @@ module PlusChecks (Policy : Tc_solvers.UPDATE with type variable = int and type 
       assert (!requests = !reference_requests && !reads = !reference_reads);
       assert (L.bindings partial = OrderedMap.bindings expected.R.cfg_state.sigma);
       assert (L.completion partial =
-        if Option.is_some (R.terminal_state expected) then Tc_solvers.Complete else Tc_solvers.Step_limit)
+        if Option.is_some (R.terminal_state expected) then Tc_solvers.Complete else Tc_solvers.Step_limit);
+      let cached_events = ref [] in
+      let cached = L.solve ~aggregate_cache:true ~max_steps:budget
+        ~on_event:(fun event -> cached_events := event :: !cached_events)
+        (fun x -> convert_l (body x)) roots in
+      assert (L.bindings cached = L.bindings partial);
+      assert (L.completion cached = L.completion partial && L.statistics cached = L.statistics partial);
+      assert (!cached_events = !events)
     ) [0;1;5;17;20]
 
   let all () =
@@ -611,4 +632,4 @@ module PlusCopyChecks = PlusChecks (TwoCopy)
 module PlusWNChecks = PlusChecks (WidenNarrow)
 let () =
   PlusJoinChecks.all (); PlusCopyChecks.all (); PlusWNChecks.all ();
-  print_endline "Plus library: 531 exact reference comparisons and indexed read traces, including bounded prefixes (16 configurations, 3 policies) passed"
+  print_endline "Plus library: 531 reference/full-fold/cache comparisons, complete typed events and bounded prefixes (16 configurations, 3 policies) passed"

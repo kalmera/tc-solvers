@@ -259,6 +259,7 @@ module Make =
    val enabled : bool
    val emit : (V.t, D.t) Interfaces.event -> unit
  end) ->
+ functor (Aggregate : sig val cache : bool end) ->
  struct
   let evaluations = ref 0
   let[@inline always] notify make =
@@ -295,7 +296,7 @@ module Make =
 
   type readers_table = S.t M.t
 
-  type contribution_row = D.t M.t
+  type contribution_row = { contributors : D.t M.t; cached : D.t }
 
   type contribution_table = contribution_row M.t
 
@@ -661,8 +662,17 @@ module Make =
   | [] -> D.bottom
   | value :: rest -> D.join value (join_values rest)
 
-    let aggregate st target =
-    join_values (M.values (lookup_map st.contributions target))
+    let empty_contribution_row = { contributors = M.empty; cached = D.bottom }
+
+  let contribution_row st target =
+    match M.lookup st.contributions target with
+    | Some row -> row
+    | None -> empty_contribution_row
+
+  let aggregate st target =
+    let row = contribution_row st target in
+    if Aggregate.cache then row.cached
+    else join_values (M.values row.contributors)
 
     let aggregate_changed before after target =
     negb (equivalent (aggregate after target) (aggregate before target))
@@ -671,11 +681,24 @@ module Make =
     negb (D.leq (aggregate after target) (aggregate before target))
 
     let stored_contribution st source target =
-    match M.lookup (lookup_map st.contributions target) source with
+    match M.lookup (contribution_row st target).contributors source with
     | Some value -> value
     | None -> D.bottom
 
-    let default_side_cell source target =
+    let replace_contribution st source target value =
+    let before = contribution_row st target in
+    let contributors = M.update before.contributors source value in
+    let cached =
+      if not Aggregate.cache then D.bottom
+      else if D.leq (stored_contribution st source target) value
+      then if D.leq value before.cached then before.cached
+           else D.join before.cached value
+      else join_values (M.values contributors)
+    in
+    with_contributions st
+      (M.update st.contributions target { contributors; cached })
+
+  let default_side_cell source target =
     { side_phase = (SU.initial_phase source target); side_reset_at = None }
 
     let stored_side_cell st source target =
@@ -955,8 +978,7 @@ module Make =
     notify (fun () -> Interfaces.Side_update { source; target; input;
       old_value = stored_contribution st1 source target; value = next_contribution });
     let st2 =
-      with_contributions st1
-        (update_map st1.contributions target source next_contribution)
+      replace_contribution st1 source target next_contribution
     in
     let st3 = register_reset st2 source target fr.frame_min_scope next_phase
     in
